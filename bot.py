@@ -11,8 +11,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = int(os.environ["TELEGRAM_CHAT_ID"])
+BOT_TOKEN = os.environ["8616037861:AAHSaUgFBCv1c-8WzoQpGdiYS1OtM94HIAE"]
+CHAT_ID = int(os.environ["-5247953376"])
 TZ = pytz.timezone("Asia/Tashkent")
 ADMIN_USERNAME = "umidpulatov"
 
