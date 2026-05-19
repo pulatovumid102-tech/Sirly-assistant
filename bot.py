@@ -1,19 +1,42 @@
-import os
 import logging
 from datetime import datetime
-import pytz
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from zoneinfo import ZoneInfo
+
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
+
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
+
+# =========================
+# TOKEN
+# =========================
+
+TOKEN = "8616037861:AAHSaUgFBCv1c-8WzoQpGdiYS1OtM94HIAE"
+
+# =========================
+# LOGGING
+# =========================
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.environ["8616037861:AAHSaUgFBCv1c-8WzoQpGdiYS1OtM94HIAE"]
-CHAT_ID = int(os.environ["-5247953376"])
-TZ = pytz.timezone("Asia/Tashkent")
+# =========================
+# SOZLAMALAR
+# =========================
+
+TIMEZONE = ZoneInfo("Asia/Tashkent")
 ADMIN_USERNAME = "umidpulatov"
 
 AGENT_ORDER = ["sirlyinfo", "Muhammadhumoyun_Mudarris"]
