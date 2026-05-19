@@ -2,16 +2,10 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
-    CallbackQueryHandler,
     ContextTypes,
 )
 
@@ -39,13 +33,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # =========================
-# SOZLAMALAR
+# TIMEZONE
 # =========================
 
 TIMEZONE = ZoneInfo("Asia/Tashkent")
+
+# =========================
+# ADMIN
+# =========================
+
 ADMIN_USERNAME = "umidpulatov"
 
-AGENT_ORDER = ["sirlyinfo", "Muhammadhumoyun_Mudarris"]
+# =========================
+# AGENTS
+# =========================
+
+AGENT_ORDER = [
+    "sirlyinfo",
+    "Muhammadhumoyun_Mudarris",
+]
 
 AGENTS = {
     "sirlyinfo": "Ozodbek",
@@ -53,12 +59,20 @@ AGENTS = {
 }
 
 AGENT_INFO = {
-    "sirlyinfo": "👨🏻‍💻 Ozodbek @sirlyinfo\n📞 93 798 13 04",
+    "sirlyinfo": (
+        "👨🏻‍💻 Ozodbek @sirlyinfo\n"
+        "📞 93 798 13 04"
+    ),
+
     "Muhammadhumoyun_Mudarris": (
         "👨🏻‍💻 Muhammadhumoyun @Muhammadhumoyun_Mudarris\n"
         "📞 88 811 88 51 • 94 115 88 51"
     ),
 }
+
+# =========================
+# MESSAGE
+# =========================
 
 REMINDER_BODY = (
     "\n\n"
@@ -67,52 +81,12 @@ REMINDER_BODY = (
     "🤝 Hamkorlardan kelgan murojaatlarni tekshiring\n\n"
     "📋 Checklistga qarang\n\n"
     "━━━━━━━━━━━━━━\n\n"
-    "Xabarni qabul qilgan bo'lsangiz: /xop deb yuboring"
+    "Xabarni qabul qilgan bo'lsangiz: /xop"
 )
 
-
-def get_active_agents() -> set:
-    now = datetime.now(TZ)
-    weekday = now.weekday()  # 0=Mon … 5=Sat, 6=Sun
-    hour = now.hour
-    active = set()
-
-    # Ozodbek: Mon–Sat 10:00–20:00 | Sun 10:00–23:59
-    if weekday <= 4:  # Mon–Fri
-        if 10 <= hour < 20:
-            active.add("sirlyinfo")
-    elif weekday == 5:  # Sat
-        if 10 <= hour < 20:
-            active.add("sirlyinfo")
-    else:  # Sun
-        if hour >= 10:
-            active.add("sirlyinfo")
-
-    # Muhammadhumoyun: Mon–Fri 14:00–23:59 | Sat 10:00–23:59 | Sun off
-    if weekday <= 4:  # Mon–Fri
-        if hour >= 14:
-            active.add("Muhammadhumoyun_Mudarris")
-    elif weekday == 5:  # Sat
-        if hour >= 10:
-            active.add("Muhammadhumoyun_Mudarris")
-
-    return active
-
-
-def get_reminder_message() -> str:
-    active = get_active_agents()
-    if not active:
-        return ""
-    agent_block = "\n\n".join(AGENT_INFO[u] for u in AGENT_ORDER if u in active)
-    return agent_block + REMINDER_BODY
-
-
-def seconds_until_next_quarter() -> float:
-    now = datetime.now(TZ)
-    elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
-    next_quarter_start = ((now.minute // 15) + 1) * 15 * 60
-    return max(next_quarter_start - elapsed, 1.0)
-
+# =========================
+# STATE
+# =========================
 
 state = {
     "xop_received": set(),
@@ -123,24 +97,123 @@ state = {
     "stopped": False,
 }
 
+# =========================
+# ACTIVE AGENTS
+# =========================
 
-async def delete_warning(bot) -> None:
+def get_active_agents():
+
+    now = datetime.now(TIMEZONE)
+
+    weekday = now.weekday()
+    hour = now.hour
+
+    active = set()
+
+    # Ozodbek
+    # Mon-Sat 10:00-20:00
+
+    if weekday <= 5:
+        if 10 <= hour < 20:
+            active.add("sirlyinfo")
+
+    # Muhammadhumoyun
+    # Mon-Fri 14:00-23:59
+    # Sat 10:00-23:59
+
+    if weekday <= 4:
+        if hour >= 14:
+            active.add("Muhammadhumoyun_Mudarris")
+
+    elif weekday == 5:
+        if hour >= 10:
+            active.add("Muhammadhumoyun_Mudarris")
+
+    return active
+
+# =========================
+# REMINDER MESSAGE
+# =========================
+
+def get_reminder_message():
+
+    active = get_active_agents()
+
+    if not active:
+        return ""
+
+    agent_block = "\n\n".join(
+        AGENT_INFO[u]
+        for u in AGENT_ORDER
+        if u in active
+    )
+
+    return agent_block + REMINDER_BODY
+
+# =========================
+# NEXT QUARTER
+# =========================
+
+def seconds_until_next_quarter():
+
+    now = datetime.now(TIMEZONE)
+
+    elapsed = (
+        now.minute * 60
+        + now.second
+        + now.microsecond / 1_000_000
+    )
+
+    next_quarter_start = (
+        ((now.minute // 15) + 1) * 15 * 60
+    )
+
+    return max(next_quarter_start - elapsed, 1.0)
+
+# =========================
+# DELETE WARNING
+# =========================
+
+async def delete_warning(bot):
+
     msg_id = state.get("warning_message_id")
+
     if msg_id:
+
         try:
-            await bot.delete_message(chat_id=CHAT_ID, message_id=msg_id)
+            await bot.delete_message(
+                chat_id=CHAT_ID,
+                message_id=msg_id
+            )
+
         except Exception:
             pass
+
         state["warning_message_id"] = None
 
+# =========================
+# CANCEL JOBS
+# =========================
 
-def cancel_jobs_by_name(job_queue, name: str):
+def cancel_jobs_by_name(job_queue, name):
+
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
 
+# =========================
+# NEXT REMINDER
+# =========================
 
-def schedule_next_quarter_reminder(job_queue, cycle_id: int):
-    cancel_jobs_by_name(job_queue, "reminder")
+def schedule_next_quarter_reminder(
+    job_queue,
+    cycle_id
+):
+
+    cancel_jobs_by_name(
+        job_queue,
+        "reminder"
+    )
+
     job_queue.run_once(
         reminder_job,
         when=seconds_until_next_quarter(),
@@ -148,9 +221,20 @@ def schedule_next_quarter_reminder(job_queue, cycle_id: int):
         data={"cycle_id": cycle_id},
     )
 
+# =========================
+# NUDGE LOOP
+# =========================
 
-def start_nudge_loop(job_queue, cycle_id: int):
-    cancel_jobs_by_name(job_queue, "nudge")
+def start_nudge_loop(
+    job_queue,
+    cycle_id
+):
+
+    cancel_jobs_by_name(
+        job_queue,
+        "nudge"
+    )
+
     job_queue.run_repeating(
         nudge_job,
         interval=60,
@@ -159,41 +243,84 @@ def start_nudge_loop(job_queue, cycle_id: int):
         data={"cycle_id": cycle_id},
     )
 
+# =========================
+# REMINDER JOB
+# =========================
 
-async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
+async def reminder_job(
+    context: ContextTypes.DEFAULT_TYPE
+):
+
     cycle_id = context.job.data["cycle_id"]
-    if cycle_id != state["cycle_id"] or state["stopped"]:
+
+    if (
+        cycle_id != state["cycle_id"]
+        or state["stopped"]
+    ):
         return
 
-    # Reset xop tracking at every quarter boundary
+    # reset
     state["xop_received"] = set()
     state["xop_times"] = {}
     state["reminder_sent_at"] = None
     state["warning_message_id"] = None
 
     active = get_active_agents()
+
     if active:
+
         message = get_reminder_message()
+
         if message:
-            await context.bot.send_message(chat_id=CHAT_ID, text=message)
-            state["reminder_sent_at"] = datetime.now(TZ)
-        start_nudge_loop(context.job_queue, state["cycle_id"])
 
-    # Always chain to the next quarter — keeps bot alive forever
-    schedule_next_quarter_reminder(context.job_queue, state["cycle_id"])
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=message
+            )
 
+            state["reminder_sent_at"] = datetime.now(
+                TIMEZONE
+            )
 
-async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
+        start_nudge_loop(
+            context.job_queue,
+            state["cycle_id"]
+        )
+
+    # next cycle
+    schedule_next_quarter_reminder(
+        context.job_queue,
+        state["cycle_id"]
+    )
+
+# =========================
+# NUDGE JOB
+# =========================
+
+async def nudge_job(
+    context: ContextTypes.DEFAULT_TYPE
+):
+
     cycle_id = context.job.data["cycle_id"]
-    if cycle_id != state["cycle_id"] or state["stopped"]:
+
+    if (
+        cycle_id != state["cycle_id"]
+        or state["stopped"]
+    ):
         return
 
     active = get_active_agents()
+
     pending = active - state["xop_received"]
+
     if not pending:
         return
 
-    agent_block = "\n\n".join(AGENT_INFO[u] for u in AGENT_ORDER if u in pending)
+    agent_block = "\n\n".join(
+        AGENT_INFO[u]
+        for u in AGENT_ORDER
+        if u in pending
+    )
 
     await delete_warning(context.bot)
 
@@ -204,104 +331,230 @@ async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━\n\n"
             "⚠️ Aloqaga chiqing.\n\n"
             "━━━━━━━━━━━━━━\n\n"
-            "Agar xabarni qabul qilgan bo'lsangiz: /xop deb yuboring"
+            "Agar xabarni qabul qilgan bo'lsangiz: /xop"
         ),
     )
+
     state["warning_message_id"] = sent.message_id
 
+# =========================
+# START
+# =========================
 
-async def post_init(application: Application) -> None:
-    """Auto-start the perpetual reminder chain on every bot startup."""
-    state["cycle_id"] += 1
-    schedule_next_quarter_reminder(application.job_queue, state["cycle_id"])
-    logger.info("Reminder chain auto-started.")
+async def start_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
+    if (
+        update.effective_user.username
+        != ADMIN_USERNAME
+    ):
         return
 
     state["stopped"] = False
+
     state["xop_received"] = set()
     state["xop_times"] = {}
     state["reminder_sent_at"] = None
     state["warning_message_id"] = None
+
     state["cycle_id"] += 1
 
-    cancel_jobs_by_name(context.job_queue, "reminder")
-    cancel_jobs_by_name(context.job_queue, "nudge")
-
-    now = datetime.now(TZ)
-    next_q_total = ((now.minute // 15) + 1) * 15
-    next_q_hour = (now.hour + next_q_total // 60) % 24
-    next_q_min = next_q_total % 60
-
-    schedule_next_quarter_reminder(context.job_queue, state["cycle_id"])
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=f"Bot ishga tushdi.\nBirinchi eslatma: {next_q_hour:02d}:{next_q_min:02d}",
+    cancel_jobs_by_name(
+        context.job_queue,
+        "reminder"
     )
 
+    cancel_jobs_by_name(
+        context.job_queue,
+        "nudge"
+    )
 
-async def xop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.now(TIMEZONE)
+
+    next_q_total = (
+        ((now.minute // 15) + 1) * 15
+    )
+
+    next_q_hour = (
+        (now.hour + next_q_total // 60) % 24
+    )
+
+    next_q_min = next_q_total % 60
+
+    schedule_next_quarter_reminder(
+        context.job_queue,
+        state["cycle_id"]
+    )
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            "Bot ishga tushdi.\n"
+            f"Birinchi eslatma: "
+            f"{next_q_hour:02d}:"
+            f"{next_q_min:02d}"
+        ),
+    )
+
+# =========================
+# XOP
+# =========================
+
+async def xop_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
     if state["stopped"]:
         return
 
     username = update.effective_user.username
+
     if not username:
         return
 
     active = get_active_agents()
 
     if username not in active:
-        await update.message.reply_text("Bu xabar support uchun yuborilgan 🙂")
+
+        await update.message.reply_text(
+            "Bu xabar support uchun yuborilgan 🙂"
+        )
+
         return
 
     if username in state["xop_received"]:
         return
 
-    xop_time = datetime.now(TZ)
+    xop_time = datetime.now(TIMEZONE)
+
     state["xop_received"].add(username)
+
     state["xop_times"][username] = xop_time
 
-    name = AGENTS.get(username, username)
-    sent_at = state["reminder_sent_at"] or xop_time
-    mins = int((xop_time - sent_at).total_seconds() // 60)
-    confirmation = f"✅ {name} xabarni {mins} daqiqada qabul qildi."
+    name = AGENTS.get(
+        username,
+        username
+    )
+
+    sent_at = (
+        state["reminder_sent_at"]
+        or xop_time
+    )
+
+    mins = int(
+        (
+            xop_time - sent_at
+        ).total_seconds() // 60
+    )
+
+    confirmation = (
+        f"✅ {name} "
+        f"xabarni {mins} daqiqada "
+        f"qabul qildi."
+    )
 
     await delete_warning(context.bot)
-    await context.bot.send_message(chat_id=CHAT_ID, text=confirmation)
-
-    if not (active - state["xop_received"]):
-        cancel_jobs_by_name(context.job_queue, "nudge")
-
-
-async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-
-    state["stopped"] = True
-    state["cycle_id"] += 1
-
-    cancel_jobs_by_name(context.job_queue, "reminder")
-    cancel_jobs_by_name(context.job_queue, "nudge")
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
-        text="Bot to'xtatildi. (@umidpulatov tomonidan)",
+        text=confirmation
     )
 
+    if not (
+        active - state["xop_received"]
+    ):
+
+        cancel_jobs_by_name(
+            context.job_queue,
+            "nudge"
+        )
+
+# =========================
+# STOP
+# =========================
+
+async def umidstop_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    if (
+        update.effective_user.username
+        != ADMIN_USERNAME
+    ):
+        return
+
+    state["stopped"] = True
+
+    state["cycle_id"] += 1
+
+    cancel_jobs_by_name(
+        context.job_queue,
+        "reminder"
+    )
+
+    cancel_jobs_by_name(
+        context.job_queue,
+        "nudge"
+    )
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            "Bot toxtatildi.\n"
+            "(@umidpulatov tomonidan)"
+        ),
+    )
+
+# =========================
+# MAIN
+# =========================
 
 def main():
-    application = Application.builder().token(TOKEN).post_init(post_init).build()
 
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("xop", xop_command))
-    application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application = Application.builder().token(TOKEN).build()
+
+    # AUTO START
+    state["cycle_id"] += 1
+
+    schedule_next_quarter_reminder(
+        application.job_queue,
+        state["cycle_id"]
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "start",
+            start_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "xop",
+            xop_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "umidstop",
+            umidstop_command
+        )
+    )
 
     logger.info("Bot starting...")
-    application.run_polling(drop_pending_updates=True)
 
+    application.run_polling(
+        drop_pending_updates=True
+    )
+
+# =========================
+# RUN
+# =========================
 
 if __name__ == "__main__":
     main()
