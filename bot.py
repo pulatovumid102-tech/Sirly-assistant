@@ -293,7 +293,7 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    application = Application.builder().token(TOKEN).post_init(post_init).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("xop", xop_command))
