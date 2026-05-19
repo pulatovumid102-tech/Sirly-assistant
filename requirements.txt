@@ -1,2 +1,2 @@
-python-telegram-bot[job-queue]
-pytz
+python-telegram-bot[job-queue]==20.7
+tzdata
