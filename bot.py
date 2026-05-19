@@ -112,14 +112,20 @@ def get_active_agents():
 
     # Ozodbek
     # Mon-Sat 10:00-20:00
+    # Sun 10:00-23:59
 
     if weekday <= 5:
         if 10 <= hour < 20:
             active.add("sirlyinfo")
 
+    elif weekday == 6:
+        if hour >= 10:
+            active.add("sirlyinfo")
+
     # Muhammadhumoyun
     # Mon-Fri 14:00-23:59
     # Sat 10:00-23:59
+    # Sun OFF
 
     if weekday <= 4:
         if hour >= 14:
@@ -168,7 +174,10 @@ def seconds_until_next_quarter():
         ((now.minute // 15) + 1) * 15 * 60
     )
 
-    return max(next_quarter_start - elapsed, 1.0)
+    return max(
+        next_quarter_start - elapsed,
+        1.0
+    )
 
 # =========================
 # DELETE WARNING
@@ -176,7 +185,9 @@ def seconds_until_next_quarter():
 
 async def delete_warning(bot):
 
-    msg_id = state.get("warning_message_id")
+    msg_id = state.get(
+        "warning_message_id"
+    )
 
     if msg_id:
 
@@ -195,7 +206,10 @@ async def delete_warning(bot):
 # CANCEL JOBS
 # =========================
 
-def cancel_jobs_by_name(job_queue, name):
+def cancel_jobs_by_name(
+    job_queue,
+    name
+):
 
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
@@ -259,7 +273,6 @@ async def reminder_job(
     ):
         return
 
-    # reset
     state["xop_received"] = set()
     state["xop_times"] = {}
     state["reminder_sent_at"] = None
@@ -287,7 +300,6 @@ async def reminder_job(
             state["cycle_id"]
         )
 
-    # next cycle
     schedule_next_quarter_reminder(
         context.job_queue,
         state["cycle_id"]
@@ -322,7 +334,9 @@ async def nudge_job(
         if u in pending
     )
 
-    await delete_warning(context.bot)
+    await delete_warning(
+        context.bot
+    )
 
     sent = await context.bot.send_message(
         chat_id=CHAT_ID,
@@ -350,6 +364,19 @@ async def start_command(
         update.effective_user.username
         != ADMIN_USERNAME
     ):
+        return
+
+    active = get_active_agents()
+
+    if not active:
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                "🌙 Hozir support ish vaqti emas."
+            ),
+        )
+
         return
 
     state["stopped"] = False
@@ -388,11 +415,27 @@ async def start_command(
         state["cycle_id"]
     )
 
+    active_names = []
+
+    for username in AGENT_ORDER:
+
+        if username in active:
+            active_names.append(
+                AGENTS[username]
+            )
+
+    active_text = "\n".join(
+        f"🟢 {name}"
+        for name in active_names
+    )
+
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "Bot ishga tushdi.\n"
-            f"Birinchi eslatma: "
+            "✅ Bot ishga tushdi\n\n"
+            f"👨🏻‍💻 Aktiv supportlar:\n"
+            f"{active_text}\n\n"
+            f"⏰ Birinchi eslatma: "
             f"{next_q_hour:02d}:"
             f"{next_q_min:02d}"
         ),
@@ -428,9 +471,13 @@ async def xop_command(
     if username in state["xop_received"]:
         return
 
-    xop_time = datetime.now(TIMEZONE)
+    xop_time = datetime.now(
+        TIMEZONE
+    )
 
-    state["xop_received"].add(username)
+    state["xop_received"].add(
+        username
+    )
 
     state["xop_times"][username] = xop_time
 
@@ -456,7 +503,9 @@ async def xop_command(
         f"qabul qildi."
     )
 
-    await delete_warning(context.bot)
+    await delete_warning(
+        context.bot
+    )
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
@@ -504,7 +553,7 @@ async def umidstop_command(
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "Bot toxtatildi.\n"
+            "🛑 Bot toxtatildi.\n"
             "(@umidpulatov tomonidan)"
         ),
     )
@@ -517,7 +566,7 @@ def main():
 
     application = Application.builder().token(TOKEN).build()
 
-    # AUTO START
+    # auto start
     state["cycle_id"] += 1
 
     schedule_next_quarter_reminder(
