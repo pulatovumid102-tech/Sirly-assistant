@@ -115,7 +115,6 @@ state = {
     "confirmations": {},
     "reminder_message_id": None,
     "reminder_sent_at": None,
-    "nudge_count": 0,
 
     "checklist_confirmations": {},
     "checklist_message_ids": {},
@@ -354,21 +353,6 @@ def checklist_all_confirmed(time_key, active_agents, checklist_confs):
 
     return True
 
-
-def get_pending_agents(active_agents, confirmations):
-    pending = []
-
-    for username in AGENT_ORDER:
-        if username not in active_agents:
-            continue
-
-        conf = confirmations.get(username, {})
-
-        if not conf.get("mijoz") or not conf.get("hamkor"):
-            pending.append(username)
-
-    return pending
-
 # =========================
 # JOB HELPERS
 # =========================
@@ -411,7 +395,7 @@ def seconds_until_time(hour, minute):
 # SEND REMINDER
 # =========================
 
-async def send_reminder(bot, job_queue, cycle_id):
+async def send_reminder(bot, cycle_id):
     active = get_active_agents()
 
     if not active:
@@ -427,7 +411,6 @@ async def send_reminder(bot, job_queue, cycle_id):
 
     state["reminder_message_id"] = None
     state["reminder_sent_at"] = datetime.now(TIMEZONE)
-    state["nudge_count"] = 0
 
     text = build_reminder_text(active)
 
@@ -443,16 +426,6 @@ async def send_reminder(bot, job_queue, cycle_id):
     )
 
     state["reminder_message_id"] = sent.message_id
-
-    cancel_jobs_by_name(job_queue, "nudge")
-
-    job_queue.run_repeating(
-        nudge_job,
-        interval=600,
-        first=600,
-        name="nudge",
-        data={"cycle_id": cycle_id},
-    )
 
 # =========================
 # SEND CHECKLIST
@@ -495,11 +468,7 @@ async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
     if cycle_id != state["cycle_id"] or state["stopped"]:
         return
 
-    await send_reminder(
-        context.bot,
-        context.job_queue,
-        cycle_id
-    )
+    await send_reminder(context.bot, cycle_id)
 
     cancel_jobs_by_name(context.job_queue, "reminder")
 
@@ -536,49 +505,6 @@ async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# NUDGE JOB
-# =========================
-
-async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
-    cycle_id = context.job.data["cycle_id"]
-
-    if cycle_id != state["cycle_id"] or state["stopped"]:
-        return
-
-    active = get_active_agents()
-
-    pending = get_pending_agents(
-        active,
-        state["confirmations"]
-    )
-
-    if not pending:
-        cancel_jobs_by_name(context.job_queue, "nudge")
-        return
-
-    if state["nudge_count"] >= 2:
-        cancel_jobs_by_name(context.job_queue, "nudge")
-        return
-
-    state["nudge_count"] += 1
-
-    agent_block = "\n\n".join(
-        AGENT_INFO[u]
-        for u in pending
-    )
-
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=(
-            f"{agent_block}\n\n"
-            "━━━━━━━━━━━━━━\n\n"
-            f"⚠️ Yuqoridagi xabarni tasdiqlang! "
-            f"({state['nudge_count']}/3)\n\n"
-            "━━━━━━━━━━━━━━"
-        ),
-    )
-
-# =========================
 # CALLBACKS
 # =========================
 
@@ -587,6 +513,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     await query.answer("✅ Tasdiqlandi!")
+
+    now = datetime.now(TIMEZONE)
+    time_str = now.strftime("%H:%M")
 
     # =========================
     # REMINDER BUTTONS
@@ -633,19 +562,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
-                f"{NOTIFY_TAGS}\n\n"
-                f"✅ {AGENTS[username]}\n\n"
-                f"“{action_text}”\n"
-                f"vazifasini tasdiqladi."
+                f"{AGENTS[username]} {time_str} | {action_text} ni bajardi ✅\n"
+                f"{NOTIFY_TAGS}"
             ),
         )
 
         if all_confirmed(active, state["confirmations"]):
-            cancel_jobs_by_name(
-                context.job_queue,
-                "nudge"
-            )
-
             await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text="✅ Barcha supportlar tasdiqladi.",
@@ -707,10 +629,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
-                f"{NOTIFY_TAGS}\n\n"
-                f"✅ {AGENTS[username]}\n\n"
-                f"“{task_text}”\n"
-                f"vazifasini tasdiqladi."
+                f"{AGENTS[username]} {time_str} | {task_text} ni bajardi ✅\n"
+                f"{NOTIFY_TAGS}"
             ),
         )
 
@@ -723,7 +643,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text=(
-                    f"✅ {time_key} checklist to‘liq yakunlandi."
+                    f"✅ {time_key} checklist to'liq yakunlandi."
                 ),
             )
 
@@ -818,7 +738,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state["cycle_id"] += 1
 
     cancel_jobs_by_name(context.job_queue, "reminder")
-    cancel_jobs_by_name(context.job_queue, "nudge")
 
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(
@@ -890,7 +809,6 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state["cycle_id"] += 1
 
     cancel_jobs_by_name(context.job_queue, "reminder")
-    cancel_jobs_by_name(context.job_queue, "nudge")
 
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(
