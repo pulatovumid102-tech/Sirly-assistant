@@ -325,7 +325,7 @@ def build_reminder_text(active_agents):
         "💬 Mijozlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "🤝 Hamkorlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
+        "pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
 # =========================
@@ -524,7 +524,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("test_chk_"):
         time_key = data[9:]  # "10:00"
-        active = set(AGENT_ORDER)
+        active = get_active_agents_for_time(time_key) or set(AGENT_ORDER)
         state["checklist_confirmations"][time_key] = {
             username: {} for username in active
         }
@@ -865,7 +865,7 @@ async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
     if update.effective_user.username != ADMIN_USERNAME:
         return
 
-    active = set(AGENT_ORDER)
+    active = get_active_agents() or set(AGENT_ORDER)
 
     state["confirmations"] = {
         username: {"mijoz": False, "hamkor": False}
