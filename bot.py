@@ -99,9 +99,9 @@ CHECKLISTS = {
         "Kunlik hisobot yuborildi",
     ],
     "23:30": [
-    "Telegram murojaatlar tekshirildi",
-    "Checklist toliq tekshirildi",
-    "STAFF guruhiga xabar yuborildi",
+        "Telegram murojaatlar tekshirildi",
+        "Checklist toliq tekshirildi",
+        "STAFF guruhiga xabar yuborildi",
     ],
 }
 
@@ -312,6 +312,7 @@ def build_checklist_text(time_key):
         "━━━━━━━━━━━━━━"
     )
 
+
 def build_reminder_text(active_agents):
     agent_block = "\n\n".join(
         AGENT_INFO[u]
@@ -340,6 +341,7 @@ def all_confirmed(active_agents, confirmations):
 
     return True
 
+
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
     tasks = CHECKLISTS[time_key]
 
@@ -351,6 +353,7 @@ def checklist_all_confirmed(time_key, active_agents, checklist_confs):
                 return False
 
     return True
+
 
 def get_pending_agents(active_agents, confirmations):
     pending = []
@@ -374,6 +377,7 @@ def cancel_jobs_by_name(job_queue, name):
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
 
+
 def seconds_until_next_30():
     now = datetime.now(TIMEZONE)
 
@@ -386,6 +390,7 @@ def seconds_until_next_30():
     next_30 = ((now.minute // 30) + 1) * 30 * 60
 
     return max(next_30 - elapsed, 1.0)
+
 
 def seconds_until_time(hour, minute):
     now = datetime.now(TIMEZONE)
@@ -579,8 +584,150 @@ async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    data = query.data
 
     await query.answer("✅ Tasdiqlandi!")
+
+    # =========================
+    # REMINDER BUTTONS
+    # =========================
+
+    if data.startswith("confirm_"):
+
+        _, username, confirm_type = data.split("_", 2)
+
+        active = get_active_agents()
+
+        if username not in active:
+            return
+
+        if username not in state["confirmations"]:
+            state["confirmations"][username] = {
+                "mijoz": False,
+                "hamkor": False,
+            }
+
+        if state["confirmations"][username][confirm_type]:
+            return
+
+        state["confirmations"][username][confirm_type] = True
+
+        keyboard = build_reminder_keyboard(
+            active,
+            state["confirmations"]
+        )
+
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=keyboard
+            )
+        except:
+            pass
+
+        action_text = (
+            "Mijozlar tekshirildi"
+            if confirm_type == "mijoz"
+            else "Hamkorlar tekshirildi"
+        )
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"{NOTIFY_TAGS}\n\n"
+                f"✅ {AGENTS[username]}\n\n"
+                f"“{action_text}”\n"
+                f"vazifasini tasdiqladi."
+            ),
+        )
+
+        if all_confirmed(active, state["confirmations"]):
+            cancel_jobs_by_name(
+                context.job_queue,
+                "nudge"
+            )
+
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text="✅ Barcha supportlar tasdiqladi.",
+            )
+
+        return
+
+    # =========================
+    # CHECKLIST BUTTONS
+    # =========================
+
+    if data.startswith("chk_"):
+
+        parts = data.split("_")
+
+        time_raw = parts[1]
+        username = parts[2]
+        task_index = int(parts[3])
+
+        time_key = (
+            f"{time_raw[:2]}:{time_raw[2:]}"
+        )
+
+        active = get_active_agents_for_time(time_key)
+
+        if username not in active:
+            return
+
+        if time_key not in state["checklist_confirmations"]:
+            state["checklist_confirmations"][time_key] = {}
+
+        if username not in state["checklist_confirmations"][time_key]:
+            state["checklist_confirmations"][time_key][username] = {}
+
+        user_conf = (
+            state["checklist_confirmations"][time_key][username]
+        )
+
+        if user_conf.get(task_index, False):
+            return
+
+        user_conf[task_index] = True
+
+        keyboard = build_checklist_keyboard(
+            time_key,
+            active,
+            state["checklist_confirmations"][time_key]
+        )
+
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=keyboard
+            )
+        except:
+            pass
+
+        task_text = CHECKLISTS[time_key][task_index]
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"{NOTIFY_TAGS}\n\n"
+                f"✅ {AGENTS[username]}\n\n"
+                f"“{task_text}”\n"
+                f"vazifasini tasdiqladi."
+            ),
+        )
+
+        if checklist_all_confirmed(
+            time_key,
+            active,
+            state["checklist_confirmations"][time_key]
+        ):
+
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=(
+                    f"✅ {time_key} checklist to‘liq yakunlandi."
+                ),
+            )
+
+        return
 
 # =========================
 # START COMMAND
