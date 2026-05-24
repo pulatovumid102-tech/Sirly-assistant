@@ -523,7 +523,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("test_chk_"):
         time_key = data[9:]  # "10:00"
-        await send_checklist(context.bot, time_key)
+        active = set(AGENT_ORDER)
+        state["checklist_confirmations"][time_key] = {
+            username: {} for username in active
+        }
+        text = build_checklist_text(time_key)
+        keyboard = build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key])
+        sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=text,
+            reply_markup=keyboard,
+        )
+        state["checklist_message_ids"][time_key] = sent.message_id
         return
 
     # =========================
@@ -846,7 +857,21 @@ async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
     if update.effective_user.username != ADMIN_USERNAME:
         return
 
-    await send_reminder(context.bot, state["cycle_id"])
+    active = set(AGENT_ORDER)
+
+    state["confirmations"] = {
+        username: {"mijoz": False, "hamkor": False}
+        for username in active
+    }
+
+    text = build_reminder_text(active)
+    keyboard = build_reminder_keyboard(active, state["confirmations"])
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=text,
+        reply_markup=keyboard,
+    )
 
 async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
