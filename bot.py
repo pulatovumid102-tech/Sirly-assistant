@@ -629,16 +629,86 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # START COMMAND
 # =========================
 
+WEEKDAY_UZ = {
+    0: "Душанба",
+    1: "Сешанба",
+    2: "Чоршанба",
+    3: "Пайшанба",
+    4: "Жума",
+    5: "Шанба",
+    6: "Якшанба",
+}
+
+MONTH_UZ = {
+    1: "январь", 2: "февраль", 3: "март", 4: "апрель",
+    5: "май", 6: "июнь", 7: "июль", 8: "август",
+    9: "сентябрь", 10: "октябрь", 11: "ноябрь", 12: "декабрь",
+}
+
+def get_agent_schedule_today(username):
+    """Return (start_hour, end_hour) or None if day off."""
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+
+    if username == "sirlyinfo":
+        if weekday <= 4:
+            return (10, 20)
+        elif weekday == 5:
+            return (10, 24)
+        else:
+            return None
+
+    elif username == "Muhammadhumoyun_Mudarris":
+        if weekday <= 4:
+            return (14, 24)
+        elif weekday == 6:
+            return (10, 24)
+        else:
+            return None
+
+    return None
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
 
     active = get_active_agents()
+    now = datetime.now(TIMEZONE)
 
     if not active:
+        weekday_name = WEEKDAY_UZ[now.weekday()]
+        date_str = f"{weekday_name}, {now.day}-{MONTH_UZ[now.month]} {now.year}"
+        time_str = now.strftime("%H:%M")
+
+        lines = [
+            "🌙 Ҳозир support иш вақти эмас.
+",
+            f"📅 Бугун: {date_str}",
+            f"🕐 Ҳозирги вақт: {time_str}
+",
+            "──────────────",
+        ]
+
+        for username in AGENT_ORDER:
+            schedule = get_agent_schedule_today(username)
+            info = AGENT_INFO[username]
+            if schedule:
+                start_h, end_h = schedule
+                end_str = "23:59" if end_h == 24 else f"{end_h:02d}:00"
+                lines.append(f"
+{info}
+🕐 Бугун иш вақти: {start_h:02d}:00 — {end_str}")
+            else:
+                lines.append(f"
+{info}
+😴 Бугун дам олади")
+            lines.append("
+──────────────")
+
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text="🌙 Ҳозир support иш вақти эмас.",
+            text="
+".join(lines),
         )
         return
 
