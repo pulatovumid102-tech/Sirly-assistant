@@ -448,8 +448,8 @@ async def send_reminder(bot, job_queue, cycle_id):
 
     job_queue.run_repeating(
         nudge_job,
-        interval=300,
-        first=300,
+        interval=600,
+        first=600,
         name="nudge",
         data={"cycle_id": cycle_id},
     )
