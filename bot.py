@@ -544,7 +544,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("confirm_"):
 
-        _, username, confirm_type = data.split("_", 2)
+        # "confirm_sirlyinfo_mijoz"
+        # "confirm_Muhammadhumoyun_Mudarris_mijoz"
+        without_prefix = data[8:]  # "sirlyinfo_mijoz" or "Muhammadhumoyun_Mudarris_mijoz"
+        confirm_type = without_prefix.split("_")[-1]  # "mijoz" or "hamkor"
+        username = without_prefix[:-(len(confirm_type) + 1)]  # "sirlyinfo" or "Muhammadhumoyun_Mudarris"
 
         active = set(state["confirmations"].keys()) or get_active_agents()
 
