@@ -325,7 +325,7 @@ def build_reminder_text(active_agents):
         "💬 Mijozlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "🤝 Hamkorlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
+        "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
 # =========================
