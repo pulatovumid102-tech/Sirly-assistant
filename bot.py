@@ -545,7 +545,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         _, username, confirm_type = data.split("_", 2)
 
-        active = get_active_agents()
+        active = set(state["confirmations"].keys()) or get_active_agents()
 
         if username not in active:
             return
@@ -615,7 +615,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{time_raw[:2]}:{time_raw[2:]}"
         )
 
-        active = get_active_agents_for_time(time_key)
+        if time_key in state["checklist_confirmations"] and state["checklist_confirmations"][time_key]:
+            active = set(state["checklist_confirmations"][time_key].keys())
+        else:
+            active = get_active_agents_for_time(time_key)
 
         if username not in active:
             return
