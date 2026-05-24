@@ -675,7 +675,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text=(
-                    f"✅ {time_key} checklist to'liq yakunlandi."
+                    f"✅ {time_key} checklist to'liq yakunlandi.
+"
+                    f"{NOTIFY_TAGS}"
                 ),
             )
 
