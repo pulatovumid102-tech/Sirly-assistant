@@ -556,7 +556,7 @@ async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
         cancel_jobs_by_name(context.job_queue, "nudge")
         return
 
-    if state["nudge_count"] >= 3:
+    if state["nudge_count"] >= 2:
         cancel_jobs_by_name(context.job_queue, "nudge")
         return
 
