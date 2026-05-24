@@ -518,6 +518,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_str = now.strftime("%H:%M")
 
     # =========================
+    # TEST CHECKLIST BUTTON
+    # =========================
+
+    if data.startswith("test_chk_"):
+        time_key = data[9:]  # "10:00"
+        await send_checklist(context.bot, time_key)
+        return
+
+    # =========================
     # REMINDER BUTTONS
     # =========================
 
@@ -830,6 +839,31 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
+# TEST COMMANDS
+# =========================
+
+async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    await send_reminder(context.bot, state["cycle_id"])
+
+async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(t, callback_data=f"test_chk_{t}")]
+        for t in CHECKLIST_TIMES
+    ]
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text="🧪 Qaysi checklist vaqtini test qilasiz?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+# =========================
 # MAIN
 # =========================
 
@@ -871,6 +905,14 @@ def main():
 
     application.add_handler(
         CommandHandler("umidstop", umidstop_command)
+    )
+
+    application.add_handler(
+        CommandHandler("test_reminder", test_reminder_command)
+    )
+
+    application.add_handler(
+        CommandHandler("test_checklist", test_checklist_command)
     )
 
     application.add_handler(
