@@ -2,10 +2,11 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
+    CallbackQueryHandler,
     ContextTypes,
 )
 
@@ -44,6 +45,8 @@ TIMEZONE = ZoneInfo("Asia/Tashkent")
 
 ADMIN_USERNAME = "umidpulatov"
 
+NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
+
 # =========================
 # AGENTS
 # =========================
@@ -63,7 +66,6 @@ AGENT_INFO = {
         "👨🏻‍💻 Ozodbek @sirlyinfo\n"
         "📞 93 798 13 04"
     ),
-
     "Muhammadhumoyun_Mudarris": (
         "👨🏻‍💻 Muhammadhumoyun @Muhammadhumoyun_Mudarris\n"
         "📞 88 811 88 51 • 94 115 88 51"
@@ -71,28 +73,54 @@ AGENT_INFO = {
 }
 
 # =========================
-# MESSAGE
+# CHECKLIST
 # =========================
 
-REMINDER_BODY = (
-    "\n\n"
-    "━━━━━━━━━━━━━━\n\n"
-    "💬 Mijozlardan kelgan murojaatlarni tekshiring\n\n"
-    "🤝 Hamkorlardan kelgan murojaatlarni tekshiring\n\n"
-    "📋 Checklistga qarang\n\n"
-    "━━━━━━━━━━━━━━\n\n"
-    "Xabarni qabul qilgan bo'lsangiz: /xop"
-)
+CHECKLISTS = {
+    "10:00": [
+        "Admin panel (support) tozalandi",
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+    ],
+    "14:00": [
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Sotuv tablistsyasi toldirildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+    ],
+    "18:00": [
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Sirly bug va task guruhidagi barcha bug hamda tasklar jadvalga kiritildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+    ],
+    "23:00": [
+        "Bugalteriya jadvali to'ldirildi",
+        "Bugalteriya kunlik holati hamkorlar telegram guruhlariga yuborildi",
+    ],
+    "23:30": [
+        "Support va telegramdagi murojaatlar qolib ketmadi",
+        "Ishlamayotgan hamkorlar ilovada sotildi holatiga o'zgartirildimi?",
+        "Checklist to'liq tekshirildi",
+        "To'liq tekshiirilgani haqida Sirly STAFF ga habar yuborildimi? Umid akani tag qilib",
+    ],
+}
+
+CHECKLIST_TIMES = ["10:00", "14:00", "18:00", "23:00", "23:30"]
 
 # =========================
 # STATE
 # =========================
 
 state = {
-    "xop_received": set(),
-    "xop_times": {},
+    # 30-min reminder state
+    "confirmations": {},
+    "reminder_message_id": None,
     "reminder_sent_at": None,
-    "warning_message_id": None,
+    "nudge_count": 0,
+
+    # checklist state: {time_key: {username: {task_index: bool}}}
+    "checklist_confirmations": {},
+    "checklist_message_ids": {},  # {time_key: message_id}
+
     "cycle_id": 0,
     "stopped": False,
 }
@@ -102,459 +130,585 @@ state = {
 # =========================
 
 def get_active_agents():
-
     now = datetime.now(TIMEZONE)
-
-    weekday = now.weekday()
+    weekday = now.weekday()  # 0=Mon, 6=Sun
     hour = now.hour
-
     active = set()
 
-    # Ozodbek
-    # Mon-Sat 10:00-20:00
-    # Sun 10:00-23:59
-
-    if weekday <= 5:
+    # Ozodbek: Mon-Fri 10:00-20:00, Sat 10:00-23:59, Sun OFF
+    if weekday <= 4:
         if 10 <= hour < 20:
             active.add("sirlyinfo")
-
-    elif weekday == 6:
+    elif weekday == 5:
         if hour >= 10:
             active.add("sirlyinfo")
 
-    # Muhammadhumoyun
-    # Mon-Fri 14:00-23:59
-    # Sat 10:00-23:59
-    # Sun OFF
-
+    # Muhammadhumoyun: Mon-Fri 14:00-23:59, Sat OFF, Sun 10:00-23:59
     if weekday <= 4:
         if hour >= 14:
             active.add("Muhammadhumoyun_Mudarris")
-
-    elif weekday == 5:
+    elif weekday == 6:
         if hour >= 10:
             active.add("Muhammadhumoyun_Mudarris")
 
     return active
 
 # =========================
-# REMINDER MESSAGE
+# ACTIVE AGENTS FOR CHECKLIST TIME
 # =========================
 
-def get_reminder_message():
+def get_active_agents_for_time(time_key):
+    """Return active agents based on checklist time."""
+    hour = int(time_key.split(":")[0])
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    active = set()
 
-    active = get_active_agents()
+    # Ozodbek: Mon-Fri 10:00-20:00, Sat 10:00-23:59, Sun OFF
+    if weekday <= 4:
+        if 10 <= hour < 20:
+            active.add("sirlyinfo")
+    elif weekday == 5:
+        if hour >= 10:
+            active.add("sirlyinfo")
 
-    if not active:
-        return ""
+    # Muhammadhumoyun: Mon-Fri 14:00-23:59, Sat OFF, Sun 10:00-23:59
+    if weekday <= 4:
+        if hour >= 14:
+            active.add("Muhammadhumoyun_Mudarris")
+    elif weekday == 6:
+        if hour >= 10:
+            active.add("Muhammadhumoyun_Mudarris")
 
+    return active
+
+# =========================
+# BUILD 30-MIN KEYBOARD
+# =========================
+
+def build_reminder_keyboard(active_agents, confirmations):
+    keyboard = []
+    for username in AGENT_ORDER:
+        if username not in active_agents:
+            continue
+        name = AGENTS[username]
+        conf = confirmations.get(username, {"mijoz": False, "hamkor": False})
+        mijoz_label = f"✅ {name} - Мижозлар текширилди" if conf["mijoz"] else f"⬜ {name} - Мижозлар текширилди"
+        hamkor_label = f"✅ {name} - Ҳамкорлар текширилди" if conf["hamkor"] else f"⬜ {name} - Ҳамкорлар текширилди"
+        keyboard.append([InlineKeyboardButton(mijoz_label, callback_data=f"confirm_{username}_mijoz")])
+        keyboard.append([InlineKeyboardButton(hamkor_label, callback_data=f"confirm_{username}_hamkor")])
+    return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# BUILD CHECKLIST KEYBOARD
+# =========================
+
+def build_checklist_keyboard(time_key, active_agents, checklist_confs):
+    tasks = CHECKLISTS[time_key]
+    keyboard = []
+    for username in AGENT_ORDER:
+        if username not in active_agents:
+            continue
+        name = AGENTS[username]
+        user_conf = checklist_confs.get(username, {})
+        for i, task in enumerate(tasks):
+            done = user_conf.get(i, False)
+            short_task = task if len(task) <= 30 else task[:30] + "..."
+            icon = "✅" if done else "⬜"
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{icon} {name} — {short_task}",
+                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
+                )
+            ])
+    return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# BUILD CHECKLIST TEXT
+# =========================
+
+def build_checklist_text(time_key):
+    tasks = CHECKLISTS[time_key]
+    task_lines = "\n".join(f"{i+1}. {task} ☑️" for i, task in enumerate(tasks))
+    return (
+        f"📋 {time_key} чеклист\n\n"
+        f"{task_lines}\n\n"
+        "━━━━━━━━━━━━━━"
+    )
+
+# =========================
+# BUILD REMINDER TEXT
+# =========================
+
+def build_reminder_text(active_agents):
     agent_block = "\n\n".join(
         AGENT_INFO[u]
         for u in AGENT_ORDER
-        if u in active
+        if u in active_agents
     )
-
-    return agent_block + REMINDER_BODY
-
-# =========================
-# NEXT QUARTER
-# =========================
-
-def seconds_until_next_quarter():
-
-    now = datetime.now(TIMEZONE)
-
-    elapsed = (
-        now.minute * 60
-        + now.second
-        + now.microsecond / 1_000_000
-    )
-
-    next_quarter_start = (
-        ((now.minute // 15) + 1) * 15 * 60
-    )
-
-    return max(
-        next_quarter_start - elapsed,
-        1.0
+    return (
+        f"{agent_block}\n\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "💬 Мижозлардан келган мурожаатларни текширдингизми? ☑️\n\n"
+        "🤝 Ҳамкорлардан келган мурожаатларни текширдингизми? ☑️\n\n"
+        "━━━━━━━━━━━━━━"
     )
 
 # =========================
-# DELETE WARNING
+# ALL CONFIRMED CHECK (30-min)
 # =========================
 
-async def delete_warning(bot):
+def all_confirmed(active_agents, confirmations):
+    for username in active_agents:
+        conf = confirmations.get(username, {})
+        if not conf.get("mijoz") or not conf.get("hamkor"):
+            return False
+    return True
 
-    msg_id = state.get(
-        "warning_message_id"
-    )
+# =========================
+# CHECKLIST ALL CONFIRMED
+# =========================
 
-    if msg_id:
+def checklist_all_confirmed(time_key, active_agents, checklist_confs):
+    tasks = CHECKLISTS[time_key]
+    for username in active_agents:
+        user_conf = checklist_confs.get(username, {})
+        for i in range(len(tasks)):
+            if not user_conf.get(i, False):
+                return False
+    return True
 
-        try:
-            await bot.delete_message(
-                chat_id=CHAT_ID,
-                message_id=msg_id
-            )
+# =========================
+# PENDING AGENTS (30-min)
+# =========================
 
-        except Exception:
-            pass
-
-        state["warning_message_id"] = None
+def get_pending_agents(active_agents, confirmations):
+    pending = []
+    for username in AGENT_ORDER:
+        if username not in active_agents:
+            continue
+        conf = confirmations.get(username, {})
+        if not conf.get("mijoz") or not conf.get("hamkor"):
+            pending.append(username)
+    return pending
 
 # =========================
 # CANCEL JOBS
 # =========================
 
-def cancel_jobs_by_name(
-    job_queue,
-    name
-):
-
+def cancel_jobs_by_name(job_queue, name):
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
 
 # =========================
-# NEXT REMINDER
+# SECONDS UNTIL NEXT 30 MIN
 # =========================
 
-def schedule_next_quarter_reminder(
-    job_queue,
-    cycle_id
-):
-
-    cancel_jobs_by_name(
-        job_queue,
-        "reminder"
-    )
-
-    job_queue.run_once(
-        reminder_job,
-        when=seconds_until_next_quarter(),
-        name="reminder",
-        data={"cycle_id": cycle_id},
-    )
+def seconds_until_next_30():
+    now = datetime.now(TIMEZONE)
+    elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
+    next_30 = ((now.minute // 30) + 1) * 30 * 60
+    return max(next_30 - elapsed, 1.0)
 
 # =========================
-# NUDGE LOOP
+# SECONDS UNTIL GIVEN TIME
 # =========================
 
-def start_nudge_loop(
-    job_queue,
-    cycle_id
-):
+def seconds_until_time(hour, minute):
+    now = datetime.now(TIMEZONE)
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        # next day
+        from datetime import timedelta
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
 
-    cancel_jobs_by_name(
-        job_queue,
-        "nudge"
+# =========================
+# SEND 30-MIN REMINDER
+# =========================
+
+async def send_reminder(bot, job_queue, cycle_id):
+    active = get_active_agents()
+    if not active:
+        return
+
+    state["confirmations"] = {
+        username: {"mijoz": False, "hamkor": False}
+        for username in active
+    }
+    state["reminder_message_id"] = None
+    state["reminder_sent_at"] = datetime.now(TIMEZONE)
+    state["nudge_count"] = 0
+
+    text = build_reminder_text(active)
+    keyboard = build_reminder_keyboard(active, state["confirmations"])
+
+    sent = await bot.send_message(
+        chat_id=CHAT_ID,
+        text=text,
+        reply_markup=keyboard,
     )
+    state["reminder_message_id"] = sent.message_id
 
+    cancel_jobs_by_name(job_queue, "nudge")
     job_queue.run_repeating(
         nudge_job,
-        interval=60,
-        first=60,
+        interval=300,
+        first=300,
         name="nudge",
         data={"cycle_id": cycle_id},
     )
 
 # =========================
+# SEND CHECKLIST
+# =========================
+
+async def send_checklist(bot, time_key):
+    active = get_active_agents_for_time(time_key)
+    if not active:
+        return
+
+    state["checklist_confirmations"][time_key] = {
+        username: {} for username in active
+    }
+
+    text = build_checklist_text(time_key)
+    keyboard = build_checklist_keyboard(
+        time_key, active,
+        state["checklist_confirmations"][time_key]
+    )
+
+    sent = await bot.send_message(
+        chat_id=CHAT_ID,
+        text=text,
+        reply_markup=keyboard,
+    )
+    state["checklist_message_ids"][time_key] = sent.message_id
+
+# =========================
 # REMINDER JOB
 # =========================
 
-async def reminder_job(
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
     cycle_id = context.job.data["cycle_id"]
-
-    if (
-        cycle_id != state["cycle_id"]
-        or state["stopped"]
-    ):
+    if cycle_id != state["cycle_id"] or state["stopped"]:
         return
 
-    state["xop_received"] = set()
-    state["xop_times"] = {}
-    state["reminder_sent_at"] = None
-    state["warning_message_id"] = None
+    await send_reminder(context.bot, context.job_queue, cycle_id)
 
-    active = get_active_agents()
+    cancel_jobs_by_name(context.job_queue, "reminder")
+    context.job_queue.run_once(
+        reminder_job,
+        when=seconds_until_next_30(),
+        name="reminder",
+        data={"cycle_id": cycle_id},
+    )
 
-    if active:
+# =========================
+# CHECKLIST JOB
+# =========================
 
-        message = get_reminder_message()
+async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
+    cycle_id = context.job.data["cycle_id"]
+    time_key = context.job.data["time_key"]
 
-        if message:
+    if cycle_id != state["cycle_id"] or state["stopped"]:
+        return
 
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=message
-            )
+    await send_checklist(context.bot, time_key)
 
-            state["reminder_sent_at"] = datetime.now(
-                TIMEZONE
-            )
-
-        start_nudge_loop(
-            context.job_queue,
-            state["cycle_id"]
-        )
-
-    schedule_next_quarter_reminder(
-        context.job_queue,
-        state["cycle_id"]
+    # Schedule next day same time
+    hour, minute = map(int, time_key.split(":"))
+    context.job_queue.run_once(
+        checklist_job,
+        when=seconds_until_time(hour, minute),
+        name=f"checklist_{time_key}",
+        data={"cycle_id": cycle_id, "time_key": time_key},
     )
 
 # =========================
 # NUDGE JOB
 # =========================
 
-async def nudge_job(
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+async def nudge_job(context: ContextTypes.DEFAULT_TYPE):
     cycle_id = context.job.data["cycle_id"]
-
-    if (
-        cycle_id != state["cycle_id"]
-        or state["stopped"]
-    ):
+    if cycle_id != state["cycle_id"] or state["stopped"]:
         return
 
     active = get_active_agents()
-
-    pending = active - state["xop_received"]
+    pending = get_pending_agents(active, state["confirmations"])
 
     if not pending:
+        cancel_jobs_by_name(context.job_queue, "nudge")
         return
 
-    agent_block = "\n\n".join(
-        AGENT_INFO[u]
-        for u in AGENT_ORDER
-        if u in pending
-    )
+    if state["nudge_count"] >= 3:
+        cancel_jobs_by_name(context.job_queue, "nudge")
+        return
 
-    await delete_warning(
-        context.bot
-    )
+    state["nudge_count"] += 1
 
-    sent = await context.bot.send_message(
+    agent_block = "\n\n".join(AGENT_INFO[u] for u in pending)
+
+    await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
             f"{agent_block}\n\n"
             "━━━━━━━━━━━━━━\n\n"
-            "⚠️ Aloqaga chiqing.\n\n"
-            "━━━━━━━━━━━━━━\n\n"
-            "Agar xabarni qabul qilgan bo'lsangiz: /xop"
+            f"⚠️ Юқоридаги хабарни тасдиқланг! "
+            f"({state['nudge_count']}/3)\n\n"
+            "━━━━━━━━━━━━━━"
         ),
     )
 
-    state["warning_message_id"] = sent.message_id
-
 # =========================
-# START
+# CALLBACK — 30-MIN REMINDER
 # =========================
 
-async def start_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def handle_reminder_callback(query, username, target_username, confirm_type, context):
+    if username != target_username:
+        await query.answer()
+        return
 
-    if (
-        update.effective_user.username
-        != ADMIN_USERNAME
-    ):
+    active = get_active_agents()
+    if username not in active:
+        await query.answer()
+        return
+
+    if username not in state["confirmations"]:
+        state["confirmations"][username] = {"mijoz": False, "hamkor": False}
+
+    if state["confirmations"][username][confirm_type]:
+        await query.answer()
+        return
+
+    state["confirmations"][username][confirm_type] = True
+
+    name = AGENTS.get(username, username)
+    now = datetime.now(TIMEZONE)
+    time_str = now.strftime("%H:%M")
+
+    if confirm_type == "mijoz":
+        label = "жавоб берилмаган мижоз қолмаганини тасдиқлади"
+    else:
+        label = "жавоб берилмаган ҳамкор қолмаганини тасдиқлади"
+
+    await query.answer("✅ Тасдиқланди!")
+
+    msg_id = state.get("reminder_message_id")
+    if msg_id:
+        keyboard = build_reminder_keyboard(active, state["confirmations"])
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=CHAT_ID,
+                message_id=msg_id,
+                reply_markup=keyboard,
+            )
+        except Exception:
+            pass
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=f"{NOTIFY_TAGS}\n\n✅ {name} ({time_str}) — {label} ✅",
+    )
+
+    if all_confirmed(active, state["confirmations"]):
+        cancel_jobs_by_name(context.job_queue, "nudge")
+        sent_at = state["reminder_sent_at"] or now
+        mins = int((now - sent_at).total_seconds() // 60)
+        names_list = "\n".join(
+            f"✅ {AGENTS[u]}" for u in AGENT_ORDER if u in active
+        )
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"🎉 Барча тасдиқлади!\n\n"
+                f"{names_list}\n\n"
+                f"⏱ Вақт: {mins} дақиқа"
+            ),
+        )
+
+# =========================
+# CALLBACK — CHECKLIST
+# =========================
+
+async def handle_checklist_callback(query, username, parts, context):
+    # parts: ["chk", time_str, username, task_index]
+    if len(parts) != 4:
+        await query.answer()
+        return
+
+    _, time_str, target_username, task_index_str = parts
+    time_key = time_str[:2] + ":" + time_str[2:]  # "1000" -> "10:00"
+
+    if username != target_username:
+        await query.answer()
+        return
+
+    active = get_active_agents_for_time(time_key)
+    if username not in active:
+        await query.answer()
+        return
+
+    if time_key not in state["checklist_confirmations"]:
+        await query.answer()
+        return
+
+    task_index = int(task_index_str)
+    tasks = CHECKLISTS.get(time_key, [])
+    if task_index >= len(tasks):
+        await query.answer()
+        return
+
+    user_conf = state["checklist_confirmations"][time_key].get(username, {})
+
+    if user_conf.get(task_index, False):
+        await query.answer()
+        return
+
+    state["checklist_confirmations"][time_key][username][task_index] = True
+
+    name = AGENTS.get(username, username)
+    task_text = tasks[task_index]
+    now = datetime.now(TIMEZONE)
+    time_str_now = now.strftime("%H:%M")
+
+    await query.answer("✅ Тасдиқланди!")
+
+    # Update checklist keyboard
+    msg_id = state["checklist_message_ids"].get(time_key)
+    if msg_id:
+        keyboard = build_checklist_keyboard(
+            time_key, active,
+            state["checklist_confirmations"][time_key]
+        )
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=CHAT_ID,
+                message_id=msg_id,
+                reply_markup=keyboard,
+            )
+        except Exception:
+            pass
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=f"{NOTIFY_TAGS}\n\n✅ {name} ({time_str_now}) — {task_text}",
+    )
+
+# =========================
+# CALLBACK HANDLER
+# =========================
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    username = query.from_user.username
+
+    if state["stopped"]:
+        await query.answer()
+        return
+
+    data = query.data
+
+    if data.startswith("confirm_"):
+        parts = data.split("_", 2)
+        if len(parts) == 3:
+            _, target_username, confirm_type = parts
+            await handle_reminder_callback(
+                query, username, target_username, confirm_type, context
+            )
+
+    elif data.startswith("chk_"):
+        parts = data.split("_", 3)
+        await handle_checklist_callback(query, username, parts, context)
+
+    else:
+        await query.answer()
+
+# =========================
+# START COMMAND
+# =========================
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
         return
 
     active = get_active_agents()
 
     if not active:
-
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text=(
-                "🌙 Hozir support ish vaqti emas."
-            ),
+            text="🌙 Ҳозир support иш вақти эмас.",
         )
-
         return
 
     state["stopped"] = False
-
-    state["xop_received"] = set()
-    state["xop_times"] = {}
-    state["reminder_sent_at"] = None
-    state["warning_message_id"] = None
-
     state["cycle_id"] += 1
 
-    cancel_jobs_by_name(
-        context.job_queue,
-        "reminder"
-    )
-
-    cancel_jobs_by_name(
-        context.job_queue,
-        "nudge"
-    )
+    cancel_jobs_by_name(context.job_queue, "reminder")
+    cancel_jobs_by_name(context.job_queue, "nudge")
+    for t in CHECKLIST_TIMES:
+        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
 
     now = datetime.now(TIMEZONE)
-
-    next_q_total = (
-        ((now.minute // 15) + 1) * 15
-    )
-
-    next_q_hour = (
-        (now.hour + next_q_total // 60) % 24
-    )
-
+    next_q_total = ((now.minute // 30) + 1) * 30
+    next_q_hour = (now.hour + next_q_total // 60) % 24
     next_q_min = next_q_total % 60
 
-    schedule_next_quarter_reminder(
-        context.job_queue,
-        state["cycle_id"]
+    # Schedule 30-min reminder
+    context.job_queue.run_once(
+        reminder_job,
+        when=seconds_until_next_30(),
+        name="reminder",
+        data={"cycle_id": state["cycle_id"]},
     )
 
-    active_names = []
-
-    for username in AGENT_ORDER:
-
-        if username in active:
-            active_names.append(
-                AGENTS[username]
-            )
+    # Schedule checklist jobs
+    for time_key in CHECKLIST_TIMES:
+        hour, minute = map(int, time_key.split(":"))
+        context.job_queue.run_once(
+            checklist_job,
+            when=seconds_until_time(hour, minute),
+            name=f"checklist_{time_key}",
+            data={"cycle_id": state["cycle_id"], "time_key": time_key},
+        )
 
     active_text = "\n".join(
-        f"🟢 {name}"
-        for name in active_names
+        f"🟢 {AGENTS[u]}" for u in AGENT_ORDER if u in active
     )
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "✅ Bot ishga tushdi\n\n"
-            f"👨🏻‍💻 Aktiv supportlar:\n"
+            "✅ Бот ишга тушди\n\n"
+            f"👨🏻‍💻 Актив supportlar:\n"
             f"{active_text}\n\n"
-            f"⏰ Birinchi eslatma: "
-            f"{next_q_hour:02d}:"
-            f"{next_q_min:02d}"
+            f"⏰ Биринчи эслатма: "
+            f"{next_q_hour:02d}:{next_q_min:02d}"
         ),
     )
 
 # =========================
-# XOP
+# STOP COMMAND
 # =========================
 
-async def xop_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if state["stopped"]:
-        return
-
-    username = update.effective_user.username
-
-    if not username:
-        return
-
-    active = get_active_agents()
-
-    if username not in active:
-
-        await update.message.reply_text(
-            "Bu xabar support uchun yuborilgan 🙂"
-        )
-
-        return
-
-    if username in state["xop_received"]:
-        return
-
-    xop_time = datetime.now(
-        TIMEZONE
-    )
-
-    state["xop_received"].add(
-        username
-    )
-
-    state["xop_times"][username] = xop_time
-
-    name = AGENTS.get(
-        username,
-        username
-    )
-
-    sent_at = (
-        state["reminder_sent_at"]
-        or xop_time
-    )
-
-    mins = int(
-        (
-            xop_time - sent_at
-        ).total_seconds() // 60
-    )
-
-    confirmation = (
-        f"✅ {name} "
-        f"xabarni {mins} daqiqada "
-        f"qabul qildi."
-    )
-
-    await delete_warning(
-        context.bot
-    )
-
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=confirmation
-    )
-
-    if not (
-        active - state["xop_received"]
-    ):
-
-        cancel_jobs_by_name(
-            context.job_queue,
-            "nudge"
-        )
-
-# =========================
-# STOP
-# =========================
-
-async def umidstop_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if (
-        update.effective_user.username
-        != ADMIN_USERNAME
-    ):
+async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
         return
 
     state["stopped"] = True
-
     state["cycle_id"] += 1
 
-    cancel_jobs_by_name(
-        context.job_queue,
-        "reminder"
-    )
-
-    cancel_jobs_by_name(
-        context.job_queue,
-        "nudge"
-    )
+    cancel_jobs_by_name(context.job_queue, "reminder")
+    cancel_jobs_by_name(context.job_queue, "nudge")
+    for t in CHECKLIST_TIMES:
+        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "🛑 Bot toxtatildi.\n"
-            "(@umidpulatov tomonidan)"
+            "🛑 Бот тўхтатилди.\n"
+            "(@umidpulatov томонидан)"
         ),
     )
 
@@ -563,43 +717,34 @@ async def umidstop_command(
 # =========================
 
 def main():
-
     application = Application.builder().token(TOKEN).build()
 
-    # auto start
     state["cycle_id"] += 1
 
-    schedule_next_quarter_reminder(
-        application.job_queue,
-        state["cycle_id"]
+    # Auto-start 30-min reminder
+    application.job_queue.run_once(
+        reminder_job,
+        when=seconds_until_next_30(),
+        name="reminder",
+        data={"cycle_id": state["cycle_id"]},
     )
 
-    application.add_handler(
-        CommandHandler(
-            "start",
-            start_command
+    # Auto-start checklist jobs
+    for time_key in CHECKLIST_TIMES:
+        hour, minute = map(int, time_key.split(":"))
+        application.job_queue.run_once(
+            checklist_job,
+            when=seconds_until_time(hour, minute),
+            name=f"checklist_{time_key}",
+            data={"cycle_id": state["cycle_id"], "time_key": time_key},
         )
-    )
 
-    application.add_handler(
-        CommandHandler(
-            "xop",
-            xop_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "umidstop",
-            umidstop_command
-        )
-    )
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application.add_handler(CallbackQueryHandler(button_callback))
 
     logger.info("Bot starting...")
-
-    application.run_polling(
-        drop_pending_updates=True
-    )
+    application.run_polling(drop_pending_updates=True)
 
 # =========================
 # RUN
