@@ -16,7 +16,7 @@ from telegram.ext import (
 # TOKEN
 # =========================
 
-TOKEN = "8616037861:AAHSaUgFBCv1c-8WzoQpGdiYS1OtM94HIAE"
+TOKEN = "8616037861:AAEpNThIHz2x4KTpMZcTQjCoJa2Hcnf_I0Q"
 
 # =========================
 # GROUP CHAT ID
