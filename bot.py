@@ -99,10 +99,9 @@ CHECKLISTS = {
         "Kunlik hisobot yuborildi",
     ],
     "23:30": [
-        "Telegram murojaatlar tekshirildi",
-        "Ishlamayotgan hamkorlar sotildi holatiga otkazildi",
-        "Checklist toliq tekshirildi",
-        "STAFF guruhiga xabar yuborildi",
+    "Telegram murojaatlar tekshirildi",
+    "Checklist toliq tekshirildi",
+    "STAFF guruhiga xabar yuborildi",
     ],
 }
 
