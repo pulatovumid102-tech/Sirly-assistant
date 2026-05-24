@@ -581,11 +581,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("chk_"):
 
-        parts = data.split("_")
-
-        time_raw = parts[1]
-        username = parts[2]
-        task_index = int(parts[3])
+        # "chk_1400_sirlyinfo_0"
+        # "chk_1400_Muhammadhumoyun_Mudarris_0"
+        without_prefix = data[4:]  # "1400_sirlyinfo_0"
+        first_underscore = without_prefix.index("_")
+        time_raw = without_prefix[:first_underscore]  # "1400"
+        rest = without_prefix[first_underscore + 1:]  # "sirlyinfo_0"
+        last_underscore = rest.rindex("_")
+        username = rest[:last_underscore]  # "sirlyinfo" or "Muhammadhumoyun_Mudarris"
+        task_index = int(rest[last_underscore + 1:])
 
         time_key = (
             f"{time_raw[:2]}:{time_raw[2:]}"
@@ -819,8 +823,9 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "🛑 Bot toxtatildi.\n"
-            "(@umidpulatov tomonidan)"
+            "🛑 Bot to'xtatildi.\n\n"
+            "Eslatmalar va vazifalar yuborilmaydi.\n\n"
+            "Qayta ishga tushirish uchun /start bosing."
         ),
     )
 
