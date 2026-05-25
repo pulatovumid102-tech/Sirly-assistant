@@ -1809,10 +1809,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- ACCEPT ---
     elif data.startswith("zaccept_"):
-    rest = data[8:]
-    underscore = rest.index("_")
-    tid = int(rest[:underscore])
-    username = rest[underscore + 1:]
+        rest = data[8:]
+        underscore = rest.index("_")
+        tid = int(rest[:underscore])
+        username = rest[underscore + 1:]
 
     if tid not in zadacha_tasks:
         return
