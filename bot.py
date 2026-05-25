@@ -87,6 +87,7 @@ CHECKLISTS = {
         "Admin panel tozalandi",
         "Muammoli mijozlar jadvali tekshirildi",
         "Checklist screenshot yuborildi",
+        "Olib ketilgan statusini tekshirildi",
     ],
     "14:00": [
         "Muammoli mijozlar jadvali tekshirildi",
@@ -337,12 +338,13 @@ def build_checklist_text(time_key, active_agents):
     )
 
     return (
-        f"📋 {time_key} checklist\n\n"
+        f"📋 ЧЕКЛИСТ — {time_key}\n\n"
         f"{task_lines}\n\n"
         "━━━━━━━━━━━━━━\n\n"
         f"{agent_block}\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
+        "⚠️ ЎҚИМАСДАН ТУРИБ БОСМАНГ\n"
+        "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
 def build_reminder_text(active_agents):
@@ -358,7 +360,8 @@ def build_reminder_text(active_agents):
         "💬 Mijozlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "🤝 Hamkorlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
+        "⚠️ ЎҚИМАСДАН ТУРИБ БОСМАНГ\n"
+        "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
 # =========================
@@ -432,6 +435,18 @@ async def send_reminder(bot, cycle_id):
     if not active:
         return
 
+    # ТАСК 2+12: янги реминдер юборилишидан олдин олдинги лог ва реминдер ўчирилади
+    if state.get("reminder_log_message_id"):
+        try:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_log_message_id"])
+        except:
+            pass
+    if state.get("reminder_message_id"):
+        try:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
+        except:
+            pass
+
     state["confirmations"] = {
         username: {
             "mijoz": False,
@@ -470,10 +485,25 @@ async def send_checklist(bot, time_key):
     if not active:
         return
 
+    # ТАСК 4+12: олдинги чеклист хабари ва логни ўчириш
+    if state["checklist_log_message_ids"].get(time_key):
+        try:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_log_message_ids"][time_key])
+        except:
+            pass
+        state["checklist_log_message_ids"][time_key] = None
+    if state["checklist_message_ids"].get(time_key):
+        try:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_message_ids"][time_key])
+        except:
+            pass
+        state["checklist_message_ids"][time_key] = None
+
     state["checklist_confirmations"][time_key] = {
         username: {}
         for username in active
     }
+    state["checklist_log_lines"][time_key] = []
 
     text = build_checklist_text(time_key, active)
 
@@ -1530,6 +1560,11 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = int(rest[:first_underscore])
         username = rest[first_underscore + 1:]
 
+        # ТАСК 11: фақат ўзи боса олади
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+
         if tid not in zadacha_tasks:
             await query.answer("❌ Vazifa topilmadi.")
             return
@@ -1559,10 +1594,14 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ),
         )
 
+        # ТАСК 5: "iltimos tasdiqlang" хабарини ўчириш
         try:
-            await query.message.edit_reply_markup(reply_markup=None)
+            await query.message.delete()
         except:
-            pass
+            try:
+                await query.message.edit_reply_markup(reply_markup=None)
+            except:
+                pass
 
     # --- ESIMDA ---
     elif data.startswith("zes_"):
@@ -1571,8 +1610,25 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = int(rest[:first_underscore])
         username = rest[first_underscore + 1:]
 
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+
         if tid not in zadacha_tasks:
             return
+
+        # ТАСК 10: 10 сониядан кейин ўчириш
+        import asyncio
+        msg_to_delete = query.message
+
+        async def delete_after_10():
+            await asyncio.sleep(10)
+            try:
+                await msg_to_delete.delete()
+            except:
+                pass
+
+        asyncio.create_task(delete_after_10())
 
         try:
             await query.message.edit_reply_markup(reply_markup=None)
@@ -1586,6 +1642,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = int(rest[:first_underscore])
         username = rest[first_underscore + 1:]
 
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+
         if tid not in zadacha_tasks:
             return
 
@@ -1597,6 +1657,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
+        supervisor = task.get("supervisor", "")
+        supervisor_tag = f" @{supervisor}" if supervisor else ""
+
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
@@ -1605,14 +1668,61 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━━━━\n"
                 f"📌 \"{task['text']}\"\n"
                 f"Deadline: 📅 {deadline_str}\n\n"
-                f"@{task['creator_username']}"
+                f"@{task['creator_username']}{supervisor_tag}"
             ),
         )
 
         try:
-            await query.message.edit_reply_markup(reply_markup=None)
+            await query.message.delete()
         except:
-            pass
+            try:
+                await query.message.edit_reply_markup(reply_markup=None)
+            except:
+                pass
+
+    # --- CANCEL ---
+    elif data.startswith("zcancel_"):
+        rest = data[8:]
+        first_underscore = rest.index("_")
+        tid = int(rest[:first_underscore])
+        username = rest[first_underscore + 1:]
+
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+
+        if tid not in zadacha_tasks:
+            return
+
+        task = zadacha_tasks[tid]
+        task.setdefault("cancelled", set()).add(username)
+        save_tasks()
+
+        name = ZADACHA_AGENTS.get(username, username)
+        now = datetime.now(TIMEZONE)
+        deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
+        supervisor = task.get("supervisor", "")
+        supervisor_tag = f" @{supervisor}" if supervisor else ""
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"❌ {name} vazifani bekor qildi.\n"
+                f"🕐 Vaqt: {now.strftime('%d.%m soat %H:%M')}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📌 \"{task['text']}\"\n"
+                f"Deadline: 📅 {deadline_str}\n\n"
+                f"@{task['creator_username']}{supervisor_tag}"
+            ),
+        )
+
+        try:
+            await query.message.delete()
+        except:
+            try:
+                await query.message.edit_reply_markup(reply_markup=None)
+            except:
+                pass
 
     # --- EXTEND ---
     elif data.startswith("zext_"):
@@ -1620,6 +1730,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = int(parts[0])
         username = parts[1]
         minutes = int(parts[2])
+
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
 
         if tid not in zadacha_tasks:
             return
@@ -1678,6 +1792,9 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
             [
                 InlineKeyboardButton("✅ Ha, esimda", callback_data=f"zes_{tid}_{username}"),
                 InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}"),
+            ],
+            [
+                InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}"),
             ]
         ]
 
@@ -1712,6 +1829,7 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             [InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
+            [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
             [
                 InlineKeyboardButton("⏰ Yana 30 daqiqa", callback_data=f"zext_{tid}_{username}_30"),
                 InlineKeyboardButton("⏰ Yana 1 soat", callback_data=f"zext_{tid}_{username}_60"),
@@ -1735,24 +1853,36 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 # ZADACHIS COMMAND
 # =========================
 
-async def zadachis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
+async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    requester = update.effective_user.username
 
     if not zadacha_tasks:
         await update.message.reply_text("📋 Faol vazifalar yo'q.")
         return
 
-    lines = ["📋 Faol vazifalar:\n"]
+    lines = []
 
     for tid, task in zadacha_tasks.items():
         deadline_str = task["deadline"].strftime("%d.%m  ⏰ %H:%M")
         creator = task["creator"]
 
-        for username in task["targets"]:
+        # Admin — барча задачаларни кўради
+        if requester == ADMIN_USERNAME:
+            show_targets = task["targets"]
+        else:
+            # Ижрочи — фақат ўзига тегишли
+            show_targets = [u for u in task["targets"] if u == requester]
+
+        for username in show_targets:
             name = ZADACHA_AGENTS.get(username, username)
             accepted = "✅ Qabul qildi" if username in task["accepted"] else "⏳ Qabul qilmadi"
-            done = "✅ Bajardi" if username in task["done"] else "⏳ Bajarilmadi"
+            cancelled = task.get("cancelled", set())
+            if username in task.get("done", set()):
+                status = "✅ Bajardi"
+            elif username in cancelled:
+                status = "❌ Bekor qilindi"
+            else:
+                status = "⏳ Bajarilmadi"
             text_short = task["text"][:50] + ("..." if len(task["text"]) > 50 else "")
 
             lines.append(
@@ -1760,9 +1890,14 @@ async def zadachis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📌 #{tid} | {creator} → {name}\n"
                 f"📝 \"{text_short}\"\n"
                 f"📅 {deadline_str}\n"
-                f"{accepted} | {done}"
+                f"{accepted} | {status}"
             )
 
+    if not lines:
+        await update.message.reply_text("📋 Sizga tegishli faol vazifalar yo'q.")
+        return
+
+    lines.insert(0, "📋 Vazifalar:\n")
     lines.append("━━━━━━━━━━━━━━")
     await update.message.reply_text("\n".join(lines))
 
@@ -1806,7 +1941,7 @@ def main():
     application.add_handler(CommandHandler("test_reminder", test_reminder_command))
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
-    application.add_handler(CommandHandler("zadachis", zadachis_command))
+    application.add_handler(CommandHandler("zadachi", zadachi_command))
 
     application.add_handler(
         MessageHandler(
@@ -1818,7 +1953,7 @@ def main():
     application.add_handler(
         CallbackQueryHandler(
             zadacha_callback,
-            pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)"
+            pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_|zcancel_)"
         )
     )
 
