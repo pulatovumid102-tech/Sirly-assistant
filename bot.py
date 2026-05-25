@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import json
 import logging
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -935,12 +937,46 @@ async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_T
 # =========================
 
 zadacha_state = {}
-# { user_id: { "step": "target"|"text"|"deadline"|"confirm", "target": ..., "text": ..., "deadline": ... } }
+zadacha_tasks = {}
+zadacha_counter = [0]
 
-tasks = {}
-# { task_id: { "creator": ..., "target": [...], "text": ..., "deadline": datetime, "accepted": False, "done": False } }
+TASKS_FILE = "zadacha_tasks.json"
 
-task_id_counter = [0]
+def save_tasks():
+    data = {}
+    for tid, task in zadacha_tasks.items():
+        data[str(tid)] = {
+            "creator": task["creator"],
+            "creator_username": task["creator_username"],
+            "targets": task["targets"],
+            "text": task["text"],
+            "deadline": task["deadline"].isoformat(),
+            "accepted": list(task["accepted"]),
+            "done": list(task["done"]),
+        }
+    with open(TASKS_FILE, "w") as f:
+        json.dump({"counter": zadacha_counter[0], "tasks": data}, f, ensure_ascii=False)
+
+def load_tasks():
+    if not os.path.exists(TASKS_FILE):
+        return
+    try:
+        with open(TASKS_FILE, "r") as f:
+            data = json.load(f)
+        zadacha_counter[0] = data.get("counter", 0)
+        for tid_str, task in data.get("tasks", {}).items():
+            tid = int(tid_str)
+            zadacha_tasks[tid] = {
+                "creator": task["creator"],
+                "creator_username": task["creator_username"],
+                "targets": task["targets"],
+                "text": task["text"],
+                "deadline": datetime.fromisoformat(task["deadline"]),
+                "accepted": set(task["accepted"]),
+                "done": set(task["done"]),
+            }
+    except Exception as e:
+        logger.error(f"load_tasks error: {e}")
 
 # =========================
 # ZADACHA COMMAND
@@ -1364,12 +1400,9 @@ zadacha_tasks = {}
 zadacha_counter = [0]
 
 DEADLINE_SLOTS = [
-    ("10:00", "12:00"),
-    ("12:00", "14:00"),
-    ("14:00", "16:00"),
-    ("16:00", "18:00"),
-    ("18:00", "20:00"),
-    ("20:00", "22:00"),
+    "10:00", "11:00", "12:00", "13:00", "14:00",
+    "15:00", "16:00", "17:00", "18:00", "19:00",
+    "20:00", "21:00", "22:00",
 ]
 
 # =========================
@@ -1521,8 +1554,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zadacha_state[user_id]["step"] = "time"
 
         slots = [
-            [InlineKeyboardButton(f"⏰ {s} - {e}", callback_data=f"ztime_{e}")]
-            for s, e in DEADLINE_SLOTS
+            [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")]
+            for t in DEADLINE_SLOTS
         ]
         slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_text")])
         slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -1708,6 +1741,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg_ids = s.get("messages", [])
 
+        save_tasks()
+
         await context.bot.send_message(
             chat_id=user_id,
             text=(
@@ -1746,6 +1781,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         task["accepted"].add(username)
+        save_tasks()
         name = ZADACHA_AGENTS[username]
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
@@ -1795,6 +1831,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         task = zadacha_tasks[tid]
         task["done"].add(username)
+        save_tasks()
         name = ZADACHA_AGENTS[username]
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
@@ -1979,6 +2016,8 @@ def main():
         .token(TOKEN)
         .build()
     )
+
+    load_tasks()
 
     state["cycle_id"] += 1
 
