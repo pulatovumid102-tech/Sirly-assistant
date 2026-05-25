@@ -47,7 +47,7 @@ TIMEZONE = ZoneInfo("Asia/Tashkent")
 
 ADMIN_USERNAME = "umidpulatov"
 
-NOTIFY_TAGS = "@umidpulatov"
+NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
 
 # =========================
 # AGENTS
@@ -322,10 +322,19 @@ def build_checklist_text(time_key, active_agents):
         for i, task in enumerate(tasks)
     )
 
+    agent_block = "\n\n".join(
+        AGENT_INFO[u]
+        for u in AGENT_ORDER
+        if u in active_agents
+    )
+
     return (
         f"📋 {time_key} checklist\n\n"
         f"{task_lines}\n\n"
-        "━━━━━━━━━━━━━━"
+        "━━━━━━━━━━━━━━\n\n"
+        f"{agent_block}\n\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
 
