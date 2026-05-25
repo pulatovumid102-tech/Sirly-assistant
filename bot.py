@@ -1677,8 +1677,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=CHAT_ID,
                 text=(
                     f"📌 {creator} → {name}\n"
-                    f"Vazifa:\n"
                     f"━━━━━━━━━━━━━━\n"
+                    f"📝 Vazifa:\n"
                     f'"{text}"\n'
                     f"━━━━━━━━━━━━━━\n"
                     f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
@@ -1706,10 +1706,29 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data={"task_id": tid},
             )
 
+        msg_ids = s.get("messages", [])
+
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"✅ Vazifa yuborildi.\n📌 {creator} → {target_str}\n\"{text}\"\nDeadline: 📅 {date_str}  ⏰ {time_str}",
+            text=(
+                f"✅ Vazifa yuborildi.\n"
+                f"📌 {creator} → {target_str}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 Vazifa:\n"
+                f'"{text}"\n'
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {date_str}  ⏰ {time_str}"
+            ),
         )
+
+        # Delete all zadacha messages after 5 seconds
+        import asyncio
+        await asyncio.sleep(5)
+        for msg_id in msg_ids:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=msg_id)
+            except:
+                pass
 
     # --- ACCEPT ---
     elif data.startswith("zacc_"):
@@ -1914,6 +1933,38 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
+
+# =========================
+# ZADACHIS COMMAND
+# =========================
+
+async def zadachis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    if not zadacha_tasks:
+        await update.message.reply_text("📋 Faol vazifalar yo'q.")
+        return
+
+    lines = ["📋 Faol vazifalar:\n"]
+
+    for tid, task in zadacha_tasks.items():
+        deadline_str = task["deadline"].strftime("%d.%m ⏰ %H:%M")
+        target_str = zadacha_target_str(task["targets"])
+
+        for username in task["targets"]:
+            name = ZADACHA_AGENTS[username]
+            accepted = "✅ Qabul qildi" if username in task["accepted"] else "⏳ Qabul qilmadi"
+            done = "✅ Bajardi" if username in task["done"] else "⏳ Bajarilmadi"
+
+            lines.append(
+                f"{tid}. {name} — \"{task['text'][:30]}{'...' if len(task['text']) > 30 else ''}\""
+                f"\n   Deadline: 📅 {deadline_str}"
+                f"\n   {accepted} | {done}\n"
+            )
+
+    await update.message.reply_text("\n".join(lines))
+
 # =========================
 # MAIN
 # =========================
@@ -1968,6 +2019,10 @@ def main():
 
     application.add_handler(
         CommandHandler("zadacha", zadacha_command)
+    )
+
+    application.add_handler(
+        CommandHandler("zadachis", zadachis_command)
     )
 
     application.add_handler(
