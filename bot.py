@@ -59,22 +59,16 @@ NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
 
 AGENT_ORDER = [
     "sirlyinfo",
-    "Muhammadhumoyun_Mudarris",
 ]
 
 AGENTS = {
     "sirlyinfo": "Ozodbek",
-    "Muhammadhumoyun_Mudarris": "Muhammadhumoyun",
 }
 
 AGENT_INFO = {
     "sirlyinfo": (
         "👨🏻‍💻 Ozodbek @sirlyinfo\n"
         "📞 93 798 13 04"
-    ),
-    "Muhammadhumoyun_Mudarris": (
-        "👨🏻‍💻 Muhammadhumoyun @Muhammadhumoyun_Mudarris\n"
-        "📞 88 811 88 51 • 94 115 88 51"
     ),
 }
 
@@ -89,28 +83,18 @@ CHECKLISTS = {
         "Checklist screenshot yuborildi",
         "Olib ketilgan statusini tekshirildi",
     ],
+    "12:00": [
+        "Muammoli mijozlar jadvali tekshirildi",
+        "Checklist screenshot yuborildi",
+    ],
     "14:00": [
         "Muammoli mijozlar jadvali tekshirildi",
         "Sotuv jadvali toldirildi",
         "Checklist screenshot yuborildi",
     ],
-    "18:00": [
-        "Muammoli mijozlar jadvali tekshirildi",
-        "Bug va tasklar jadvalga kiritildi",
-        "Checklist screenshot yuborildi",
-    ],
-    "23:00": [
-        "Bugalteriya jadvali toldirildi",
-        "Kunlik hisobot yuborildi",
-    ],
-    "23:30": [
-        "Telegram murojaatlar tekshirildi",
-        "Checklist toliq tekshirildi",
-        "STAFF guruhiga xabar yuborildi",
-    ],
 }
 
-CHECKLIST_TIMES = ["10:00", "14:00", "18:00", "23:00", "23:30"]
+CHECKLIST_TIMES = ["10:00", "12:00", "14:00"]
 
 # =========================
 # NEXT TIME HELPERS
@@ -147,6 +131,7 @@ state = {
 
     "cycle_id": 0,
     "stopped": False,
+    "reminder_stopped": False,
 }
 
 # =========================
@@ -189,21 +174,10 @@ def get_active_agents():
 
     active = set()
 
-    # Ozodbek
+    # Ozodbek — Dush-Juma 10:00-18:00
     if weekday <= 4:
-        if 10 <= hour < 20:
+        if 10 <= hour < 18:
             active.add("sirlyinfo")
-    elif weekday == 5:
-        if hour >= 10:
-            active.add("sirlyinfo")
-
-    # Muhammadhumoyun
-    if weekday <= 4:
-        if hour >= 14:
-            active.add("Muhammadhumoyun_Mudarris")
-    elif weekday == 6:
-        if hour >= 10:
-            active.add("Muhammadhumoyun_Mudarris")
 
     return active
 
@@ -219,21 +193,10 @@ def get_active_agents_for_time(time_key):
 
     active = set()
 
-    # Ozodbek
+    # Ozodbek — Dush-Juma 10:00-18:00
     if weekday <= 4:
-        if 10 <= hour < 20:
+        if 10 <= hour <= 18:
             active.add("sirlyinfo")
-    elif weekday == 5:
-        if hour >= 10:
-            active.add("sirlyinfo")
-
-    # Muhammadhumoyun
-    if weekday <= 4:
-        if hour >= 14:
-            active.add("Muhammadhumoyun_Mudarris")
-    elif weekday == 6:
-        if hour >= 10:
-            active.add("Muhammadhumoyun_Mudarris")
 
     return active
 
@@ -430,6 +393,9 @@ def seconds_until_time(hour, minute):
 # =========================
 
 async def send_reminder(bot, cycle_id):
+    if state.get("reminder_stopped"):
+        return
+
     active = get_active_agents()
 
     if not active:
@@ -927,6 +893,49 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
+# REMINDER START / STOP
+# =========================
+
+async def reminder_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    state["reminder_stopped"] = False
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            "▶️ Reminder yoqildi.\n"
+            f"⏰ Keyingi eslatma: {get_next_reminder_time()}"
+        ),
+    )
+
+async def reminder_stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    state["reminder_stopped"] = True
+
+    # Юборилган реминдер хабарини ўчириш
+    if state.get("reminder_message_id"):
+        try:
+            await context.bot.delete_message(
+                chat_id=CHAT_ID,
+                message_id=state["reminder_message_id"]
+            )
+        except:
+            pass
+        state["reminder_message_id"] = None
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            "⏸ Reminder to'xtatildi.\n"
+            "Qayta yoqish uchun /reminder_start bosing."
+        ),
+    )
+
+# =========================
 # TEST COMMANDS
 # =========================
 
@@ -1085,17 +1094,16 @@ def get_agent_work_schedule(username):
     """Агент ҳар куни нечадан ишлашини қайтаради: {weekday: (start_h, end_h)}"""
     if username == "sirlyinfo":
         return {
-            0: (10, 20), 1: (10, 20), 2: (10, 20),
-            3: (10, 20), 4: (10, 20),
-            5: (10, 24),
-            # 6 якшанба — ишламайди
+            0: (10, 18), 1: (10, 18), 2: (10, 18),
+            3: (10, 18), 4: (10, 18),
+            # 5,6 — ишламайди
         }
     elif username == "Muhammadhumoyun_Mudarris":
+        # Tester — задача тизимида қолади, реминдер/чеклистда йўқ
         return {
-            0: (14, 24), 1: (14, 24), 2: (14, 24),
-            3: (14, 24), 4: (14, 24),
-            # 5 шанба — ишламайди
-            6: (10, 24),
+            0: (10, 22), 1: (10, 22), 2: (10, 22),
+            3: (10, 22), 4: (10, 22),
+            5: (10, 22), 6: (10, 22),
         }
     elif username == "kh_nosirov":
         # Xojiakbar — Dush-Yak, 10:00-23:59
@@ -1938,6 +1946,8 @@ def main():
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application.add_handler(CommandHandler("reminder_start", reminder_start_command))
+    application.add_handler(CommandHandler("reminder_stop", reminder_stop_command))
     application.add_handler(CommandHandler("test_reminder", test_reminder_command))
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
