@@ -1808,7 +1808,43 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     # --- ACCEPT ---
-    elif data.startswith("zacc_"):
+    elif data.startswith("zaccept_"):
+    rest = data[8:]
+    underscore = rest.index("_")
+    tid = int(rest[:underscore])
+    username = rest[underscore + 1:]
+
+    if tid not in zadacha_tasks:
+        return
+
+    task = zadacha_tasks[tid]
+
+    if username in task["accepted"]:
+        return
+
+    task["accepted"].add(username)
+    save_tasks()
+
+    name = ZADACHA_AGENTS[username]
+    now = datetime.now(TIMEZONE)
+    deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"✅ {name} vazifani qabul qildi.\n"
+            f"🕐 Qabul vaqti: {now.strftime('%d.%m soat %H:%M')}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📌 \"{task['text']}\"\n"
+            f"Deadline: 📅 {deadline_str}\n\n"
+            f"@{task['creator_username']}"
+        ),
+    )
+
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+    except:
+        pass
         rest = data[5:]
         underscore = rest.index("_")
         tid = int(rest[:underscore])
