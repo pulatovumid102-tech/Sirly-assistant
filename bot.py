@@ -136,9 +136,13 @@ state = {
     "confirmations": {},
     "reminder_message_id": None,
     "reminder_sent_at": None,
+    "reminder_log_message_id": None,
+    "reminder_log_lines": [],
 
     "checklist_confirmations": {},
     "checklist_message_ids": {},
+    "checklist_log_message_ids": {},
+    "checklist_log_lines": {},
 
     "cycle_id": 0,
     "stopped": False,
@@ -442,6 +446,8 @@ async def send_reminder(bot, cycle_id):
 
     state["reminder_message_id"] = None
     state["reminder_sent_at"] = datetime.now(TIMEZONE)
+    state["reminder_log_message_id"] = None
+    state["reminder_log_lines"] = []
 
     text = build_reminder_text(active)
 
@@ -614,22 +620,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else "Hamkorlar tekshirildi"
         )
 
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"{AGENTS[username]} {time_str} | {action_text} ni bajardi ✅\n"
-                f"{NOTIFY_TAGS}"
-            ),
-        )
+        new_line = f"{AGENTS[username]} {time_str} | {action_text} ni bajardi ✅"
+        state["reminder_log_lines"].append(new_line)
+
+        log_text = "\n".join(state["reminder_log_lines"]) + f"\n{NOTIFY_TAGS}"
+
+        # Delete old log message
+        if state["reminder_log_message_id"]:
+            try:
+                await context.bot.delete_message(
+                    chat_id=CHAT_ID,
+                    message_id=state["reminder_log_message_id"]
+                )
+            except:
+                pass
 
         if all_confirmed(active, state["confirmations"]):
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=(
-                    f"✅ Barcha supportlar tasdiqladi. 🕐 Keyingi tekshiruv: {get_next_reminder_time()}\n"
-                    f"{NOTIFY_TAGS}"
-                ),
-            )
+            log_text += f"\n✅ Barcha supportlar tasdiqladi. 🕐 Keyingi tekshiruv: {get_next_reminder_time()}"
+            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
+            state["reminder_log_message_id"] = sent.message_id
+            state["reminder_log_lines"] = []
+            # Delete reminder message
+            if state["reminder_message_id"]:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=CHAT_ID,
+                        message_id=state["reminder_message_id"]
+                    )
+                except:
+                    pass
+        else:
+            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
+            state["reminder_log_message_id"] = sent.message_id
 
         return
 
@@ -691,28 +713,48 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         task_text = CHECKLISTS[time_key][task_index]
 
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"{AGENTS[username]} {time_str} | {task_text} ni bajardi ✅\n"
-                f"{NOTIFY_TAGS}"
-            ),
-        )
+        new_line = f"{AGENTS[username]} {time_str} | {task_text} ni bajardi ✅"
+
+        if time_key not in state["checklist_log_lines"]:
+            state["checklist_log_lines"][time_key] = []
+        state["checklist_log_lines"][time_key].append(new_line)
+
+        log_text = "\n".join(state["checklist_log_lines"][time_key]) + f"\n{NOTIFY_TAGS}"
+
+        # Delete old log message
+        if state["checklist_log_message_ids"].get(time_key):
+            try:
+                await context.bot.delete_message(
+                    chat_id=CHAT_ID,
+                    message_id=state["checklist_log_message_ids"][time_key]
+                )
+            except:
+                pass
 
         if checklist_all_confirmed(
             time_key,
             active,
             state["checklist_confirmations"][time_key]
         ):
-
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=(
-                    f"✅ {time_key} checklist yakunlandi. "
-                    + (f"🕐 Keyingi tekshiruv: {get_next_checklist_time(time_key)}" if get_next_checklist_time(time_key) else "") 
-                    + f"\n{NOTIFY_TAGS}"
-                ),
-            )
+            next_t = get_next_checklist_time(time_key)
+            log_text += f"\n✅ {time_key} checklist yakunlandi."
+            if next_t:
+                log_text += f" 🕐 Keyingi tekshiruv: {next_t}"
+            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
+            state["checklist_log_message_ids"][time_key] = sent.message_id
+            state["checklist_log_lines"][time_key] = []
+            # Delete checklist message
+            if state["checklist_message_ids"].get(time_key):
+                try:
+                    await context.bot.delete_message(
+                        chat_id=CHAT_ID,
+                        message_id=state["checklist_message_ids"][time_key]
+                    )
+                except:
+                    pass
+        else:
+            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
+            state["checklist_log_message_ids"][time_key] = sent.message_id
 
         return
 
@@ -971,7 +1013,7 @@ def load_tasks():
                 "creator_username": task["creator_username"],
                 "targets": task["targets"],
                 "text": task["text"],
-                "deadline": datetime.fromisoformat(task["deadline"]),
+                "deadline": datetime.fromisoformat(task["deadline"]).replace(tzinfo=ZoneInfo("Asia/Tashkent")) if datetime.fromisoformat(task["deadline"]).tzinfo is None else datetime.fromisoformat(task["deadline"]),
                 "accepted": set(task["accepted"]),
                 "done": set(task["done"]),
             }
