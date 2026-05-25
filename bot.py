@@ -261,9 +261,6 @@ def build_reminder_keyboard(active_agents, confirmations):
 # =========================
 
 def build_checklist_keyboard(time_key, active_agents, checklist_confs):
-    reset_checklist_if_new_day()
-    remaining = get_checklist_tasks_for_time()
-
     keyboard = []
 
     for username in AGENT_ORDER:
@@ -273,16 +270,15 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
         name = AGENTS[username]
         user_conf = checklist_confs.get(username, {})
 
-        for orig_i, task in remaining:
-            # user_conf da orig_i indeks ishlatamiz
-            done = user_conf.get(orig_i, False)
+        for i, task in enumerate(CHECKLIST_ALL_TASKS):
+            done = user_conf.get(i, False)
             icon = "✅" if done else "⬜"
             short_task = task if len(task) <= 30 else task[:30] + "..."
 
             keyboard.append([
                 InlineKeyboardButton(
                     f"{icon} {name} — {short_task}",
-                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{orig_i}"
+                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
                 )
             ])
 
@@ -293,16 +289,10 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
 # =========================
 
 def build_checklist_text(time_key, active_agents):
-    reset_checklist_if_new_day()
-    remaining = get_checklist_tasks_for_time()
-
-    if not remaining:
-        task_lines = "✅ Barcha vazifalar bajarildi!"
-    else:
-        task_lines = "\n".join(
-            f"{idx+1}. {task} ☑️"
-            for idx, (i, task) in enumerate(remaining)
-        )
+    task_lines = "\n".join(
+        f"{i+1}. {task} ☑️"
+        for i, task in enumerate(CHECKLIST_ALL_TASKS)
+    )
 
     agent_block = "\n\n".join(
         AGENT_INFO[u]
@@ -351,13 +341,10 @@ def all_confirmed(active_agents, confirmations):
     return True
 
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
-    reset_checklist_if_new_day()
-    remaining = get_checklist_tasks_for_time()
-
     for username in active_agents:
         user_conf = checklist_confs.get(username, {})
-        for orig_i, task in remaining:
-            if not user_conf.get(orig_i, False):
+        for i in range(len(CHECKLIST_ALL_TASKS)):
+            if not user_conf.get(i, False):
                 return False
 
     return True
@@ -480,13 +467,6 @@ async def send_checklist(bot, time_key):
         for username in active
     }
     state["checklist_log_lines"][time_key] = []
-
-    reset_checklist_if_new_day()
-    remaining = get_checklist_tasks_for_time()
-
-    # Барча вазифалар бажарилган бўлса чеклист юборилмайди
-    if not remaining:
-        return
 
     text = build_checklist_text(time_key, active)
 
@@ -695,9 +675,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user_conf[task_index] = True
-
-        # Глобал бажарилган рўйхатга қўшиш
-        checklist_done_today.add(task_index)
 
         keyboard = build_checklist_keyboard(
             time_key,
