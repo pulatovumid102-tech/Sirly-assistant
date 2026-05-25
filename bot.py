@@ -108,6 +108,23 @@ CHECKLISTS = {
 CHECKLIST_TIMES = ["10:00", "14:00", "18:00", "23:00", "23:30"]
 
 # =========================
+# NEXT TIME HELPERS
+# =========================
+
+def get_next_checklist_time(current_time_key):
+    idx = CHECKLIST_TIMES.index(current_time_key)
+    if idx + 1 < len(CHECKLIST_TIMES):
+        return CHECKLIST_TIMES[idx + 1]
+    return None
+
+def get_next_reminder_time():
+    now = datetime.now(TIMEZONE)
+    next_q_total = ((now.minute // 30) + 1) * 30
+    next_q_hour = (now.hour + next_q_total // 60) % 24
+    next_q_min = next_q_total % 60
+    return f"{next_q_hour:02d}:{next_q_min:02d}"
+
+# =========================
 # STATE
 # =========================
 
@@ -595,7 +612,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if all_confirmed(active, state["confirmations"]):
             await context.bot.send_message(
                 chat_id=CHAT_ID,
-                text="✅ Barcha supportlar tasdiqladi.",
+                text=(
+                    f"✅ Barcha supportlar tasdiqladi. 🕐 Keyingi tekshiruv: {get_next_reminder_time()}\n"
+                    f"{NOTIFY_TAGS}"
+                ),
             )
 
         return
@@ -675,8 +695,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text=(
-                    f"✅ {time_key} checklist to'liq yakunlandi.\n"
-                    f"{NOTIFY_TAGS}"
+                    f"✅ {time_key} checklist yakunlandi. "
+                    + (f"🕐 Keyingi tekshiruv: {get_next_checklist_time(time_key)}" if get_next_checklist_time(time_key) else "") 
+                    + f"\n{NOTIFY_TAGS}"
                 ),
             )
 
