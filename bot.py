@@ -2115,7 +2115,7 @@ def main():
     )
 
     application.add_handler(
-        CallbackQueryHandler(zadacha_callback, pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)")
+        CallbackQueryHandler(zadacha_callback, pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zaccept_|zes_|zdone_|zext_)")
     )
 
     application.add_handler(
