@@ -47,7 +47,7 @@ TIMEZONE = ZoneInfo("Asia/Tashkent")
 
 ADMIN_USERNAME = "umidpulatov"
 
-NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
+NOTIFY_TAGS = "@umidpulatov"
 
 # =========================
 # AGENTS
@@ -297,7 +297,7 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
 # BUILD TEXTS
 # =========================
 
-def build_checklist_text(time_key):
+def build_checklist_text(time_key, active_agents):
     tasks = CHECKLISTS[time_key]
 
     task_lines = "\n".join(
@@ -443,7 +443,7 @@ async def send_checklist(bot, time_key):
         for username in active
     }
 
-    text = build_checklist_text(time_key)
+    text = build_checklist_text(time_key, active)
 
     keyboard = build_checklist_keyboard(
         time_key,
@@ -528,7 +528,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["checklist_confirmations"][time_key] = {
             username: {} for username in active
         }
-        text = build_checklist_text(time_key)
+        text = build_checklist_text(time_key, active)
         keyboard = build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key])
         sent = await context.bot.send_message(
             chat_id=CHAT_ID,
