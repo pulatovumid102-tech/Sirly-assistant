@@ -1845,6 +1845,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_reply_markup(reply_markup=None)
     except:
         pass
+        pass
         rest = data[5:]
         underscore = rest.index("_")
         tid = int(rest[:underscore])
