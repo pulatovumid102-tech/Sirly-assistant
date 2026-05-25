@@ -943,14 +943,38 @@ ZADACHA_AGENTS = {
     "sirlyinfo": "Ozodbek",
     "Muhammadhumoyun_Mudarris": "Muhammadhumoyun",
     "al_xorazm1y": "Azamjon",
+    "kh_nosirov": "Xojiakbar",
+    "umidpulatov": "Umid",
+}
+
+ZADACHA_AGENT_ROLES = {
+    "sirlyinfo": "Support",
+    "Muhammadhumoyun_Mudarris": "Support",
+    "al_xorazm1y": "Support",
+    "kh_nosirov": "CEO",
+    "umidpulatov": "COO",
 }
 
 ZADACHA_AGENT_INFO = {
     "al_xorazm1y": (
-        "👨🏻‍💻 Azamjon @al_xorazm1y\n"
+        "👨\u200d💻 Azamjon @al_xorazm1y\n"
         "📞 99 737 11 99"
     ),
+    "kh_nosirov": (
+        "👨\u200d💼 Xojiakbar @kh_nosirov\n"
+        "💼 CEO"
+    ),
+    "umidpulatov": (
+        "👨\u200d💼 Umid @umidpulatov\n"
+        "📞 99 477 41 48 | 💼 COO"
+    ),
 }
+
+# Ижро этувчилар (vazifa yuklatiladi)
+EXECUTOR_AGENTS = ["sirlyinfo", "Muhammadhumoyun_Mudarris", "al_xorazm1y"]
+
+# Назорат қилувчилар (nazorat qiladi)
+SUPERVISOR_AGENTS = ["kh_nosirov", "umidpulatov"]
 
 # =========================
 # ZADACHA — STATE
@@ -1043,8 +1067,17 @@ def get_agent_work_schedule(username):
             # 5 шанба — ишламайди
             6: (10, 24),
         }
+    elif username == "kh_nosirov":
+        # Xojiakbar — Dush-Yak, 10:00-23:59
+        return {i: (10, 24) for i in range(7)}
+    elif username == "umidpulatov":
+        # Umid — Dush-Juma, 12:00-20:00
+        return {
+            0: (12, 20), 1: (12, 20), 2: (12, 20),
+            3: (12, 20), 4: (12, 20),
+        }
     else:
-        # Азамжон ва бошқалар — барча кунлар
+        # Бошқалар — барча кунлар
         return {i: (9, 24) for i in range(7)}
 
 def get_available_dates_for_targets(targets):
@@ -1104,18 +1137,18 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    zadacha_state[user_id] = {"step": "target", "messages": []}
+    zadacha_state[user_id] = {"step": "executor", "messages": []}
 
     keyboard = [
-        [InlineKeyboardButton("👤 Ozodbek", callback_data="zt_sirlyinfo")],
-        [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="zt_Muhammadhumoyun_Mudarris")],
-        [InlineKeyboardButton("👤 Azamjon", callback_data="zt_al_xorazm1y")],
-        [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="zt_both")],
+        [InlineKeyboardButton("👤 Ozodbek", callback_data="ze_sirlyinfo")],
+        [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ze_Muhammadhumoyun_Mudarris")],
+        [InlineKeyboardButton("👤 Azamjon", callback_data="ze_al_xorazm1y")],
+        [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="ze_both")],
         [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
     ]
 
     sent = await update.message.reply_text(
-        "📌 Vazifa kim uchun?",
+        "👷 Ijro etuvchi hodimni tanlang:",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
     zadacha_state[user_id]["messages"].append(sent.message_id)
@@ -1191,8 +1224,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in zadacha_state and not data.startswith(("zacc_", "zes_", "zdone_", "zext_")):
         return
 
-    # --- TARGET ---
-    if data.startswith("zt_"):
+    # --- EXECUTOR (ижро этувчи) ---
+    if data.startswith("ze_"):
         target = data[3:]
 
         if target == "both":
@@ -1201,10 +1234,30 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             targets = [target]
 
         zadacha_state[user_id]["targets"] = targets
+        zadacha_state[user_id]["step"] = "supervisor"
+
+        keyboard = [
+            [InlineKeyboardButton("👤 Xojiakbar (CEO)", callback_data="zs_kh_nosirov")],
+            [InlineKeyboardButton("👤 Umid (COO)", callback_data="zs_umidpulatov")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
+            [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+        ]
+
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="🧑‍💼 Nazorat qiluvchi hodimni tanlang:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    # --- SUPERVISOR (назорат қилувчи) ---
+    elif data.startswith("zs_"):
+        supervisor = data[3:]
+        zadacha_state[user_id]["supervisor"] = supervisor
         zadacha_state[user_id]["step"] = "text"
 
         keyboard = [
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
             [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
         ]
 
@@ -1285,17 +1338,32 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         where = data[6:]
 
         if where == "start":
-            zadacha_state[user_id]["step"] = "target"
+            zadacha_state[user_id]["step"] = "executor"
             keyboard = [
-                [InlineKeyboardButton("👤 Ozodbek", callback_data="zt_sirlyinfo")],
-                [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="zt_Muhammadhumoyun_Mudarris")],
-                [InlineKeyboardButton("👤 Azamjon", callback_data="zt_al_xorazm1y")],
-                [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="zt_both")],
+                [InlineKeyboardButton("👤 Ozodbek", callback_data="ze_sirlyinfo")],
+                [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ze_Muhammadhumoyun_Mudarris")],
+                [InlineKeyboardButton("👤 Azamjon", callback_data="ze_al_xorazm1y")],
+                [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="ze_both")],
                 [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
             ]
             sent = await context.bot.send_message(
                 chat_id=user_id,
-                text="📌 Vazifa kim uchun?",
+                text="👷 Ijro etuvchi hodimni tanlang:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+
+        elif where == "supervisor":
+            zadacha_state[user_id]["step"] = "supervisor"
+            keyboard = [
+                [InlineKeyboardButton("👤 Xojiakbar (CEO)", callback_data="zs_kh_nosirov")],
+                [InlineKeyboardButton("👤 Umid (COO)", callback_data="zs_umidpulatov")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
+                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+            ]
+            sent = await context.bot.send_message(
+                chat_id=user_id,
+                text="🧑‍💼 Nazorat qiluvchi hodimni tanlang:",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
             zadacha_state[user_id]["messages"].append(sent.message_id)
@@ -1303,7 +1371,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif where == "target":
             zadacha_state[user_id]["step"] = "text"
             keyboard = [
-                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
                 [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
             ]
             sent = await context.bot.send_message(
@@ -1380,6 +1448,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "creator": creator,
             "creator_username": creator_username,
             "targets": targets,
+            "supervisor": s.get("supervisor", ""),
             "text": text,
             "deadline": dt,
             "accepted": set(),
@@ -1387,6 +1456,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         target_str = zadacha_target_str(targets)
+
+        supervisor = s.get("supervisor", "")
+        supervisor_name = ZADACHA_AGENTS.get(supervisor, supervisor)
+        supervisor_tag = f"@{supervisor}" if supervisor else ""
 
         for username in targets:
             name = ZADACHA_AGENTS[username]
@@ -1398,6 +1471,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=CHAT_ID,
                 text=(
                     f"📌 {creator} → {name}\n"
+                    f"🧑‍💼 Nazorat: {supervisor_name}\n"
                     f"━━━━━━━━━━━━━━\n"
                     f"📝 Vazifa:\n"
                     f'"{text}"\n'
@@ -1744,7 +1818,7 @@ def main():
     application.add_handler(
         CallbackQueryHandler(
             zadacha_callback,
-            pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)"
+            pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)"
         )
     )
 
