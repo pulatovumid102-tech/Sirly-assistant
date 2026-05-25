@@ -345,7 +345,6 @@ def build_checklist_text(time_key, active_agents):
         "⚠️ Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
-
 def build_reminder_text(active_agents):
     agent_block = "\n\n".join(
         AGENT_INFO[u]
@@ -375,7 +374,6 @@ def all_confirmed(active_agents, confirmations):
 
     return True
 
-
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
     tasks = CHECKLISTS[time_key]
 
@@ -396,7 +394,6 @@ def cancel_jobs_by_name(job_queue, name):
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
 
-
 def seconds_until_next_30():
     now = datetime.now(TIMEZONE)
 
@@ -409,7 +406,6 @@ def seconds_until_next_30():
     next_30 = ((now.minute // 30) + 1) * 30 * 60
 
     return max(next_30 - elapsed, 1.0)
-
 
 def seconds_until_time(hour, minute):
     now = datetime.now(TIMEZONE)
@@ -973,7 +969,6 @@ async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-
 # =========================
 # ZADACHA STATE
 # =========================
@@ -1349,7 +1344,6 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
         data={"task_id": tid, "attempt": attempt + 1},
     )
 
-
 async def zadacha_deadline_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
 
@@ -1382,7 +1376,6 @@ async def zadacha_deadline_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             ),
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-
 
 async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
@@ -1808,44 +1801,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     # --- ACCEPT ---
-    elif data.startswith("zaccept_"):
-        rest = data[8:]
-        underscore = rest.index("_")
-        tid = int(rest[:underscore])
-        username = rest[underscore + 1:]
-
-    if tid not in zadacha_tasks:
-        return
-
-    task = zadacha_tasks[tid]
-
-    if username in task["accepted"]:
-        return
-
-    task["accepted"].add(username)
-    save_tasks()
-
-    name = ZADACHA_AGENTS[username]
-    now = datetime.now(TIMEZONE)
-    deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
-
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=(
-            f"✅ {name} vazifani qabul qildi.\n"
-            f"🕐 Qabul vaqti: {now.strftime('%d.%m soat %H:%M')}\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"📌 \"{task['text']}\"\n"
-            f"Deadline: 📅 {deadline_str}\n\n"
-            f"@{task['creator_username']}"
-        ),
-    )
-
-    try:
-        await query.message.edit_reply_markup(reply_markup=None)
-    except:
-        pass
-        pass
+    elif data.startswith("zacc_"):
         rest = data[5:]
         underscore = rest.index("_")
         tid = int(rest[:underscore])
@@ -2009,7 +1965,6 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
-
 async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
 
@@ -2048,7 +2003,6 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
             ),
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-
 
 # =========================
 # ZADACHIS COMMAND
@@ -2152,7 +2106,7 @@ def main():
     )
 
     application.add_handler(
-        CallbackQueryHandler(zadacha_callback, pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zaccept_|zes_|zdone_|zext_)")
+        CallbackQueryHandler(zadacha_callback, pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)")
     )
 
     application.add_handler(
