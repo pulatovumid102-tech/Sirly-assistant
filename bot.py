@@ -1949,20 +1949,24 @@ async def zadachis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = ["📋 Faol vazifalar:\n"]
 
     for tid, task in zadacha_tasks.items():
-        deadline_str = task["deadline"].strftime("%d.%m ⏰ %H:%M")
-        target_str = zadacha_target_str(task["targets"])
+        deadline_str = task["deadline"].strftime("%d.%m  ⏰ %H:%M")
+        creator = task["creator"]
 
         for username in task["targets"]:
             name = ZADACHA_AGENTS[username]
             accepted = "✅ Qabul qildi" if username in task["accepted"] else "⏳ Qabul qilmadi"
             done = "✅ Bajardi" if username in task["done"] else "⏳ Bajarilmadi"
+            text_short = task["text"][:50] + ("..." if len(task["text"]) > 50 else "")
 
             lines.append(
-                f"{tid}. {name} — \"{task['text'][:30]}{'...' if len(task['text']) > 30 else ''}\""
-                f"\n   Deadline: 📅 {deadline_str}"
-                f"\n   {accepted} | {done}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📌 #{tid} | {creator} → {name}\n"
+                f"📝 \"{text_short}\"\n"
+                f"📅 {deadline_str}\n"
+                f"{accepted} | {done}"
             )
 
+    lines.append("━━━━━━━━━━━━━━")
     await update.message.reply_text("\n".join(lines))
 
 # =========================
