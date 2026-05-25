@@ -538,7 +538,7 @@ async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# CALLBACKS
+# CALLBACKS (reminder + checklist)
 # =========================
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -550,12 +550,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(TIMEZONE)
     time_str = now.strftime("%H:%M")
 
-    # =========================
-    # TEST CHECKLIST BUTTON
-    # =========================
-
+    # --- TEST CHECKLIST ---
     if data.startswith("test_chk_"):
-        time_key = data[9:]  # "10:00"
+        time_key = data[9:]
         active = get_active_agents_for_time(time_key) or set(AGENT_ORDER)
         state["checklist_confirmations"][time_key] = {
             username: {} for username in active
@@ -570,17 +567,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["checklist_message_ids"][time_key] = sent.message_id
         return
 
-    # =========================
-    # REMINDER BUTTONS
-    # =========================
-
+    # --- REMINDER BUTTONS ---
     if data.startswith("confirm_"):
+        without_prefix = data[8:]
+        confirm_type = without_prefix.split("_")[-1]
+        username = without_prefix[:-(len(confirm_type) + 1)]
 
-        # "confirm_sirlyinfo_mijoz"
-        # "confirm_Muhammadhumoyun_Mudarris_mijoz"
-        without_prefix = data[8:]  # "sirlyinfo_mijoz" or "Muhammadhumoyun_Mudarris_mijoz"
-        confirm_type = without_prefix.split("_")[-1]  # "mijoz" or "hamkor"
-        username = without_prefix[:-(len(confirm_type) + 1)]  # "sirlyinfo" or "Muhammadhumoyun_Mudarris"
+        # Фақат ўз тугмасини боса олади
+        presser = query.from_user.username
+        if presser != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
 
         active = set(state["confirmations"].keys()) or get_active_agents()
 
@@ -604,24 +601,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         try:
-            await query.message.edit_reply_markup(
-                reply_markup=keyboard
-            )
+            await query.message.edit_reply_markup(reply_markup=keyboard)
         except:
             pass
 
         action_text = (
-            "Mijozlar tekshirildi"
+            "Javob berilmagan mijoz qolmadi"
             if confirm_type == "mijoz"
-            else "Hamkorlar tekshirildi"
+            else "Javob berilmagan hamkor qolmadi"
         )
 
-        new_line = f"{AGENTS[username]} {time_str} | {action_text} ni bajardi ✅"
+        new_line = f"{AGENTS[username]} {time_str} | {action_text} ✅"
         state["reminder_log_lines"].append(new_line)
 
         log_text = "\n".join(state["reminder_log_lines"]) + f"\n{NOTIFY_TAGS}"
 
-        # Delete old log message
         if state["reminder_log_message_id"]:
             try:
                 await context.bot.delete_message(
@@ -632,11 +626,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
         if all_confirmed(active, state["confirmations"]):
-            log_text += f"\n✅ Barcha supportlar tasdiqladi. 🕐 Keyingi tekshiruv: {get_next_reminder_time()}"
+            log_text += f"\n\n🕐 Keyingi tekshiruv: {get_next_reminder_time()}"
             sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
             state["reminder_log_message_id"] = sent.message_id
             state["reminder_log_lines"] = []
-            # Delete reminder message
             if state["reminder_message_id"]:
                 try:
                     await context.bot.delete_message(
@@ -651,25 +644,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # =========================
-    # CHECKLIST BUTTONS
-    # =========================
-
+    # --- CHECKLIST BUTTONS ---
     if data.startswith("chk_"):
-
-        # "chk_1400_sirlyinfo_0"
-        # "chk_1400_Muhammadhumoyun_Mudarris_0"
-        without_prefix = data[4:]  # "1400_sirlyinfo_0"
+        without_prefix = data[4:]
         first_underscore = without_prefix.index("_")
-        time_raw = without_prefix[:first_underscore]  # "1400"
-        rest = without_prefix[first_underscore + 1:]  # "sirlyinfo_0"
+        time_raw = without_prefix[:first_underscore]
+        rest = without_prefix[first_underscore + 1:]
         last_underscore = rest.rindex("_")
-        username = rest[:last_underscore]  # "sirlyinfo" or "Muhammadhumoyun_Mudarris"
+        username = rest[:last_underscore]
         task_index = int(rest[last_underscore + 1:])
 
-        time_key = (
-            f"{time_raw[:2]}:{time_raw[2:]}"
-        )
+        time_key = f"{time_raw[:2]}:{time_raw[2:]}"
+
+        # Фақат ўз тугмасини боса олади
+        presser = query.from_user.username
+        if presser != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
 
         if time_key in state["checklist_confirmations"] and state["checklist_confirmations"][time_key]:
             active = set(state["checklist_confirmations"][time_key].keys())
@@ -685,9 +676,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if username not in state["checklist_confirmations"][time_key]:
             state["checklist_confirmations"][time_key][username] = {}
 
-        user_conf = (
-            state["checklist_confirmations"][time_key][username]
-        )
+        user_conf = state["checklist_confirmations"][time_key][username]
 
         if user_conf.get(task_index, False):
             return
@@ -701,9 +690,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         try:
-            await query.message.edit_reply_markup(
-                reply_markup=keyboard
-            )
+            await query.message.edit_reply_markup(reply_markup=keyboard)
         except:
             pass
 
@@ -717,7 +704,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         log_text = "\n".join(state["checklist_log_lines"][time_key]) + f"\n{NOTIFY_TAGS}"
 
-        # Delete old log message
         if state["checklist_log_message_ids"].get(time_key):
             try:
                 await context.bot.delete_message(
@@ -739,7 +725,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
             state["checklist_log_message_ids"][time_key] = sent.message_id
             state["checklist_log_lines"][time_key] = []
-            # Delete checklist message
             if state["checklist_message_ids"].get(time_key):
                 try:
                     await context.bot.delete_message(
@@ -807,24 +792,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         for username in AGENT_ORDER:
             schedule = get_agent_schedule_today(username)
-
             info = AGENT_INFO[username]
 
             if schedule:
                 start_h, end_h = schedule
-
                 end_str = (
                     "23:59"
                     if end_h == 24
                     else f"{end_h:02d}:00"
                 )
-
                 lines.append(
                     f"\n{info}\n"
                     f"🕐 Bugun ish vaqti: "
                     f"{start_h:02d}:00 — {end_str}"
                 )
-
             else:
                 lines.append(
                     f"\n{info}\n😴 Bugun dam oladi"
@@ -845,21 +826,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cancel_jobs_by_name(context.job_queue, "reminder")
 
     for t in CHECKLIST_TIMES:
-        cancel_jobs_by_name(
-            context.job_queue,
-            f"checklist_{t}"
-        )
+        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
 
     now = datetime.now(TIMEZONE)
 
-    next_q_total = (
-        ((now.minute // 30) + 1) * 30
-    )
-
-    next_q_hour = (
-        (now.hour + next_q_total // 60) % 24
-    )
-
+    next_q_total = ((now.minute // 30) + 1) * 30
+    next_q_hour = (now.hour + next_q_total // 60) % 24
     next_q_min = next_q_total % 60
 
     context.job_queue.run_once(
@@ -870,10 +842,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     for time_key in CHECKLIST_TIMES:
-        hour, minute = map(
-            int,
-            time_key.split(":")
-        )
+        hour, minute = map(int, time_key.split(":"))
 
         context.job_queue.run_once(
             checklist_job,
@@ -916,10 +885,7 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cancel_jobs_by_name(context.job_queue, "reminder")
 
     for t in CHECKLIST_TIMES:
-        cancel_jobs_by_name(
-            context.job_queue,
-            f"checklist_{t}"
-        )
+        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
@@ -970,14 +936,41 @@ async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 # =========================
-# ZADACHA STATE
+# ZADACHA — AGENTS
+# =========================
+
+ZADACHA_AGENTS = {
+    "sirlyinfo": "Ozodbek",
+    "Muhammadhumoyun_Mudarris": "Muhammadhumoyun",
+    "al_xorazm1y": "Azamjon",
+}
+
+ZADACHA_AGENT_INFO = {
+    "al_xorazm1y": (
+        "👨🏻‍💻 Azamjon @al_xorazm1y\n"
+        "📞 99 737 11 99"
+    ),
+}
+
+# =========================
+# ZADACHA — STATE
 # =========================
 
 zadacha_state = {}
 zadacha_tasks = {}
 zadacha_counter = [0]
 
+DEADLINE_SLOTS = [
+    "10:00", "11:00", "12:00", "13:00", "14:00",
+    "15:00", "16:00", "17:00", "18:00", "19:00",
+    "20:00", "21:00", "22:00",
+]
+
 TASKS_FILE = "zadacha_tasks.json"
+
+# =========================
+# ZADACHA — SAVE / LOAD
+# =========================
 
 def save_tasks():
     data = {}
@@ -1003,12 +996,15 @@ def load_tasks():
         zadacha_counter[0] = data.get("counter", 0)
         for tid_str, task in data.get("tasks", {}).items():
             tid = int(tid_str)
+            dl = datetime.fromisoformat(task["deadline"])
+            if dl.tzinfo is None:
+                dl = dl.replace(tzinfo=TIMEZONE)
             zadacha_tasks[tid] = {
                 "creator": task["creator"],
                 "creator_username": task["creator_username"],
                 "targets": task["targets"],
                 "text": task["text"],
-                "deadline": datetime.fromisoformat(task["deadline"]).replace(tzinfo=ZoneInfo("Asia/Tashkent")) if datetime.fromisoformat(task["deadline"]).tzinfo is None else datetime.fromisoformat(task["deadline"]),
+                "deadline": dl,
                 "accepted": set(task["accepted"]),
                 "done": set(task["done"]),
             }
@@ -1016,432 +1012,7 @@ def load_tasks():
         logger.error(f"load_tasks error: {e}")
 
 # =========================
-# ZADACHA COMMAND
-# =========================
-
-async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-
-    user_id = update.effective_user.id
-    zadacha_state[user_id] = {"step": "target"}
-
-    keyboard = [
-        [InlineKeyboardButton("👤 Ozodbek", callback_data="ztarget_sirlyinfo")],
-        [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ztarget_Muhammadhumoyun_Mudarris")],
-        [InlineKeyboardButton("👥 Ikkalasi", callback_data="ztarget_both")],
-    ]
-
-    await update.message.reply_text(
-        "📌 Vazifa kim uchun?",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-# =========================
-# ZADACHA TEXT HANDLER
-# =========================
-
-async def zadacha_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-
-    user_id = update.effective_user.id
-
-    if user_id not in zadacha_state:
-        return
-
-    step = zadacha_state[user_id].get("step")
-
-    if step == "text":
-        zadacha_state[user_id]["text"] = update.message.text
-        zadacha_state[user_id]["step"] = "deadline"
-
-        await update.message.reply_text(
-            "📅 Muddatni kiriting\n(masalan: 27.05 14:00)"
-        )
-
-    elif step == "deadline":
-        raw = update.message.text.strip()
-
-        try:
-            now = datetime.now(TIMEZONE)
-            dt = datetime.strptime(f"{now.year}.{raw}", "%Y.%d.%m %H:%M")
-            dt = dt.replace(tzinfo=TIMEZONE)
-        except ValueError:
-            await update.message.reply_text(
-                "❌ Format noto\'g\'ri. Masalan: 27.05 14:00"
-            )
-            return
-
-        zadacha_state[user_id]["deadline"] = dt
-        zadacha_state[user_id]["step"] = "confirm"
-
-        target = zadacha_state[user_id]["target"]
-        text = zadacha_state[user_id]["text"]
-
-        if target == "both":
-            target_str = "Ozodbek va Muhammadhumoyun"
-        else:
-            target_str = AGENTS.get(target, target)
-
-        deadline_str = dt.strftime("%d.%m %H:%M")
-
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes"),
-                InlineKeyboardButton("❌ Bekor qilish", callback_data="zconfirm_no"),
-            ]
-        ]
-
-        await update.message.reply_text(
-            f"📌 {update.effective_user.first_name} → {target_str}\n\n"
-            f"Vazifa: \"{text}\"\n"
-            f"Muddati: {deadline_str}\n\n"
-            f"Yuborilsinmi?",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-# =========================
-# ZADACHA CALLBACKS
-# =========================
-
-async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    data = query.data
-    user_id = query.from_user.id
-
-    await query.answer()
-
-    # Target selection
-    if data.startswith("ztarget_"):
-        if user_id not in zadacha_state:
-            return
-
-        target = data[8:]  # "sirlyinfo", "Muhammadhumoyun_Mudarris", "both"
-        zadacha_state[user_id]["target"] = target
-        zadacha_state[user_id]["step"] = "text"
-
-        await query.message.reply_text("✏️ Vazifa matnini yozing:")
-
-    # Confirm
-    elif data == "zconfirm_yes":
-        if user_id not in zadacha_state:
-            return
-
-        s = zadacha_state.pop(user_id)
-        target = s["target"]
-        text = s["text"]
-        deadline = s["deadline"]
-        creator = query.from_user.first_name
-        creator_username = query.from_user.username
-
-        if target == "both":
-            targets = list(AGENT_ORDER)
-        else:
-            targets = [target]
-
-        task_id_counter[0] += 1
-        tid = task_id_counter[0]
-
-        tasks[tid] = {
-            "creator": creator,
-            "creator_username": creator_username,
-            "targets": targets,
-            "text": text,
-            "deadline": deadline,
-            "accepted": set(),
-            "done": set(),
-        }
-
-        deadline_str = deadline.strftime("%d.%m %H:%M")
-
-        if target == "both":
-            target_str = "Ozodbek va Muhammadhumoyun"
-        else:
-            target_str = AGENTS.get(target, target)
-
-        # Send to group
-        for username in targets:
-            name = AGENTS[username]
-            tag = f"@{username}"
-
-            keyboard = [[InlineKeyboardButton("✅ Qabul qildim", callback_data=f"zaccept_{tid}_{username}")]]
-
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=(
-                    f"📌 {creator} → {name}\n\n"
-                    f"Vazifa: \"{text}\"\n"
-                    f"Muddati: {deadline_str}\n\n"
-                    f"{tag}, iltimos tasdiqlang."
-                ),
-                reply_markup=InlineKeyboardMarkup(keyboard),
-            )
-
-        # Schedule accept reminder at task start hour (when agent starts work)
-        # Remind at deadline - 2.5 hours (30 min before deadline reminder)
-        now = datetime.now(TIMEZONE)
-
-        # Accept reminder: agent work start time or 30 min from now
-        accept_remind_time = max(
-            now + timedelta(minutes=30),
-            deadline.replace(hour=deadline.hour, minute=0) - timedelta(hours=3)
-        )
-
-        context.job_queue.run_once(
-            zadacha_accept_reminder_job,
-            when=(accept_remind_time - now).total_seconds(),
-            name=f"zaccept_{tid}",
-            data={"task_id": tid, "attempt": 1},
-        )
-
-        # Schedule deadline reminder 30 min before
-        deadline_remind = deadline - timedelta(minutes=30)
-        if deadline_remind > now:
-            context.job_queue.run_once(
-                zadacha_deadline_reminder_job,
-                when=(deadline_remind - now).total_seconds(),
-                name=f"zdeadline_{tid}",
-                data={"task_id": tid},
-            )
-
-        # Schedule deadline notification
-        if deadline > now:
-            context.job_queue.run_once(
-                zadacha_deadline_job,
-                when=(deadline - now).total_seconds(),
-                name=f"zdue_{tid}",
-                data={"task_id": tid},
-            )
-
-        await query.message.reply_text("✅ Vazifa yuborildi.")
-
-    elif data == "zconfirm_no":
-        zadacha_state.pop(user_id, None)
-        await query.message.reply_text("❌ Bekor qilindi.")
-
-    # Accept
-    elif data.startswith("zaccept_"):
-        parts = data[8:].split("_", 1)
-        tid = int(parts[0])
-        username = parts[1]
-
-        if tid not in tasks:
-            return
-
-        task = tasks[tid]
-
-        if username in task["accepted"]:
-            return
-
-        task["accepted"].add(username)
-
-        cancel_jobs_by_name(context.job_queue, f"zaccept_{tid}")
-
-        name = AGENTS[username]
-        deadline_str = task["deadline"].strftime("%d.%m %H:%M")
-
-        # Notify creator
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"✅ {name} vazifani qabul qildi.\n\n"
-                f"📌 {task['creator']} → {name}\n"
-                f"Vazifa: \"{task['text']})\"\n"
-                f"Muddati: {deadline_str}\n\n"
-                f"@{task['creator_username']}"
-            ),
-        )
-
-        try:
-            await query.message.edit_reply_markup(reply_markup=None)
-        except:
-            pass
-
-    # Done
-    elif data.startswith("zdone_"):
-        parts = data[6:].split("_", 1)
-        tid = int(parts[0])
-        username = parts[1]
-
-        if tid not in tasks:
-            return
-
-        task = tasks[tid]
-        task["done"].add(username)
-
-        name = AGENTS[username]
-        deadline_str = task["deadline"].strftime("%d.%m %H:%M")
-
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"✅ {name} vazifani bajardi.\n\n"
-                f"📌 {task['creator']} → {name}\n"
-                f"Vazifa: \"{task['text']})\"\n"
-                f"Muddati: {deadline_str}\n\n"
-                f"@{task['creator_username']}"
-            ),
-        )
-
-        try:
-            await query.message.edit_reply_markup(reply_markup=None)
-        except:
-            pass
-
-# =========================
-# ZADACHA JOBS
-# =========================
-
-async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
-    tid = context.job.data["task_id"]
-    attempt = context.job.data["attempt"]
-
-    if tid not in tasks:
-        return
-
-    task = tasks[tid]
-    deadline_str = task["deadline"].strftime("%d.%m %H:%M")
-
-    pending = [u for u in task["targets"] if u not in task["accepted"]]
-
-    if not pending:
-        return
-
-    if attempt > 3:
-        # Notify creator - not accepted
-        names = ", ".join(AGENTS[u] for u in pending)
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"⚠️ {names} vazifani qabul qilmadi.\n\n"
-                f"📌 Vazifa: \"{task['text']})\"\n"
-                f"Muddati: {deadline_str}\n\n"
-                f"@{task['creator_username']}"
-            ),
-        )
-        return
-
-    for username in pending:
-        name = AGENTS[username]
-        tag = f"@{username}"
-        keyboard = [[InlineKeyboardButton("✅ Qabul qildim", callback_data=f"zaccept_{tid}_{username}")]]
-
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"{tag}, vazifani tasdiqladingizmi?\n\n"
-                f"📌 Vazifa: \"{task['text']})\"\n"
-                f"Muddati: {deadline_str}"
-            ),
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    context.job_queue.run_once(
-        zadacha_accept_reminder_job,
-        when=1800,
-        name=f"zaccept_{tid}",
-        data={"task_id": tid, "attempt": attempt + 1},
-    )
-
-async def zadacha_deadline_reminder_job(context: ContextTypes.DEFAULT_TYPE):
-    tid = context.job.data["task_id"]
-
-    if tid not in tasks:
-        return
-
-    task = tasks[tid]
-    deadline_str = task["deadline"].strftime("%d.%m %H:%M")
-
-    for username in task["targets"]:
-        if username in task["done"]:
-            continue
-
-        name = AGENTS[username]
-        tag = f"@{username}"
-
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Ha, esimda", callback_data=f"zremind_{tid}_{username}"),
-                InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}"),
-            ]
-        ]
-
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"{tag}, esingizda a?\n\n"
-                f"📌 Vazifa: \"{task['text']})\"\n"
-                f"Muddati: {deadline_str}"
-            ),
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
-    tid = context.job.data["task_id"]
-
-    if tid not in tasks:
-        return
-
-    task = tasks[tid]
-    deadline_str = task["deadline"].strftime("%d.%m %H:%M")
-
-    not_done = [u for u in task["targets"] if u not in task["done"]]
-
-    if not not_done:
-        return
-
-    tags = " ".join(f"@{u}" for u in not_done)
-    names = ", ".join(AGENTS[u] for u in not_done)
-
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=(
-            f"⏰ Vazifa muddati tugadi.\n\n"
-            f"📌 {task['creator']} → {names}\n"
-            f"Vazifa: \"{task['text']})\"\n"
-            f"Muddati: {deadline_str}\n\n"
-            f"{tags} @{task['creator_username']}"
-        ),
-    )
-
-# =========================
-# ZADACHA AGENTS
-# =========================
-
-ZADACHA_AGENTS = {
-    "sirlyinfo": "Ozodbek",
-    "Muhammadhumoyun_Mudarris": "Muhammadhumoyun",
-    "al_xorazm1y": "Azamjon",
-}
-
-ZADACHA_AGENT_INFO = {
-    "al_xorazm1y": (
-        "👨🏻‍💻 Azamjon @al_xorazm1y\n"
-        "📞 99 737 11 99"
-    ),
-}
-
-# =========================
-# ZADACHA STATE
-# =========================
-
-zadacha_state = {}
-# { user_id: { step, target, text, deadline_date, deadline_time, messages: [] } }
-
-zadacha_tasks = {}
-# { task_id: { creator, creator_username, targets, text, deadline, accepted, done, extended_deadline } }
-
-zadacha_counter = [0]
-
-DEADLINE_SLOTS = [
-    "10:00", "11:00", "12:00", "13:00", "14:00",
-    "15:00", "16:00", "17:00", "18:00", "19:00",
-    "20:00", "21:00", "22:00",
-]
-
-# =========================
-# ZADACHA HELPERS
+# ZADACHA — HELPERS
 # =========================
 
 def zadacha_target_str(targets):
@@ -1455,17 +1026,6 @@ async def zadacha_delete_messages(bot, user_id):
             await bot.delete_message(chat_id=user_id, message_id=msg_id)
         except:
             pass
-
-async def zadacha_send(update_or_query, text, keyboard=None, state_key=None):
-    """Send message and track message_id"""
-    markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-    
-    if hasattr(update_or_query, 'message') and update_or_query.message:
-        sent = await update_or_query.message.reply_text(text, reply_markup=markup)
-    else:
-        sent = await update_or_query.reply_text(text, reply_markup=markup)
-    
-    return sent
 
 # =========================
 # ZADACHA COMMAND
@@ -1543,19 +1103,17 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    if user_id not in zadacha_state and data != "zt_otmen":
-        return
-
-    s = zadacha_state.get(user_id, {})
-
     # --- OTMEN ---
     if data == "zt_otmen":
         await zadacha_delete_messages(context.bot, user_id)
         zadacha_state.pop(user_id, None)
-        sent = await context.bot.send_message(
+        await context.bot.send_message(
             chat_id=user_id,
             text="❌ Vazifa bekor qilindi.",
         )
+        return
+
+    if user_id not in zadacha_state and not data.startswith(("zacc_", "zes_", "zdone_", "zext_")):
         return
 
     # --- TARGET ---
@@ -1693,8 +1251,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif where == "date":
             zadacha_state[user_id]["step"] = "time"
             slots = [
-                [InlineKeyboardButton(f"⏰ {s} - {e}", callback_data=f"ztime_{e}")]
-                for s, e in DEADLINE_SLOTS
+                [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")]
+                for t in DEADLINE_SLOTS
             ]
             slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_text")])
             slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -1705,8 +1263,11 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             zadacha_state[user_id]["messages"].append(sent.message_id)
 
-    # --- CONFIRM ---
+    # --- CONFIRM YES ---
     elif data == "zconfirm_yes":
+        if user_id not in zadacha_state:
+            return
+
         s = zadacha_state.pop(user_id)
         targets = s["targets"]
         text = s["text"]
@@ -1755,7 +1316,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
 
-        # Schedule deadline-30min reminder
         remind_time = dt - timedelta(minutes=30)
         if remind_time > datetime.now(TIMEZONE):
             context.job_queue.run_once(
@@ -1765,7 +1325,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data={"task_id": tid},
             )
 
-        # Schedule deadline job
         if dt > datetime.now(TIMEZONE):
             context.job_queue.run_once(
                 zadacha_deadline_job,
@@ -1775,7 +1334,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         msg_ids = s.get("messages", [])
-
         save_tasks()
 
         await context.bot.send_message(
@@ -1791,7 +1349,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ),
         )
 
-        # Delete all zadacha messages after 5 seconds
         import asyncio
         await asyncio.sleep(5)
         for msg_id in msg_ids:
@@ -1803,21 +1360,24 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- ACCEPT ---
     elif data.startswith("zacc_"):
         rest = data[5:]
-        underscore = rest.index("_")
-        tid = int(rest[:underscore])
-        username = rest[underscore + 1:]
+        first_underscore = rest.index("_")
+        tid = int(rest[:first_underscore])
+        username = rest[first_underscore + 1:]
 
         if tid not in zadacha_tasks:
+            await query.answer("❌ Vazifa topilmadi.")
             return
 
         task = zadacha_tasks[tid]
 
         if username in task["accepted"]:
+            await query.answer("Siz allaqachon qabul qilgansiz.")
             return
 
         task["accepted"].add(username)
         save_tasks()
-        name = ZADACHA_AGENTS[username]
+
+        name = ZADACHA_AGENTS.get(username, username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
@@ -1841,14 +1401,13 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- ESIMDA ---
     elif data.startswith("zes_"):
         rest = data[4:]
-        underscore = rest.index("_")
-        tid = int(rest[:underscore])
-        username = rest[underscore + 1:]
+        first_underscore = rest.index("_")
+        tid = int(rest[:first_underscore])
+        username = rest[first_underscore + 1:]
 
         if tid not in zadacha_tasks:
             return
 
-        name = ZADACHA_AGENTS[username]
         try:
             await query.message.edit_reply_markup(reply_markup=None)
         except:
@@ -1857,9 +1416,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- DONE ---
     elif data.startswith("zdone_"):
         rest = data[6:]
-        underscore = rest.index("_")
-        tid = int(rest[:underscore])
-        username = rest[underscore + 1:]
+        first_underscore = rest.index("_")
+        tid = int(rest[:first_underscore])
+        username = rest[first_underscore + 1:]
 
         if tid not in zadacha_tasks:
             return
@@ -1867,7 +1426,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task = zadacha_tasks[tid]
         task["done"].add(username)
         save_tasks()
-        name = ZADACHA_AGENTS[username]
+
+        name = ZADACHA_AGENTS.get(username, username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
@@ -1900,6 +1460,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         task = zadacha_tasks[tid]
         task["deadline"] = task["deadline"] + timedelta(minutes=minutes)
+        save_tasks()
+
         new_deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
         try:
@@ -1907,7 +1469,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-        # Reschedule deadline job
         cancel_jobs_by_name(context.job_queue, f"zdue_{tid}")
         now = datetime.now(TIMEZONE)
         if task["deadline"] > now:
@@ -1981,7 +1542,7 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 
     for username in not_done:
         tag = f"@{username}"
-        name = ZADACHA_AGENTS[username]
+        name = ZADACHA_AGENTS.get(username, username)
 
         keyboard = [
             [InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
@@ -2023,7 +1584,7 @@ async def zadachis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         creator = task["creator"]
 
         for username in task["targets"]:
-            name = ZADACHA_AGENTS[username]
+            name = ZADACHA_AGENTS.get(username, username)
             accepted = "✅ Qabul qildi" if username in task["accepted"] else "⏳ Qabul qilmadi"
             done = "✅ Bajardi" if username in task["done"] else "⏳ Bajarilmadi"
             text_short = task["text"][:50] + ("..." if len(task["text"]) > 50 else "")
@@ -2062,10 +1623,7 @@ def main():
     )
 
     for time_key in CHECKLIST_TIMES:
-        hour, minute = map(
-            int,
-            time_key.split(":")
-        )
+        hour, minute = map(int, time_key.split(":"))
 
         application.job_queue.run_once(
             checklist_job,
@@ -2077,36 +1635,25 @@ def main():
             },
         )
 
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application.add_handler(CommandHandler("test_reminder", test_reminder_command))
+    application.add_handler(CommandHandler("test_checklist", test_checklist_command))
+    application.add_handler(CommandHandler("zadacha", zadacha_command))
+    application.add_handler(CommandHandler("zadachis", zadachis_command))
+
     application.add_handler(
-        CommandHandler("start", start_command)
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+            zadacha_text_handler
+        )
     )
 
     application.add_handler(
-        CommandHandler("umidstop", umidstop_command)
-    )
-
-    application.add_handler(
-        CommandHandler("test_reminder", test_reminder_command)
-    )
-
-    application.add_handler(
-        CommandHandler("test_checklist", test_checklist_command)
-    )
-
-    application.add_handler(
-        CommandHandler("zadacha", zadacha_command)
-    )
-
-    application.add_handler(
-        CommandHandler("zadachis", zadachis_command)
-    )
-
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, zadacha_text_handler)
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(zadacha_callback, pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)")
+        CallbackQueryHandler(
+            zadacha_callback,
+            pattern="^(zt_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_)"
+        )
     )
 
     application.add_handler(
@@ -2115,9 +1662,7 @@ def main():
 
     logger.info("Bot starting...")
 
-    application.run_polling(
-        drop_pending_updates=True
-    )
+    application.run_polling(drop_pending_updates=True)
 
 # =========================
 # RUN
