@@ -1027,6 +1027,74 @@ async def zadacha_delete_messages(bot, user_id):
         except:
             pass
 
+def get_agent_work_schedule(username):
+    """Агент ҳар куни нечадан ишлашини қайтаради: {weekday: (start_h, end_h)}"""
+    if username == "sirlyinfo":
+        return {
+            0: (10, 20), 1: (10, 20), 2: (10, 20),
+            3: (10, 20), 4: (10, 20),
+            5: (10, 24),
+            # 6 якшанба — ишламайди
+        }
+    elif username == "Muhammadhumoyun_Mudarris":
+        return {
+            0: (14, 24), 1: (14, 24), 2: (14, 24),
+            3: (14, 24), 4: (14, 24),
+            # 5 шанба — ишламайди
+            6: (10, 24),
+        }
+    else:
+        # Азамжон ва бошқалар — барча кунлар
+        return {i: (9, 24) for i in range(7)}
+
+def get_available_dates_for_targets(targets):
+    """Агентлар учун кейинги 7 та иш кунини қайтаради."""
+    now = datetime.now(TIMEZONE)
+    available = []
+    for i in range(14):
+        d = now + timedelta(days=i)
+        weekday = d.weekday()
+        all_work = all(
+            weekday in get_agent_work_schedule(u)
+            for u in targets
+        )
+        if all_work:
+            available.append(d)
+        if len(available) >= 7:
+            break
+    return available
+
+def get_available_times_for_targets(targets, date_str):
+    """Берилган сана учун агентлар иш вақтига мос вақт слотларини қайтаради."""
+    now = datetime.now(TIMEZONE)
+    year = now.year
+    from datetime import date as date_cls
+    d = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y")
+    weekday = d.weekday()
+
+    start_hour = 0
+    end_hour = 24
+
+    for username in targets:
+        schedule = get_agent_work_schedule(username)
+        if weekday not in schedule:
+            return []
+        s, e = schedule[weekday]
+        start_hour = max(start_hour, s)
+        end_hour = min(end_hour, e)
+
+    if start_hour >= end_hour:
+        return []
+
+    slots = []
+    for h in range(start_hour, end_hour):
+        # Агар бугун бўлса ўтган вақтни кўрсатмаймиз
+        if d.date() == now.date() and h <= now.hour:
+            continue
+        slots.append(f"{h:02d}:00")
+    return slots
+
+
 # =========================
 # ZADACHA COMMAND
 # =========================
@@ -1071,17 +1139,24 @@ async def zadacha_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         zadacha_state[user_id]["text"] = update.message.text
         zadacha_state[user_id]["step"] = "date"
 
+        targets = zadacha_state[user_id].get("targets", [])
         now = datetime.now(TIMEZONE)
+        available_dates = get_available_dates_for_targets(targets)
         days = []
-        for i in range(7):
-            d = now + timedelta(days=i)
-            if i == 0:
+        for d in available_dates:
+            diff = (d.date() - now.date()).days
+            if diff == 0:
                 label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
-            elif i == 1:
+            elif diff == 1:
                 label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
             else:
-                label = f"📆 {d.day} {MONTH_UZ[d.month]}"
+                label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
             days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
+
+        if not days:
+            sent = await update.message.reply_text("❌ Ushbu agent uchun yaqin kunlarda ish vaqti topilmadi.")
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+            return
 
         days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_target")])
         days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -1146,9 +1221,21 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zadacha_state[user_id]["deadline_date"] = date_str
         zadacha_state[user_id]["step"] = "time"
 
+        targets = zadacha_state[user_id].get("targets", [])
+        available_times = get_available_times_for_targets(targets, date_str)
+
+        if not available_times:
+            sent = await context.bot.send_message(
+                chat_id=user_id,
+                text="❌ Bu sana uchun ish vaqti topilmadi. Boshqa kun tanlang.",
+            )
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+            zadacha_state[user_id]["step"] = "date"
+            return
+
         slots = [
             [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")]
-            for t in DEADLINE_SLOTS
+            for t in available_times
         ]
         slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_text")])
         slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -1228,16 +1315,18 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif where == "text":
             zadacha_state[user_id]["step"] = "date"
+            targets = zadacha_state[user_id].get("targets", [])
             now = datetime.now(TIMEZONE)
+            available_dates = get_available_dates_for_targets(targets)
             days = []
-            for i in range(7):
-                d = now + timedelta(days=i)
-                if i == 0:
+            for d in available_dates:
+                diff = (d.date() - now.date()).days
+                if diff == 0:
                     label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
-                elif i == 1:
+                elif diff == 1:
                     label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
                 else:
-                    label = f"📆 {d.day} {MONTH_UZ[d.month]}"
+                    label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
                 days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
             days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_target")])
             days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -1250,9 +1339,12 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif where == "date":
             zadacha_state[user_id]["step"] = "time"
+            targets = zadacha_state[user_id].get("targets", [])
+            date_str = zadacha_state[user_id].get("deadline_date", "")
+            available_times = get_available_times_for_targets(targets, date_str) if date_str else DEADLINE_SLOTS
             slots = [
                 [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")]
-                for t in DEADLINE_SLOTS
+                for t in available_times
             ]
             slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_text")])
             slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
