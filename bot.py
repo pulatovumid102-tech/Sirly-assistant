@@ -76,25 +76,35 @@ AGENT_INFO = {
 # CHECKLIST
 # =========================
 
-CHECKLISTS = {
-    "10:00": [
-        "Admin panel tozalandi",
-        "Muammoli mijozlar jadvali tekshirildi",
-        "Checklist screenshot yuborildi",
-        "Olib ketilgan statusini tekshirildi",
-    ],
-    "12:00": [
-        "Muammoli mijozlar jadvali tekshirildi",
-        "Checklist screenshot yuborildi",
-    ],
-    "14:00": [
-        "Muammoli mijozlar jadvali tekshirildi",
-        "Sotuv jadvali toldirildi",
-        "Checklist screenshot yuborildi",
-    ],
-}
+# Барча чеклист вазифалари — умумий рўйхат
+CHECKLIST_ALL_TASKS = [
+    "Admin panel tozalandi",
+    "Muammoli mijozlar jadvali tekshirildi",
+    "Olib ketilgan statusini tekshirildi",
+    "Sotuv jadvali toldirildi",
+    "Checklist screenshot yuborildi",
+]
 
-CHECKLIST_TIMES = ["10:00", "12:00", "14:00"]
+CHECKLIST_TIMES = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+
+# Кун бўйи бажарилган вазифалар индекслари
+checklist_done_today: set = set()
+checklist_done_date: str = ""  # "DD.MM.YYYY" форматида
+
+def get_checklist_tasks_for_time():
+    """Бажарилмаган вазифаларни қайтаради"""
+    remaining = [
+        (i, task) for i, task in enumerate(CHECKLIST_ALL_TASKS)
+        if i not in checklist_done_today
+    ]
+    return remaining
+
+def reset_checklist_if_new_day():
+    global checklist_done_today, checklist_done_date
+    today = datetime.now(TIMEZONE).strftime("%d.%m.%Y")
+    if checklist_done_date != today:
+        checklist_done_today = set()
+        checklist_done_date = today
 
 # =========================
 # NEXT TIME HELPERS
@@ -251,7 +261,8 @@ def build_reminder_keyboard(active_agents, confirmations):
 # =========================
 
 def build_checklist_keyboard(time_key, active_agents, checklist_confs):
-    tasks = CHECKLISTS[time_key]
+    reset_checklist_if_new_day()
+    remaining = get_checklist_tasks_for_time()
 
     keyboard = []
 
@@ -260,23 +271,18 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
             continue
 
         name = AGENTS[username]
-
         user_conf = checklist_confs.get(username, {})
 
-        for i, task in enumerate(tasks):
-            done = user_conf.get(i, False)
-
+        for orig_i, task in remaining:
+            # user_conf da orig_i indeks ishlatamiz
+            done = user_conf.get(orig_i, False)
             icon = "✅" if done else "⬜"
-
-            short_task = (
-                task if len(task) <= 30
-                else task[:30] + "..."
-            )
+            short_task = task if len(task) <= 30 else task[:30] + "..."
 
             keyboard.append([
                 InlineKeyboardButton(
                     f"{icon} {name} — {short_task}",
-                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
+                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{orig_i}"
                 )
             ])
 
@@ -287,12 +293,16 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
 # =========================
 
 def build_checklist_text(time_key, active_agents):
-    tasks = CHECKLISTS[time_key]
+    reset_checklist_if_new_day()
+    remaining = get_checklist_tasks_for_time()
 
-    task_lines = "\n".join(
-        f"{i+1}. {task} ☑️"
-        for i, task in enumerate(tasks)
-    )
+    if not remaining:
+        task_lines = "✅ Barcha vazifalar bajarildi!"
+    else:
+        task_lines = "\n".join(
+            f"{idx+1}. {task} ☑️"
+            for idx, (i, task) in enumerate(remaining)
+        )
 
     agent_block = "\n\n".join(
         AGENT_INFO[u]
@@ -341,13 +351,13 @@ def all_confirmed(active_agents, confirmations):
     return True
 
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
-    tasks = CHECKLISTS[time_key]
+    reset_checklist_if_new_day()
+    remaining = get_checklist_tasks_for_time()
 
     for username in active_agents:
         user_conf = checklist_confs.get(username, {})
-
-        for i in range(len(tasks)):
-            if not user_conf.get(i, False):
+        for orig_i, task in remaining:
+            if not user_conf.get(orig_i, False):
                 return False
 
     return True
@@ -470,6 +480,13 @@ async def send_checklist(bot, time_key):
         for username in active
     }
     state["checklist_log_lines"][time_key] = []
+
+    reset_checklist_if_new_day()
+    remaining = get_checklist_tasks_for_time()
+
+    # Барча вазифалар бажарилган бўлса чеклист юборилмайди
+    if not remaining:
+        return
 
     text = build_checklist_text(time_key, active)
 
@@ -679,6 +696,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_conf[task_index] = True
 
+        # Глобал бажарилган рўйхатга қўшиш
+        checklist_done_today.add(task_index)
+
         keyboard = build_checklist_keyboard(
             time_key,
             active,
@@ -690,7 +710,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-        task_text = CHECKLISTS[time_key][task_index]
+        task_text = CHECKLIST_ALL_TASKS[task_index] if task_index < len(CHECKLIST_ALL_TASKS) else str(task_index)
 
         new_line = f"{AGENTS[username]} {time_str} | {task_text} ni bajardi ✅"
 
@@ -996,8 +1016,8 @@ ZADACHA_AGENT_ROLES = {
 
 ZADACHA_AGENT_INFO = {
     "al_xorazm1y": (
-        "👨\u200d💻 Azamjon @al_xorazm1y\n"
-        "📞 99 737 11 99"
+        "👨\u200d💼 Azamjon @al_xorazm1y\n"
+        "📞 99 737 11 99 | 💼 Hamkor jalb qilish bo'lim boshlig'i"
     ),
     "kh_nosirov": (
         "👨\u200d💼 Xojiakbar @kh_nosirov\n"
@@ -1044,6 +1064,7 @@ def save_tasks():
             "targets": task["targets"],
             "text": task["text"],
             "deadline": task["deadline"].isoformat(),
+            "supervisor": task.get("supervisor", []) if isinstance(task.get("supervisor", []), list) else [task.get("supervisor", "")],
             "accepted": list(task["accepted"]),
             "done": list(task["done"]),
         }
@@ -1181,7 +1202,9 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("👤 Ozodbek", callback_data="ze_sirlyinfo")],
         [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ze_Muhammadhumoyun_Mudarris")],
         [InlineKeyboardButton("👤 Azamjon", callback_data="ze_al_xorazm1y")],
-        [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="ze_both")],
+        [InlineKeyboardButton("👤 Xojiakbar", callback_data="ze_kh_nosirov")],
+        [InlineKeyboardButton("👤 Umid", callback_data="ze_umidpulatov")],
+        [InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")],
         [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
     ]
 
@@ -1266,7 +1289,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ze_"):
         target = data[3:]
 
-        if target == "both":
+        all_agents = list(ZADACHA_AGENTS.keys())
+        if target == "all":
+            targets = all_agents
+        elif target == "both":
             targets = ["sirlyinfo", "Muhammadhumoyun_Mudarris"]
         else:
             targets = [target]
@@ -1275,8 +1301,12 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zadacha_state[user_id]["step"] = "supervisor"
 
         keyboard = [
+            [InlineKeyboardButton("👤 Ozodbek", callback_data="zs_sirlyinfo")],
+            [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="zs_Muhammadhumoyun_Mudarris")],
+            [InlineKeyboardButton("👤 Azamjon", callback_data="zs_al_xorazm1y")],
             [InlineKeyboardButton("👤 Xojiakbar (CEO)", callback_data="zs_kh_nosirov")],
             [InlineKeyboardButton("👤 Umid (COO)", callback_data="zs_umidpulatov")],
+            [InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")],
             [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
             [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
         ]
@@ -1291,7 +1321,14 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- SUPERVISOR (назорат қилувчи) ---
     elif data.startswith("zs_"):
         supervisor = data[3:]
-        zadacha_state[user_id]["supervisor"] = supervisor
+
+        all_agents = list(ZADACHA_AGENTS.keys())
+        if supervisor == "all":
+            supervisors = all_agents
+        else:
+            supervisors = [supervisor]
+
+        zadacha_state[user_id]["supervisor"] = supervisors
         zadacha_state[user_id]["step"] = "text"
 
         keyboard = [
@@ -1486,7 +1523,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "creator": creator,
             "creator_username": creator_username,
             "targets": targets,
-            "supervisor": s.get("supervisor", ""),
+            "supervisor": supervisors,
             "text": text,
             "deadline": dt,
             "accepted": set(),
@@ -1495,9 +1532,11 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         target_str = zadacha_target_str(targets)
 
-        supervisor = s.get("supervisor", "")
-        supervisor_name = ZADACHA_AGENTS.get(supervisor, supervisor)
-        supervisor_tag = f"@{supervisor}" if supervisor else ""
+        supervisors = s.get("supervisor", [])
+        if isinstance(supervisors, str):
+            supervisors = [supervisors]
+        supervisor_names = " + ".join(ZADACHA_AGENTS.get(u, u) for u in supervisors)
+        supervisor_tags = " ".join(f"@{u}" for u in supervisors)
 
         for username in targets:
             name = ZADACHA_AGENTS[username]
@@ -1509,7 +1548,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=CHAT_ID,
                 text=(
                     f"📌 {creator} → {name}\n"
-                    f"🧑‍💼 Nazorat: {supervisor_name}\n"
+                    f"🧑‍💼 Nazorat: {supervisor_names}\n"
                     f"━━━━━━━━━━━━━━\n"
                     f"📝 Vazifa:\n"
                     f'"{text}"\n'
@@ -1665,8 +1704,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
-        supervisor = task.get("supervisor", "")
-        supervisor_tag = f" @{supervisor}" if supervisor else ""
+        supervisors = task.get("supervisor", [])
+        if isinstance(supervisors, str): supervisors = [supervisors]
+        supervisor_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
 
         await context.bot.send_message(
             chat_id=CHAT_ID,
@@ -1709,8 +1749,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = ZADACHA_AGENTS.get(username, username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
-        supervisor = task.get("supervisor", "")
-        supervisor_tag = f" @{supervisor}" if supervisor else ""
+        supervisors = task.get("supervisor", [])
+        if isinstance(supervisors, str): supervisors = [supervisors]
+        supervisor_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
 
         await context.bot.send_message(
             chat_id=CHAT_ID,
