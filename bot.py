@@ -60,27 +60,47 @@ NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
 AGENTS_FILE = "agents.json"
 
 def load_agents():
-    if not os.path.exists(AGENTS_FILE):
-        # Default agents
-        return {
-            "sirlyinfo": {
-                "name": "Ozodbek",
-                "username": "sirlyinfo",
-                "phone": "+998 93 798 13 04",
-                "work_days": [0, 1, 2, 3, 4, 6],
-                "work_hours": {
-                    "0": [10, 20], "1": [10, 20], "2": [10, 20],
-                    "3": [10, 20], "4": [10, 20],
-                    "6": [10, 24],
-                },
+    default = {
+        "sirlyinfo": {
+            "name": "Ozodbek",
+            "username": "sirlyinfo",
+            "phone": "+998 93 798 13 04",
+            "work_days": [0, 1, 2, 3, 4, 6],
+            "work_hours": {
+                "0": [10, 20], "1": [10, 20], "2": [10, 20],
+                "3": [10, 20], "4": [10, 20],
+                "6": [10, 24],
             },
-        }
+        },
+        "shahnoza": {
+            "name": "Shahnoзabonu",
+            "username": "shahnoza",
+            "phone": "+998 91 016 77 47",
+            "work_days": [0, 1, 2, 3, 4, 5],
+            "work_hours": {
+                "0": [14, 24], "1": [14, 24], "2": [14, 24],
+                "3": [14, 24], "4": [14, 24], "5": [14, 24],
+            },
+        },
+    }
+    if not os.path.exists(AGENTS_FILE):
+        save_agents(default)
+        return default
     try:
         with open(AGENTS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        # Ensure both default agents exist (add if missing)
+        changed = False
+        for key, val in default.items():
+            if key not in data:
+                data[key] = val
+                changed = True
+        if changed:
+            save_agents(data)
+        return data
     except Exception as e:
         logger.error(f"load_agents error: {e}")
-        return {}
+        return default
 
 def save_agents(agents_data):
     with open(AGENTS_FILE, "w", encoding="utf-8") as f:
