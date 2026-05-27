@@ -634,9 +634,9 @@ async def addagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = update.effective_user.id
     addagent_state[user_id] = {"step": "username", "messages": []}
-    sent = await update.message.reply_text(
-        "➕ Yangi hodim qo'shish\n\n"
-        "1️⃣ Username kiriting (@siz formatida yoki username):"
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="➕ Yangi hodim qo'shish\n\n1️⃣ Username kiriting (@siz formatida yoki username):"
     )
     addagent_state[user_id]["messages"].append(sent.message_id)
 
@@ -791,7 +791,7 @@ async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if not AGENTS_DATA:
-        await update.message.reply_text("❌ Hodimlar ro'yxati bo'sh.")
+        await context.bot.send_message(chat_id=user_id, text="❌ Hodimlar ro'yxati bo'sh.")
         return
 
     keyboard = [
@@ -800,8 +800,9 @@ async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")])
 
-    sent = await update.message.reply_text(
-        "✏️ Qaysi hodimni tahrirlaysiz?",
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="✏️ Qaysi hodimni tahrirlaysiz?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     editagent_state[user_id] = {"messages": [sent.message_id]}
@@ -953,8 +954,9 @@ async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
 
+    user_id2 = update.effective_user.id
     if not AGENTS_DATA:
-        await update.message.reply_text("❌ Hodimlar ro'yxati bo'sh.")
+        await context.bot.send_message(chat_id=user_id2, text="❌ Hodimlar ro'yxati bo'sh.")
         return
 
     keyboard = [
@@ -963,8 +965,9 @@ async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="delagent_cancel")])
 
-    await update.message.reply_text(
-        "🗑 Qaysi hodimni o'chirmoqchisiz?",
+    await context.bot.send_message(
+        chat_id=user_id2,
+        text="🗑 Qaysi hodimni o'chirmoqchisiz?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -1072,8 +1075,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=(
             "✅ Bot ishga tushdi\n\n"
             f"👨🏻‍💻 Aktiv supportlar:\n{active_text}\n\n"
-            f"📋 Cheklistlar: {'✅ Yoqiq' if not state['stopped'] else '❌ O'chiq'}\n"
-            f"🔔 Reminder: {'✅ Yoqiq' if not state['reminder_stopped'] else '❌ O'chiq'}\n\n"
+            "📋 Cheklistlar: ✅ Yoqiq\n"
+            f"🔔 Reminder: {'ON' if not state['reminder_stopped'] else 'OFF'}\n\n"
             f"⏰ Birinchi reminder (agar yoqiq bo'lsa): {next_q_hour:02d}:{next_q_min:02d}"
         ),
     )
@@ -1304,12 +1307,10 @@ async def zadacha_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     user_id = update.effective_user.id
 
-    # addagent text handler
     if user_id in addagent_state:
         await addagent_text_handler(update, context)
         return
 
-    # editagent text handler
     if user_id in editagent_state:
         await editagent_text_handler(update, context)
         return
