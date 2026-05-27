@@ -444,13 +444,17 @@ def build_zadacha_main_text(task):
     supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
     date_str = deadline.strftime("%d.%m")
     time_str = deadline.strftime("%H:%M")
+    exec_tags = " ".join(f"@{u}" for u in targets)
+    sup_tags = " ".join(f"@{u}" for u in supervisors)
+    all_tags = (exec_tags + " " + sup_tags).strip()
     return (
         f"📌 {creator} → {target_str}\n"
         f"🧑 Nazorat: {supervisor_names}\n"
         f"━━━━━━━━━━━━━━\n"
         f"📝 Vazifa:\n\"{text}\"\n"
         f"━━━━━━━━━━━━━━\n"
-        f"Deadline: 📅 {date_str}  ⏰ {time_str}"
+        f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
+        f"{all_tags}"
     )
 
 def build_zadacha_main_keyboard(tid, task):
@@ -749,16 +753,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_executors", set()).add(username)
-        name = AGENTS_DATA.get(username, {}).get("name", username)
-        now_str = datetime.now(TIMEZONE).strftime("%d.%m soat %H:%M")
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ {name} vazifani qabul qildi.\n🕐 {now_str}\n📌 \"{task['text'][:50]}\"")
-        # Update main message keyboard
+        # Just update main message keyboard silently
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
-        # Delete this reminder message
+        # Delete this reminder message (Task 3)
         try:
             await query.message.delete()
         except:
@@ -787,14 +788,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_supervisors", set()).add(username)
-        name = AGENTS_DATA.get(username, {}).get("name", username)
-        now_str = datetime.now(TIMEZONE).strftime("%d.%m soat %H:%M")
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ {name} nazoratni qabul qildi.\n🕐 {now_str}\n📌 \"{task['text'][:50]}\"")
+        # Just update main message keyboard silently
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
+        # Delete this reminder message (Task 3)
         try:
             await query.message.delete()
         except:
@@ -1780,18 +1780,20 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         return
     task = zadacha_tasks[tid]
     deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
+    supervisors = task.get("supervisor", [])
+    sup_tags = " ".join(f"@{u}" for u in supervisors)
     for username in task["targets"]:
         if username in task.get("done", set()):
             continue
-        name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [
             [InlineKeyboardButton("✅ Ha, esimda", callback_data=f"zes_{tid}_{username}"),
              InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
             [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
         ]
+        sup_line = f"\n🧑 Nazorat: {sup_tags}" if sup_tags else ""
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n\"{task['text']}\"\nDeadline: 📅 {deadline_str}",
+            text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n\"{task['text']}\"\nDeadline: 📅 {deadline_str}{sup_line}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
