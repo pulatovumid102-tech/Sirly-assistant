@@ -398,6 +398,10 @@ def save_tasks():
             "done": list(task.get("done", set())),
             "main_msg_id": task.get("main_msg_id"),
             "reminder_msg_ids": list(task.get("reminder_msg_ids", [])),
+            "created_at": task["created_at"].isoformat() if task.get("created_at") else None,
+            "accepted_at": {u: t.isoformat() for u, t in task.get("accepted_at", {}).items()},
+            "done_at": {u: t.isoformat() for u, t in task.get("done_at", {}).items()},
+            "done_confirmed": list(task.get("done_confirmed", set())),
         }
     with open(TASKS_FILE, "w") as f:
         json.dump({"counter": zadacha_counter[0], "tasks": data}, f, ensure_ascii=False)
@@ -414,6 +418,14 @@ def load_tasks():
             dl = datetime.fromisoformat(task["deadline"])
             if dl.tzinfo is None:
                 dl = dl.replace(tzinfo=TIMEZONE)
+            def parse_dt(s):
+                if not s:
+                    return None
+                dt2 = datetime.fromisoformat(s)
+                if dt2.tzinfo is None:
+                    dt2 = dt2.replace(tzinfo=TIMEZONE)
+                return dt2
+
             zadacha_tasks[tid] = {
                 "creator": task["creator"],
                 "creator_username": task["creator_username"],
@@ -426,6 +438,10 @@ def load_tasks():
                 "done": set(task.get("done", [])),
                 "main_msg_id": task.get("main_msg_id"),
                 "reminder_msg_ids": list(task.get("reminder_msg_ids", [])),
+                "created_at": parse_dt(task.get("created_at")),
+                "accepted_at": {u: parse_dt(t) for u, t in task.get("accepted_at", {}).items()},
+                "done_at": {u: parse_dt(t) for u, t in task.get("done_at", {}).items()},
+                "done_confirmed": set(task.get("done_confirmed", [])),
             }
     except Exception as e:
         logger.error(f"load_tasks error: {e}")
@@ -753,6 +769,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_executors", set()).add(username)
+        task.setdefault("accepted_at", {})[username] = datetime.now(TIMEZONE)
         # Update main message keyboard
         if task.get("main_msg_id"):
             try:
@@ -906,6 +923,107 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ZADACHI EDIT/DELETE
+    # ZADACHI — BAJARDIM
+    if data.startswith("ztask_done_"):
+        rest = data[11:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("done", set()):
+            await query.answer("Siz allaqachon bajardingiz.")
+            return
+        now_done = datetime.now(TIMEZONE)
+        task.setdefault("done", set()).add(username)
+        task.setdefault("done_at", {})[username] = now_done
+
+        # Build completion message
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        supervisors = task.get("supervisor", [])
+        creator_username = task["creator_username"]
+        sup_tags = " ".join(f"@{u}" for u in supervisors)
+        all_tags = f"@{creator_username} {sup_tags}".strip()
+
+        created_at = task.get("created_at")
+        accepted_at = task.get("accepted_at", {}).get(username)
+        created_str = created_at.strftime("%d.%m soat %H:%M") if created_at else "—"
+        accepted_str = accepted_at.strftime("%d.%m soat %H:%M") if accepted_at else "—"
+        done_str = now_done.strftime("%d.%m soat %H:%M")
+        text_short = task["text"][:60]
+
+        msg_text = (
+            f"✅ {name} vazifani bajardi!\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📌 \"{text_short}\"\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📋 Vazifa berildi: {created_str}\n"
+            f"✅ Qabul qilindi: {accepted_str}\n"
+            f"✅ Bajarildi: {done_str}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"{all_tags}"
+        )
+
+        # Keyboard — creator confirms (grey until pressed)
+        creator_name = task["creator"]
+        keyboard = [[InlineKeyboardButton(f"⬜ Qabul qildim — {creator_name}", callback_data=f"ztask_doneack_{tid}_{creator_username}")]]
+
+        await context.bot.send_message(chat_id=CHAT_ID, text=msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+        # Delete all task related messages from group
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=task["main_msg_id"])
+            except:
+                pass
+        for mid in task.get("reminder_msg_ids", []):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+            except:
+                pass
+        task["reminder_msg_ids"] = []
+        task["main_msg_id"] = None
+
+        save_tasks()
+
+        # Delete zadachi message
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    # ZADACHI — DONE ACK (creator confirms)
+    if data.startswith("ztask_doneack_"):
+        rest = data[14:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("done_confirmed", set()):
+            await query.answer("Siz allaqachon tasdiqladingiz.")
+            return
+        task.setdefault("done_confirmed", set()).add(username)
+        creator_name = task["creator"]
+        # Update button to green
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ Qabul qildim — {creator_name}", callback_data="noop")]])
+            )
+        except:
+            pass
+        save_tasks()
+        return
+
     if data.startswith("ztask_edit_"):
         tid = int(data[11:])
         if tid not in zadacha_tasks:
@@ -1694,6 +1812,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "done": set(),
             "main_msg_id": None,
             "reminder_msg_ids": [],
+            "created_at": datetime.now(TIMEZONE),
+            "accepted_at": {},
+            "done_at": {},
+            "done_confirmed": set(),
         }
 
         # Send main message to group
@@ -1756,7 +1878,8 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for username in show_targets:
             name = AGENTS_DATA.get(username, {}).get("name", username)
             exec_accepted = username in task.get("accepted_executors", set())
-            if username in task.get("done", set()):
+            is_done = username in task.get("done", set())
+            if is_done:
                 status = "✅ Bajardi"
             elif username in task.get("cancelled", set()):
                 status = "❌ Bekor"
@@ -1773,11 +1896,16 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{accepted} | {status}"
             )
 
+            row = []
             if is_creator:
-                keyboards.append([
-                    InlineKeyboardButton(f"✏️ #{tid}", callback_data=f"ztask_edit_{tid}"),
-                    InlineKeyboardButton(f"🗑 #{tid}", callback_data=f"ztask_delete_{tid}"),
-                ])
+                row.append(InlineKeyboardButton(f"✏️ #{tid}", callback_data=f"ztask_edit_{tid}"))
+                row.append(InlineKeyboardButton(f"🗑 #{tid}", callback_data=f"ztask_delete_{tid}"))
+            if username == requester and not is_done:
+                keyboards.append(row) if row else None
+                row = []
+                row.append(InlineKeyboardButton(f"✅ Bajardim — #{tid}", callback_data=f"ztask_done_{tid}_{username}"))
+            if row:
+                keyboards.append(row)
 
     lines.append("━━━━━━━━━━━━━━")
 
