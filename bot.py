@@ -305,9 +305,8 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
         user_conf = checklist_confs.get(username, {})
         for i, task in enumerate(tasks):
             done = user_conf.get(i, False)
-            short_task = task if len(task) <= 30 else task[:30] + "..."
             keyboard.append([InlineKeyboardButton(
-                f"{'✅' if done else '⬜'} {name} — {short_task}",
+                f"{'✅' if done else '⬜'} {name} — {i+1}",
                 callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
             )])
     return InlineKeyboardMarkup(keyboard)
