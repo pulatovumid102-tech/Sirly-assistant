@@ -121,8 +121,10 @@ CHECKLIST_CONFIG = {
     "10:00": [
         "Admin panel (support) tozalandi",
         "Muammoli mijozlar jadvali to'liq tekshirildi",
-        "Umid akaga checklist skrinshoti yuborildi",
+        "Bugalteriya jadvali to'ldirildi",
         "Olib ketilmagan statusini tekshirildi",
+        "Bugalteriya kunlik holati hamkorlar telegram guruhlariga yuborildi",
+        "Umid akaga checklist skrinshoti yuborildi",
     ],
     "14:00": [
         "Muammoli mijozlar jadvali to'liq tekshirildi",
@@ -135,8 +137,6 @@ CHECKLIST_CONFIG = {
         "Umid akaga checklist skrinshoti yuborildi",
     ],
     "23:00": [
-        "Bugalteriya jadvali to'ldirildi",
-        "Bugalteriya kunlik holati hamkorlar telegram guruhlariga yuborildi",
         "Support va telegramdagi murojaatlar qolib ketmadi",
         "Checklist to'liq tekshirildi",
         "To'liq tekshirilgani haqida Sirly STAFF ga xabar yuborildi? Umid akani tag qilib",
@@ -1995,7 +1995,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hour, minute = map(int, time_key.split(":"))
         context.job_queue.run_once(checklist_job, when=seconds_until_time(hour, minute), name=f"checklist_{time_key}", data={"cycle_id": state["cycle_id"], "time_key": time_key})
     active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
-    await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv supportlar:\n{active_text}\n\n📋 Cheklistlar: ✅ Yoqiq\n🔔 Reminder: {'ON' if not state['reminder_stopped'] else 'OFF'}\n\n⏰ Birinchi reminder: {next_q_hour:02d}:{next_q_min:02d}")
+    await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv supportlar:\n{active_text}\n\n📋 Cheklistlar: ✅ Faol\n🔔 Reminder: {'ON' if not state['reminder_stopped'] else 'OFF'}\n\n⏰ Birinchi reminder: {next_q_hour:02d}:{next_q_min:02d}")
 
 async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
