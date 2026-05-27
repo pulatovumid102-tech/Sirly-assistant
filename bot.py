@@ -753,17 +753,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_executors", set()).add(username)
-        # Just update main message keyboard silently
+        # Update main message keyboard
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
-        # Delete this reminder message (Task 3)
-        try:
-            await query.message.delete()
-        except:
-            pass
+        # Delete only if it's a reminder message, NOT the main message
+        if query.message.message_id != task.get("main_msg_id"):
+            try:
+                await query.message.delete()
+            except:
+                pass
         if task.get("reminder_msg_ids"):
             task["reminder_msg_ids"] = [m for m in task["reminder_msg_ids"] if m != query.message.message_id]
         # Check if all accepted
@@ -788,17 +789,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_supervisors", set()).add(username)
-        # Just update main message keyboard silently
+        # Update main message keyboard
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
-        # Delete this reminder message (Task 3)
-        try:
-            await query.message.delete()
-        except:
-            pass
+        # Delete only if it's a reminder message, NOT the main message
+        if query.message.message_id != task.get("main_msg_id"):
+            try:
+                await query.message.delete()
+            except:
+                pass
         if task.get("reminder_msg_ids"):
             task["reminder_msg_ids"] = [m for m in task["reminder_msg_ids"] if m != query.message.message_id]
         if all_accepted(task):
