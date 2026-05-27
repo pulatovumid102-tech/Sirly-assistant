@@ -1100,7 +1100,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
         ]
-        await query.message.reply_text(f"⚠️ #{tid} vazifani o'chirishni tasdiqlaysizmi?\n\"{task['text'][:50]}\"", reply_markup=InlineKeyboardMarkup(keyboard))
+        confirm_sent = await query.message.reply_text(f"⚠️ #{tid} vazifani o'chirishni tasdiqlaysizmi?\n\"{task['text'][:50]}\"", reply_markup=InlineKeyboardMarkup(keyboard))
+        # Store confirm msg id and zadachi msg id for later deletion
+        zadacha_state[f"del_confirm_{tid}"] = {
+            "confirm_msg_id": confirm_sent.message_id,
+            "zadachi_msg_id": query.message.message_id,
+            "chat_id": query.from_user.id,
+        }
         return
 
     if data.startswith("ztask_deleteconfirm_"):
@@ -1126,11 +1132,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         del zadacha_tasks[tid]
         save_tasks()
+        # Delete confirm message immediately
         try:
             await query.message.delete()
         except:
             pass
-        await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ #{tid} vazifa o'chirildi.")
+        # Send success and delete it + zadachi message after 5 seconds
+        sent_ok = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ #{tid} vazifa o'chirildi.")
+        del_info = zadacha_state.pop(f"del_confirm_{tid}", {})
+        zadachi_msg_id = del_info.get("zadachi_msg_id")
+        msgs_to_del = [sent_ok.message_id]
+        if zadachi_msg_id:
+            msgs_to_del.append(zadachi_msg_id)
+        schedule_delete(context.bot, query.from_user.id, msgs_to_del, delay=5)
         return
 
 async def _on_all_accepted(bot, tid, task):
