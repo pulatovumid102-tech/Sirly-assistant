@@ -54,66 +54,95 @@ ADMIN_USERNAME = "umidpulatov"
 NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
 
 # =========================
-# AGENTS
+# AGENTS FILE
 # =========================
 
-AGENT_ORDER = [
-    "sirlyinfo",
-]
+AGENTS_FILE = "agents.json"
 
-AGENTS = {
-    "sirlyinfo": "Ozodbek",
+def load_agents():
+    if not os.path.exists(AGENTS_FILE):
+        # Default agents
+        return {
+            "sirlyinfo": {
+                "name": "Ozodbek",
+                "username": "sirlyinfo",
+                "phone": "+998 93 798 13 04",
+                "work_days": [0, 1, 2, 3, 4, 6],  # Dush-Juma + Yakshanba
+                "work_hours": {
+                    "0": [10, 20], "1": [10, 20], "2": [10, 20],
+                    "3": [10, 20], "4": [10, 20],
+                    "6": [10, 24],
+                },
+            },
+        }
+    try:
+        with open(AGENTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"load_agents error: {e}")
+        return {}
+
+def save_agents(agents_data):
+    with open(AGENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(agents_data, f, ensure_ascii=False, indent=2)
+
+# Global agents dict (loaded at startup)
+AGENTS_DATA = load_agents()
+
+def get_agent_order():
+    return list(AGENTS_DATA.keys())
+
+def get_agents():
+    return {u: d["name"] for u, d in AGENTS_DATA.items()}
+
+def get_agent_info(username):
+    d = AGENTS_DATA.get(username, {})
+    name = d.get("name", username)
+    phone = d.get("phone", "")
+    return f"👨🏻‍💻 {name} @{username}\n📞 {phone}"
+
+# =========================
+# CHECKLIST CONFIG
+# =========================
+
+CHECKLIST_CONFIG = {
+    "10:00": [
+        "Admin panel (support) tozalandi",
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+        "Olib ketilmagan statusini tekshirildi",
+    ],
+    "14:00": [
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Sotuv tablitsasi to'ldirildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+    ],
+    "18:00": [
+        "Muammoli mijozlar jadvali to'liq tekshirildi",
+        "Sirly bug va task guruhidagi barcha bug hamda tasklar jadvalga kiritildi",
+        "Umid akaga checklist skrinshoti yuborildi",
+    ],
+    "23:00": [
+        "Bugalteriya jadvali to'ldirildi",
+        "Bugalteriya kunlik holati hamkorlar telegram guruhlariga yuborildi",
+        "Support va telegramdagi murojaatlar qolib ketmadi",
+        "Checklist to'liq tekshirildi",
+        "To'liq tekshirilgani haqida Sirly STAFF ga xabar yuborildi? Umid akani tag qilib",
+    ],
 }
 
-AGENT_INFO = {
-    "sirlyinfo": (
-        "👨🏻‍💻 Ozodbek @sirlyinfo\n"
-        "📞 93 798 13 04"
-    ),
-}
-
-# =========================
-# CHECKLIST
-# =========================
-
-# Барча чеклист вазифалари — умумий рўйхат
-CHECKLIST_ALL_TASKS = [
-    "Admin panel tozalandi",
-    "Muammoli mijozlar jadvali tekshirildi",
-    "Olib ketilgan statusini tekshirildi",
-    "Sotuv jadvali toldirildi",
-    "Checklist screenshot yuborildi",
-]
-
-CHECKLIST_TIMES = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
-
-# Кун бўйи бажарилган вазифалар индекслари
-checklist_done_today: set = set()
-checklist_done_date: str = ""  # "DD.MM.YYYY" форматида
-
-def get_checklist_tasks_for_time():
-    """Бажарилмаган вазифаларни қайтаради"""
-    remaining = [
-        (i, task) for i, task in enumerate(CHECKLIST_ALL_TASKS)
-        if i not in checklist_done_today
-    ]
-    return remaining
-
-def reset_checklist_if_new_day():
-    global checklist_done_today, checklist_done_date
-    today = datetime.now(TIMEZONE).strftime("%d.%m.%Y")
-    if checklist_done_date != today:
-        checklist_done_today = set()
-        checklist_done_date = today
+CHECKLIST_TIMES = list(CHECKLIST_CONFIG.keys())
 
 # =========================
 # NEXT TIME HELPERS
 # =========================
 
 def get_next_checklist_time(current_time_key):
-    idx = CHECKLIST_TIMES.index(current_time_key)
-    if idx + 1 < len(CHECKLIST_TIMES):
-        return CHECKLIST_TIMES[idx + 1]
+    times = CHECKLIST_TIMES
+    if current_time_key in times:
+        idx = times.index(current_time_key)
+        if idx + 1 < len(times):
+            return times[idx + 1]
     return None
 
 def get_next_reminder_time():
@@ -141,7 +170,7 @@ state = {
 
     "cycle_id": 0,
     "stopped": False,
-    "reminder_stopped": False,
+    "reminder_stopped": True,  # Default o'chiq
 }
 
 # =========================
@@ -158,19 +187,15 @@ WEEKDAY_UZ = {
     6: "Yakshanba",
 }
 
+WEEKDAY_SHORT = {
+    "Dush": 0, "Sesh": 1, "Chor": 2, "Pay": 3,
+    "Juma": 4, "Shan": 5, "Yak": 6,
+}
+
 MONTH_UZ = {
-    1: "yanvar",
-    2: "fevral",
-    3: "mart",
-    4: "aprel",
-    5: "may",
-    6: "iyun",
-    7: "iyul",
-    8: "avgust",
-    9: "sentyabr",
-    10: "oktyabr",
-    11: "noyabr",
-    12: "dekabr",
+    1: "yanvar", 2: "fevral", 3: "mart", 4: "aprel",
+    5: "may", 6: "iyun", 7: "iyul", 8: "avgust",
+    9: "sentyabr", 10: "oktyabr", 11: "noyabr", 12: "dekabr",
 }
 
 # =========================
@@ -181,33 +206,28 @@ def get_active_agents():
     now = datetime.now(TIMEZONE)
     weekday = now.weekday()
     hour = now.hour
-
     active = set()
-
-    # Ozodbek — Dush-Juma 10:00-18:00
-    if weekday <= 4:
-        if 10 <= hour < 18:
-            active.add("sirlyinfo")
-
+    for username, data in AGENTS_DATA.items():
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), work_hours.get("default", [0, 24]))
+            if wh[0] <= hour < wh[1]:
+                active.add(username)
     return active
-
-# =========================
-# ACTIVE AGENTS FOR TIME
-# =========================
 
 def get_active_agents_for_time(time_key):
     hour = int(time_key.split(":")[0])
-
     now = datetime.now(TIMEZONE)
     weekday = now.weekday()
-
     active = set()
-
-    # Ozodbek — Dush-Juma 10:00-18:00
-    if weekday <= 4:
-        if 10 <= hour <= 18:
-            active.add("sirlyinfo")
-
+    for username, data in AGENTS_DATA.items():
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), work_hours.get("default", [0, 24]))
+            if wh[0] <= hour <= wh[1]:
+                active.add(username)
     return active
 
 # =========================
@@ -216,44 +236,19 @@ def get_active_agents_for_time(time_key):
 
 def build_reminder_keyboard(active_agents, confirmations):
     keyboard = []
-
-    for username in AGENT_ORDER:
+    for username in get_agent_order():
         if username not in active_agents:
             continue
-
-        name = AGENTS[username]
-
-        conf = confirmations.get(
-            username,
-            {"mijoz": False, "hamkor": False}
-        )
-
-        mijoz_label = (
-            f"✅ {name} - Mijozlar tekshirildi"
-            if conf["mijoz"]
-            else f"⬜ {name} - Mijozlar tekshirildi"
-        )
-
-        hamkor_label = (
-            f"✅ {name} - Hamkorlar tekshirildi"
-            if conf["hamkor"]
-            else f"⬜ {name} - Hamkorlar tekshirildi"
-        )
-
-        keyboard.append([
-            InlineKeyboardButton(
-                mijoz_label,
-                callback_data=f"confirm_{username}_mijoz"
-            )
-        ])
-
-        keyboard.append([
-            InlineKeyboardButton(
-                hamkor_label,
-                callback_data=f"confirm_{username}_hamkor"
-            )
-        ])
-
+        name = AGENTS_DATA[username]["name"]
+        conf = confirmations.get(username, {"mijoz": False, "hamkor": False})
+        keyboard.append([InlineKeyboardButton(
+            f"{'✅' if conf['mijoz'] else '⬜'} {name} - Mijozlar tekshirildi",
+            callback_data=f"confirm_{username}_mijoz"
+        )])
+        keyboard.append([InlineKeyboardButton(
+            f"{'✅' if conf['hamkor'] else '⬜'} {name} - Hamkorlar tekshirildi",
+            callback_data=f"confirm_{username}_hamkor"
+        )])
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
@@ -262,26 +257,20 @@ def build_reminder_keyboard(active_agents, confirmations):
 
 def build_checklist_keyboard(time_key, active_agents, checklist_confs):
     keyboard = []
-
-    for username in AGENT_ORDER:
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
+    for username in get_agent_order():
         if username not in active_agents:
             continue
-
-        name = AGENTS[username]
+        name = AGENTS_DATA[username]["name"]
         user_conf = checklist_confs.get(username, {})
-
-        for i, task in enumerate(CHECKLIST_ALL_TASKS):
+        for i, task in enumerate(tasks):
             done = user_conf.get(i, False)
             icon = "✅" if done else "⬜"
             short_task = task if len(task) <= 30 else task[:30] + "..."
-
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"{icon} {name} — {short_task}",
-                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
-                )
-            ])
-
+            keyboard.append([InlineKeyboardButton(
+                f"{icon} {name} — {short_task}",
+                callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
+            )])
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
@@ -289,17 +278,11 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
 # =========================
 
 def build_checklist_text(time_key, active_agents):
-    task_lines = "\n".join(
-        f"{i+1}. {task} ☑️"
-        for i, task in enumerate(CHECKLIST_ALL_TASKS)
-    )
-
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
+    task_lines = "\n".join(f"{i+1}. {task} ☑️" for i, task in enumerate(tasks))
     agent_block = "\n\n".join(
-        AGENT_INFO[u]
-        for u in AGENT_ORDER
-        if u in active_agents
+        get_agent_info(u) for u in get_agent_order() if u in active_agents
     )
-
     return (
         f"📋 ЧЕКЛИСТ — {time_key}\n\n"
         f"{task_lines}\n\n"
@@ -312,11 +295,8 @@ def build_checklist_text(time_key, active_agents):
 
 def build_reminder_text(active_agents):
     agent_block = "\n\n".join(
-        AGENT_INFO[u]
-        for u in AGENT_ORDER
-        if u in active_agents
+        get_agent_info(u) for u in get_agent_order() if u in active_agents
     )
-
     return (
         f"{agent_block}\n\n"
         "━━━━━━━━━━━━━━\n\n"
@@ -334,19 +314,17 @@ def build_reminder_text(active_agents):
 def all_confirmed(active_agents, confirmations):
     for username in active_agents:
         conf = confirmations.get(username, {})
-
         if not conf.get("mijoz") or not conf.get("hamkor"):
             return False
-
     return True
 
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
     for username in active_agents:
         user_conf = checklist_confs.get(username, {})
-        for i in range(len(CHECKLIST_ALL_TASKS)):
+        for i in range(len(tasks)):
             if not user_conf.get(i, False):
                 return False
-
     return True
 
 # =========================
@@ -359,30 +337,15 @@ def cancel_jobs_by_name(job_queue, name):
 
 def seconds_until_next_30():
     now = datetime.now(TIMEZONE)
-
-    elapsed = (
-        now.minute * 60
-        + now.second
-        + now.microsecond / 1_000_000
-    )
-
+    elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
     next_30 = ((now.minute // 30) + 1) * 30 * 60
-
     return max(next_30 - elapsed, 1.0)
 
 def seconds_until_time(hour, minute):
     now = datetime.now(TIMEZONE)
-
-    target = now.replace(
-        hour=hour,
-        minute=minute,
-        second=0,
-        microsecond=0,
-    )
-
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
-
     return (target - now).total_seconds()
 
 # =========================
@@ -392,13 +355,10 @@ def seconds_until_time(hour, minute):
 async def send_reminder(bot, cycle_id):
     if state.get("reminder_stopped"):
         return
-
     active = get_active_agents()
-
     if not active:
         return
 
-    # ТАСК 2+12: янги реминдер юборилишидан олдин олдинги лог ва реминдер ўчирилади
     if state.get("reminder_log_message_id"):
         try:
             await bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_log_message_id"])
@@ -411,31 +371,16 @@ async def send_reminder(bot, cycle_id):
             pass
 
     state["confirmations"] = {
-        username: {
-            "mijoz": False,
-            "hamkor": False
-        }
-        for username in active
+        username: {"mijoz": False, "hamkor": False} for username in active
     }
-
     state["reminder_message_id"] = None
     state["reminder_sent_at"] = datetime.now(TIMEZONE)
     state["reminder_log_message_id"] = None
     state["reminder_log_lines"] = []
 
     text = build_reminder_text(active)
-
-    keyboard = build_reminder_keyboard(
-        active,
-        state["confirmations"]
-    )
-
-    sent = await bot.send_message(
-        chat_id=CHAT_ID,
-        text=text,
-        reply_markup=keyboard,
-    )
-
+    keyboard = build_reminder_keyboard(active, state["confirmations"])
+    sent = await bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
     state["reminder_message_id"] = sent.message_id
 
 # =========================
@@ -444,11 +389,9 @@ async def send_reminder(bot, cycle_id):
 
 async def send_checklist(bot, time_key):
     active = get_active_agents_for_time(time_key)
-
     if not active:
         return
 
-    # ТАСК 4+12: олдинги чеклист хабари ва логни ўчириш
     if state["checklist_log_message_ids"].get(time_key):
         try:
             await bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_log_message_ids"][time_key])
@@ -462,26 +405,12 @@ async def send_checklist(bot, time_key):
             pass
         state["checklist_message_ids"][time_key] = None
 
-    state["checklist_confirmations"][time_key] = {
-        username: {}
-        for username in active
-    }
+    state["checklist_confirmations"][time_key] = {username: {} for username in active}
     state["checklist_log_lines"][time_key] = []
 
     text = build_checklist_text(time_key, active)
-
-    keyboard = build_checklist_keyboard(
-        time_key,
-        active,
-        state["checklist_confirmations"][time_key]
-    )
-
-    sent = await bot.send_message(
-        chat_id=CHAT_ID,
-        text=text,
-        reply_markup=keyboard,
-    )
-
+    keyboard = build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key])
+    sent = await bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
     state["checklist_message_ids"][time_key] = sent.message_id
 
 # =========================
@@ -490,14 +419,10 @@ async def send_checklist(bot, time_key):
 
 async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
     cycle_id = context.job.data["cycle_id"]
-
     if cycle_id != state["cycle_id"] or state["stopped"]:
         return
-
     await send_reminder(context.bot, cycle_id)
-
     cancel_jobs_by_name(context.job_queue, "reminder")
-
     context.job_queue.run_once(
         reminder_job,
         when=seconds_until_next_30(),
@@ -512,22 +437,15 @@ async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
 async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
     cycle_id = context.job.data["cycle_id"]
     time_key = context.job.data["time_key"]
-
     if cycle_id != state["cycle_id"] or state["stopped"]:
         return
-
     await send_checklist(context.bot, time_key)
-
     hour, minute = map(int, time_key.split(":"))
-
     context.job_queue.run_once(
         checklist_job,
         when=seconds_until_time(hour, minute),
         name=f"checklist_{time_key}",
-        data={
-            "cycle_id": cycle_id,
-            "time_key": time_key
-        },
+        data={"cycle_id": cycle_id, "time_key": time_key},
     )
 
 # =========================
@@ -537,7 +455,6 @@ async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
-
     await query.answer("✅ Tasdiqlandi!")
 
     now = datetime.now(TIMEZONE)
@@ -546,17 +463,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- TEST CHECKLIST ---
     if data.startswith("test_chk_"):
         time_key = data[9:]
-        active = get_active_agents_for_time(time_key) or set(AGENT_ORDER)
-        state["checklist_confirmations"][time_key] = {
-            username: {} for username in active
-        }
+        active = get_active_agents_for_time(time_key) or set(get_agent_order())
+        state["checklist_confirmations"][time_key] = {username: {} for username in active}
         text = build_checklist_text(time_key, active)
         keyboard = build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key])
-        sent = await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=text,
-            reply_markup=keyboard,
-        )
+        sent = await context.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
         state["checklist_message_ids"][time_key] = sent.message_id
         return
 
@@ -566,55 +477,37 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         confirm_type = without_prefix.split("_")[-1]
         username = without_prefix[:-(len(confirm_type) + 1)]
 
-        # Фақат ўз тугмасини боса олади
         presser = query.from_user.username
         if presser != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
 
         active = set(state["confirmations"].keys()) or get_active_agents()
-
         if username not in active:
             return
-
         if username not in state["confirmations"]:
-            state["confirmations"][username] = {
-                "mijoz": False,
-                "hamkor": False,
-            }
-
+            state["confirmations"][username] = {"mijoz": False, "hamkor": False}
         if state["confirmations"][username][confirm_type]:
             return
 
         state["confirmations"][username][confirm_type] = True
-
-        keyboard = build_reminder_keyboard(
-            active,
-            state["confirmations"]
-        )
-
+        keyboard = build_reminder_keyboard(active, state["confirmations"])
         try:
             await query.message.edit_reply_markup(reply_markup=keyboard)
         except:
             pass
 
         action_text = (
-            "Javob berilmagan mijoz qolmadi"
-            if confirm_type == "mijoz"
+            "Javob berilmagan mijoz qolmadi" if confirm_type == "mijoz"
             else "Javob berilmagan hamkor qolmadi"
         )
-
-        new_line = f"{AGENTS[username]} {time_str} | {action_text} ✅"
+        new_line = f"{AGENTS_DATA[username]['name']} {time_str} | {action_text} ✅"
         state["reminder_log_lines"].append(new_line)
-
         log_text = "\n".join(state["reminder_log_lines"]) + f"\n{NOTIFY_TAGS}"
 
         if state["reminder_log_message_id"]:
             try:
-                await context.bot.delete_message(
-                    chat_id=CHAT_ID,
-                    message_id=state["reminder_log_message_id"]
-                )
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_log_message_id"])
             except:
                 pass
 
@@ -625,16 +518,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["reminder_log_lines"] = []
             if state["reminder_message_id"]:
                 try:
-                    await context.bot.delete_message(
-                        chat_id=CHAT_ID,
-                        message_id=state["reminder_message_id"]
-                    )
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
                 except:
                     pass
         else:
             sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
             state["reminder_log_message_id"] = sent.message_id
-
         return
 
     # --- CHECKLIST BUTTONS ---
@@ -646,10 +535,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         last_underscore = rest.rindex("_")
         username = rest[:last_underscore]
         task_index = int(rest[last_underscore + 1:])
-
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
 
-        # Фақат ўз тугмасини боса олади
         presser = query.from_user.username
         if presser != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
@@ -662,55 +549,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if username not in active:
             return
-
         if time_key not in state["checklist_confirmations"]:
             state["checklist_confirmations"][time_key] = {}
-
         if username not in state["checklist_confirmations"][time_key]:
             state["checklist_confirmations"][time_key][username] = {}
 
         user_conf = state["checklist_confirmations"][time_key][username]
-
         if user_conf.get(task_index, False):
             return
-
         user_conf[task_index] = True
 
-        keyboard = build_checklist_keyboard(
-            time_key,
-            active,
-            state["checklist_confirmations"][time_key]
-        )
-
+        keyboard = build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key])
         try:
             await query.message.edit_reply_markup(reply_markup=keyboard)
         except:
             pass
 
-        task_text = CHECKLIST_ALL_TASKS[task_index] if task_index < len(CHECKLIST_ALL_TASKS) else str(task_index)
-
-        new_line = f"{AGENTS[username]} {time_str} | {task_text} ni bajardi ✅"
+        tasks = CHECKLIST_CONFIG.get(time_key, [])
+        task_text = tasks[task_index] if task_index < len(tasks) else str(task_index)
+        new_line = f"{AGENTS_DATA[username]['name']} {time_str} | {task_text} ni bajardi ✅"
 
         if time_key not in state["checklist_log_lines"]:
             state["checklist_log_lines"][time_key] = []
         state["checklist_log_lines"][time_key].append(new_line)
-
         log_text = "\n".join(state["checklist_log_lines"][time_key]) + f"\n{NOTIFY_TAGS}"
 
         if state["checklist_log_message_ids"].get(time_key):
             try:
-                await context.bot.delete_message(
-                    chat_id=CHAT_ID,
-                    message_id=state["checklist_log_message_ids"][time_key]
-                )
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_log_message_ids"][time_key])
             except:
                 pass
 
-        if checklist_all_confirmed(
-            time_key,
-            active,
-            state["checklist_confirmations"][time_key]
-        ):
+        if checklist_all_confirmed(time_key, active, state["checklist_confirmations"][time_key]):
             next_t = get_next_checklist_time(time_key)
             log_text += f"\n✅ {time_key} checklist yakunlandi."
             if next_t:
@@ -720,60 +590,430 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["checklist_log_lines"][time_key] = []
             if state["checklist_message_ids"].get(time_key):
                 try:
-                    await context.bot.delete_message(
-                        chat_id=CHAT_ID,
-                        message_id=state["checklist_message_ids"][time_key]
-                    )
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_message_ids"][time_key])
                 except:
                     pass
         else:
             sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
             state["checklist_log_message_ids"][time_key] = sent.message_id
-
         return
+
+# =========================
+# ADDAGENT STATE
+# =========================
+
+addagent_state = {}
+editagent_state = {}
+
+WEEKDAY_BUTTONS = [
+    ("Dush (Du)", 0), ("Sesh (Se)", 1), ("Chor (Ch)", 2),
+    ("Pay (Pa)", 3), ("Juma (Ju)", 4), ("Shanba (Sh)", 5), ("Yakshanba (Ya)", 6),
+]
+
+def build_days_keyboard(selected_days, prefix="add"):
+    keyboard = []
+    row = []
+    for label, idx in WEEKDAY_BUTTONS:
+        icon = "✅" if idx in selected_days else "⬜"
+        row.append(InlineKeyboardButton(f"{icon} {label}", callback_data=f"{prefix}day_{idx}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("✅ Tayyor", callback_data=f"{prefix}days_done")])
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data=f"{prefix}cancel")])
+    return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# ADDAGENT COMMAND
+# =========================
+
+async def addagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    addagent_state[user_id] = {"step": "username", "messages": []}
+    sent = await update.message.reply_text(
+        "➕ Yangi hodim qo'shish\n\n"
+        "1️⃣ Username kiriting (@siz formatida yoki username):"
+    )
+    addagent_state[user_id]["messages"].append(sent.message_id)
+
+async def addagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    if user_id not in addagent_state:
+        return
+
+    s = addagent_state[user_id]
+    step = s.get("step")
+    text = update.message.text.strip().lstrip("@")
+
+    if step == "username":
+        s["username"] = text
+        s["step"] = "name"
+        sent = await update.message.reply_text("2️⃣ Ismini kiriting (masalan: Ozodbek):")
+        s["messages"].append(sent.message_id)
+
+    elif step == "name":
+        s["name"] = text
+        s["step"] = "phone"
+        sent = await update.message.reply_text("3️⃣ Telefon raqamini kiriting (masalan: +998 93 798 13 04):")
+        s["messages"].append(sent.message_id)
+
+    elif step == "phone":
+        s["phone"] = text
+        s["step"] = "days"
+        s["selected_days"] = []
+        sent = await update.message.reply_text(
+            "4️⃣ Ish kunlarini tanlang:",
+            reply_markup=build_days_keyboard(s["selected_days"], prefix="add")
+        )
+        s["messages"].append(sent.message_id)
+
+    elif step == "start_hour":
+        try:
+            h = int(text.replace(":", "").strip())
+            if ":" in text:
+                h = int(text.split(":")[0])
+            s["start_hour"] = h
+            s["step"] = "end_hour"
+            sent = await update.message.reply_text("6️⃣ Ish tugash vaqtini kiriting (masalan: 20 yoki 23:59 uchun 24):")
+            s["messages"].append(sent.message_id)
+        except:
+            sent = await update.message.reply_text("❌ Noto'g'ri format. Qayta kiriting (masalan: 10):")
+            s["messages"].append(sent.message_id)
+
+    elif step == "end_hour":
+        try:
+            h = int(text.replace(":", "").strip())
+            if ":" in text:
+                parts = text.split(":")
+                h = int(parts[0])
+                if parts[1] in ["59", "45", "30"]:
+                    h += 1
+            s["end_hour"] = h
+            s["step"] = "confirm"
+
+            days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
+            sent = await update.message.reply_text(
+                f"📋 Yangi hodim ma'lumotlari:\n\n"
+                f"👤 Username: @{s['username']}\n"
+                f"📛 Ismi: {s['name']}\n"
+                f"📞 Telefon: {s['phone']}\n"
+                f"📅 Ish kunlari: {days_str}\n"
+                f"🕐 Ish vaqti: {s['start_hour']:02d}:00 — {s['end_hour']:02d}:00\n\n"
+                f"Tasdiqlaysizmi?",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✅ Tasdiqlash", callback_data="addconfirm_yes")],
+                    [InlineKeyboardButton("❌ Bekor", callback_data="add_cancel")],
+                ])
+            )
+            s["messages"].append(sent.message_id)
+        except:
+            sent = await update.message.reply_text("❌ Noto'g'ri format. Qayta kiriting (masalan: 20):")
+            s["messages"].append(sent.message_id)
+
+async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+
+    if data == "add_cancel":
+        addagent_state.pop(user_id, None)
+        await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        return
+
+    if user_id not in addagent_state:
+        return
+
+    s = addagent_state[user_id]
+
+    if data.startswith("addday_"):
+        day_idx = int(data[7:])
+        if day_idx in s["selected_days"]:
+            s["selected_days"].remove(day_idx)
+        else:
+            s["selected_days"].append(day_idx)
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=build_days_keyboard(s["selected_days"], prefix="add")
+            )
+        except:
+            pass
+
+    elif data == "adddays_done":
+        if not s["selected_days"]:
+            await query.answer("❌ Kamida 1 kun tanlang!", show_alert=True)
+            return
+        s["step"] = "start_hour"
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="5️⃣ Ish boshlash vaqtini kiriting (masalan: 10):"
+        )
+        s["messages"].append(sent.message_id)
+
+    elif data == "addconfirm_yes":
+        username = s["username"]
+        work_hours = {}
+        for d in s["selected_days"]:
+            work_hours[str(d)] = [s["start_hour"], s["end_hour"]]
+
+        AGENTS_DATA[username] = {
+            "name": s["name"],
+            "username": username,
+            "phone": s["phone"],
+            "work_days": sorted(s["selected_days"]),
+            "work_hours": work_hours,
+        }
+        save_agents(AGENTS_DATA)
+        addagent_state.pop(user_id, None)
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"✅ {s['name']} (@{username}) muvaffaqiyatli qo'shildi!"
+        )
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"👤 Yangi hodim qo'shildi: {s['name']} (@{username})\n📞 {s['phone']}"
+        )
+
+# =========================
+# EDITAGENT COMMAND
+# =========================
+
+async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+
+    if not AGENTS_DATA:
+        await update.message.reply_text("❌ Hodimlar ro'yxati bo'sh.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(f"👤 {d['name']} (@{u})", callback_data=f"edit_select_{u}")]
+        for u, d in AGENTS_DATA.items()
+    ]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")])
+
+    sent = await update.message.reply_text(
+        "✏️ Qaysi hodimni tahrirlaysiz?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    editagent_state[user_id] = {"messages": [sent.message_id]}
+
+async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    if user_id not in editagent_state:
+        return
+
+    s = editagent_state[user_id]
+    step = s.get("step")
+    text = update.message.text.strip()
+
+    if step == "name":
+        s["new_name"] = text
+        AGENTS_DATA[s["username"]]["name"] = text
+        save_agents(AGENTS_DATA)
+        editagent_state.pop(user_id, None)
+        await update.message.reply_text(f"✅ Ismi '{text}' ga o'zgartirildi.")
+
+    elif step == "phone":
+        AGENTS_DATA[s["username"]]["phone"] = text
+        save_agents(AGENTS_DATA)
+        editagent_state.pop(user_id, None)
+        await update.message.reply_text(f"✅ Telefon '{text}' ga o'zgartirildi.")
+
+    elif step == "start_hour":
+        try:
+            h = int(text.split(":")[0]) if ":" in text else int(text)
+            s["start_hour"] = h
+            s["step"] = "end_hour"
+            sent = await update.message.reply_text("Yangi tugash vaqtini kiriting (masalan: 20):")
+            s["messages"].append(sent.message_id)
+        except:
+            await update.message.reply_text("❌ Noto'g'ri format.")
+
+    elif step == "end_hour":
+        try:
+            h = int(text.split(":")[0]) if ":" in text else int(text)
+            username = s["username"]
+            for d in AGENTS_DATA[username]["work_days"]:
+                AGENTS_DATA[username]["work_hours"][str(d)] = [s["start_hour"], h]
+            save_agents(AGENTS_DATA)
+            editagent_state.pop(user_id, None)
+            await update.message.reply_text(f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga o'zgartirildi.")
+        except:
+            await update.message.reply_text("❌ Noto'g'ri format.")
+
+async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+
+    if data == "edit_cancel":
+        editagent_state.pop(user_id, None)
+        await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        return
+
+    if user_id not in editagent_state:
+        return
+
+    s = editagent_state[user_id]
+
+    if data.startswith("edit_select_"):
+        username = data[12:]
+        s["username"] = username
+        d = AGENTS_DATA[username]
+        days_str = ", ".join(WEEKDAY_UZ[day] for day in sorted(d["work_days"]))
+
+        keyboard = [
+            [InlineKeyboardButton("📛 Ismini o'zgartir", callback_data="edit_field_name")],
+            [InlineKeyboardButton("📞 Telefonni o'zgartir", callback_data="edit_field_phone")],
+            [InlineKeyboardButton("📅 Ish kunlarini o'zgartir", callback_data="edit_field_days")],
+            [InlineKeyboardButton("🕐 Ish vaqtini o'zgartir", callback_data="edit_field_hours")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")],
+        ]
+
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"👤 {d['name']} (@{username})\n"
+                f"📞 {d['phone']}\n"
+                f"📅 {days_str}\n\n"
+                f"Nimani o'zgartirmoqchisiz?"
+            ),
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        s["messages"].append(sent.message_id)
+
+    elif data == "edit_field_name":
+        s["step"] = "name"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi ismini kiriting:")
+        s["messages"].append(sent.message_id)
+
+    elif data == "edit_field_phone":
+        s["step"] = "phone"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi telefon raqamini kiriting:")
+        s["messages"].append(sent.message_id)
+
+    elif data == "edit_field_days":
+        s["step"] = "days"
+        s["selected_days"] = list(AGENTS_DATA[s["username"]]["work_days"])
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="Yangi ish kunlarini tanlang:",
+            reply_markup=build_days_keyboard(s["selected_days"], prefix="editday_")
+        )
+        s["messages"].append(sent.message_id)
+
+    elif data == "edit_field_hours":
+        s["step"] = "start_hour"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi boshlash vaqtini kiriting (masalan: 10):")
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("editday__"):
+        day_idx = int(data[9:])
+        if day_idx in s["selected_days"]:
+            s["selected_days"].remove(day_idx)
+        else:
+            s["selected_days"].append(day_idx)
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=build_days_keyboard(s["selected_days"], prefix="editday_")
+            )
+        except:
+            pass
+
+    elif data == "editday_days_done":
+        username = s["username"]
+        AGENTS_DATA[username]["work_days"] = sorted(s["selected_days"])
+        new_hours = {}
+        for d in s["selected_days"]:
+            old = AGENTS_DATA[username]["work_hours"].get(str(d), [10, 20])
+            new_hours[str(d)] = old
+        AGENTS_DATA[username]["work_hours"] = new_hours
+        save_agents(AGENTS_DATA)
+        editagent_state.pop(user_id, None)
+        days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
+        await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
+
+# =========================
+# DELAGENT COMMAND
+# =========================
+
+async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+
+    if not AGENTS_DATA:
+        await update.message.reply_text("❌ Hodimlar ro'yxati bo'sh.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(f"🗑 {d['name']} (@{u})", callback_data=f"delagent_{u}")]
+        for u, d in AGENTS_DATA.items()
+    ]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="delagent_cancel")])
+
+    await update.message.reply_text(
+        "🗑 Qaysi hodimni o'chirmoqchisiz?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+
+    if data == "delagent_cancel":
+        await query.message.edit_text("❌ Bekor qilindi.")
+        return
+
+    if data.startswith("delagent_confirm_"):
+        username = data[17:]
+        if username in AGENTS_DATA:
+            name = AGENTS_DATA[username]["name"]
+            del AGENTS_DATA[username]
+            save_agents(AGENTS_DATA)
+            await query.message.edit_text(f"✅ {name} (@{username}) o'chirildi.")
+        return
+
+    if data.startswith("delagent_"):
+        username = data[9:]
+        if username not in AGENTS_DATA:
+            return
+        name = AGENTS_DATA[username]["name"]
+        keyboard = [
+            [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"delagent_confirm_{username}")],
+            [InlineKeyboardButton("❌ Yo'q", callback_data="delagent_cancel")],
+        ]
+        await query.message.edit_text(
+            f"⚠️ {name} (@{username}) ni o'chirishni tasdiqlaysizmi?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 # =========================
 # START COMMAND
 # =========================
-
-def get_agent_schedule_today(username):
-    now = datetime.now(TIMEZONE)
-    weekday = now.weekday()
-
-    if username == "sirlyinfo":
-        if weekday <= 4:
-            return (10, 20)
-        elif weekday == 5:
-            return (10, 24)
-        else:
-            return None
-
-    elif username == "Muhammadhumoyun_Mudarris":
-        if weekday <= 4:
-            return (14, 24)
-        elif weekday == 6:
-            return (10, 24)
-        else:
-            return None
-
-    return None
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
 
     active = get_active_agents()
-
     now = datetime.now(TIMEZONE)
 
     if not active:
         weekday_name = WEEKDAY_UZ[now.weekday()]
-
-        date_str = (
-            f"{weekday_name}, "
-            f"{now.day}-{MONTH_UZ[now.month]} {now.year}"
-        )
-
+        date_str = f"{weekday_name}, {now.day}-{MONTH_UZ[now.month]} {now.year}"
         time_str = now.strftime("%H:%M")
 
         lines = [
@@ -783,45 +1023,27 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "──────────────",
         ]
 
-        for username in AGENT_ORDER:
-            schedule = get_agent_schedule_today(username)
-            info = AGENT_INFO[username]
-
-            if schedule:
-                start_h, end_h = schedule
-                end_str = (
-                    "23:59"
-                    if end_h == 24
-                    else f"{end_h:02d}:00"
-                )
+        for username, data in AGENTS_DATA.items():
+            weekday = now.weekday()
+            if weekday in data["work_days"]:
+                wh = data["work_hours"].get(str(weekday), [10, 20])
                 lines.append(
-                    f"\n{info}\n"
-                    f"🕐 Bugun ish vaqti: "
-                    f"{start_h:02d}:00 — {end_str}"
+                    f"\n{get_agent_info(username)}\n"
+                    f"🕐 Bugun ish vaqti: {wh[0]:02d}:00 — {wh[1]:02d}:00"
                 )
             else:
-                lines.append(
-                    f"\n{info}\n😴 Bugun dam oladi"
-                )
-
+                lines.append(f"\n{get_agent_info(username)}\n😴 Bugun dam oladi")
             lines.append("\n──────────────")
 
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text="\n".join(lines),
-        )
-
+        await context.bot.send_message(chat_id=CHAT_ID, text="\n".join(lines))
         return
 
     state["stopped"] = False
     state["cycle_id"] += 1
 
     cancel_jobs_by_name(context.job_queue, "reminder")
-
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
-
-    now = datetime.now(TIMEZONE)
 
     next_q_total = ((now.minute // 30) + 1) * 30
     next_q_hour = (now.hour + next_q_total // 60) % 24
@@ -836,31 +1058,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for time_key in CHECKLIST_TIMES:
         hour, minute = map(int, time_key.split(":"))
-
         context.job_queue.run_once(
             checklist_job,
             when=seconds_until_time(hour, minute),
             name=f"checklist_{time_key}",
-            data={
-                "cycle_id": state["cycle_id"],
-                "time_key": time_key
-            },
+            data={"cycle_id": state["cycle_id"], "time_key": time_key},
         )
 
-    active_text = "\n".join(
-        f"🟢 {AGENTS[u]}"
-        for u in AGENT_ORDER
-        if u in active
-    )
+    active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active)
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
             "✅ Bot ishga tushdi\n\n"
-            f"👨🏻‍💻 Aktiv supportlar:\n"
-            f"{active_text}\n\n"
-            f"⏰ Birinchi eslatma: "
-            f"{next_q_hour:02d}:{next_q_min:02d}"
+            f"👨🏻‍💻 Aktiv supportlar:\n{active_text}\n\n"
+            f"📋 Cheklistlar: {'✅ Yoqiq' if not state['stopped'] else '❌ O'chiq'}\n"
+            f"🔔 Reminder: {'✅ Yoqiq' if not state['reminder_stopped'] else '❌ O'chiq'}\n\n"
+            f"⏰ Birinchi reminder (agar yoqiq bo'lsa): {next_q_hour:02d}:{next_q_min:02d}"
         ),
     )
 
@@ -876,7 +1090,6 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state["cycle_id"] += 1
 
     cancel_jobs_by_name(context.job_queue, "reminder")
-
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
 
@@ -896,40 +1109,25 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reminder_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
     state["reminder_stopped"] = False
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
-        text=(
-            "▶️ Reminder yoqildi.\n"
-            f"⏰ Keyingi eslatma: {get_next_reminder_time()}"
-        ),
+        text=f"▶️ Reminder yoqildi.\n⏰ Keyingi eslatma: {get_next_reminder_time()}"
     )
 
 async def reminder_stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
     state["reminder_stopped"] = True
-
-    # Юборилган реминдер хабарини ўчириш
     if state.get("reminder_message_id"):
         try:
-            await context.bot.delete_message(
-                chat_id=CHAT_ID,
-                message_id=state["reminder_message_id"]
-            )
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
         except:
             pass
         state["reminder_message_id"] = None
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
-        text=(
-            "⏸ Reminder to'xtatildi.\n"
-            "Qayta yoqish uchun /reminder_start bosing."
-        ),
+        text="⏸ Reminder to'xtatildi.\nQayta yoqish uchun /reminder_start bosing."
     )
 
 # =========================
@@ -939,78 +1137,26 @@ async def reminder_stop_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
-    active = get_active_agents() or set(AGENT_ORDER)
-
+    active = get_active_agents() or set(get_agent_order())
     state["confirmations"] = {
-        username: {"mijoz": False, "hamkor": False}
-        for username in active
+        username: {"mijoz": False, "hamkor": False} for username in active
     }
-
     text = build_reminder_text(active)
     keyboard = build_reminder_keyboard(active, state["confirmations"])
-
-    await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=text,
-        reply_markup=keyboard,
-    )
+    await context.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
 
 async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
     keyboard = [
         [InlineKeyboardButton(t, callback_data=f"test_chk_{t}")]
         for t in CHECKLIST_TIMES
     ]
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text="🧪 Qaysi checklist vaqtini test qilasiz?",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
-
-# =========================
-# ZADACHA — AGENTS
-# =========================
-
-ZADACHA_AGENTS = {
-    "sirlyinfo": "Ozodbek",
-    "Muhammadhumoyun_Mudarris": "Muhammadhumoyun",
-    "al_xorazm1y": "Azamjon",
-    "kh_nosirov": "Xojiakbar",
-    "umidpulatov": "Umid",
-}
-
-ZADACHA_AGENT_ROLES = {
-    "sirlyinfo": "Support",
-    "Muhammadhumoyun_Mudarris": "Support",
-    "al_xorazm1y": "Support",
-    "kh_nosirov": "CEO",
-    "umidpulatov": "COO",
-}
-
-ZADACHA_AGENT_INFO = {
-    "al_xorazm1y": (
-        "👨\u200d💼 Azamjon @al_xorazm1y\n"
-        "📞 99 737 11 99 | 💼 Hamkor jalb qilish bo'lim boshlig'i"
-    ),
-    "kh_nosirov": (
-        "👨\u200d💼 Xojiakbar @kh_nosirov\n"
-        "💼 CEO"
-    ),
-    "umidpulatov": (
-        "👨\u200d💼 Umid @umidpulatov\n"
-        "📞 99 477 41 48 | 💼 COO"
-    ),
-}
-
-# Ижро этувчилар (vazifa yuklatiladi)
-EXECUTOR_AGENTS = ["sirlyinfo", "Muhammadhumoyun_Mudarris", "al_xorazm1y"]
-
-# Назорат қилувчилар (nazorat qiladi)
-SUPERVISOR_AGENTS = ["kh_nosirov", "umidpulatov"]
 
 # =========================
 # ZADACHA — STATE
@@ -1019,12 +1165,6 @@ SUPERVISOR_AGENTS = ["kh_nosirov", "umidpulatov"]
 zadacha_state = {}
 zadacha_tasks = {}
 zadacha_counter = [0]
-
-DEADLINE_SLOTS = [
-    "10:00", "11:00", "12:00", "13:00", "14:00",
-    "15:00", "16:00", "17:00", "18:00", "19:00",
-    "20:00", "21:00", "22:00",
-]
 
 TASKS_FILE = "zadacha_tasks.json"
 
@@ -1066,6 +1206,7 @@ def load_tasks():
                 "targets": task["targets"],
                 "text": task["text"],
                 "deadline": dl,
+                "supervisor": task.get("supervisor", []),
                 "accepted": set(task["accepted"]),
                 "done": set(task["done"]),
             }
@@ -1077,56 +1218,26 @@ def load_tasks():
 # =========================
 
 def zadacha_target_str(targets):
-    names = [ZADACHA_AGENTS.get(u, u) for u in targets]
+    names = [AGENTS_DATA.get(u, {}).get("name", u) for u in targets]
     return " + ".join(names)
 
-async def zadacha_delete_messages(bot, user_id):
-    msgs = zadacha_state.get(user_id, {}).get("messages", [])
-    for msg_id in msgs:
-        try:
-            await bot.delete_message(chat_id=user_id, message_id=msg_id)
-        except:
-            pass
-
 def get_agent_work_schedule(username):
-    """Агент ҳар куни нечадан ишлашини қайтаради: {weekday: (start_h, end_h)}"""
-    if username == "sirlyinfo":
-        return {
-            0: (10, 18), 1: (10, 18), 2: (10, 18),
-            3: (10, 18), 4: (10, 18),
-            # 5,6 — ишламайди
-        }
-    elif username == "Muhammadhumoyun_Mudarris":
-        # Tester — задача тизимида қолади, реминдер/чеклистда йўқ
-        return {
-            0: (10, 22), 1: (10, 22), 2: (10, 22),
-            3: (10, 22), 4: (10, 22),
-            5: (10, 22), 6: (10, 22),
-        }
-    elif username == "kh_nosirov":
-        # Xojiakbar — Dush-Yak, 10:00-23:59
-        return {i: (10, 24) for i in range(7)}
-    elif username == "umidpulatov":
-        # Umid — Dush-Juma, 12:00-20:00
-        return {
-            0: (12, 20), 1: (12, 20), 2: (12, 20),
-            3: (12, 20), 4: (12, 20),
-        }
-    else:
-        # Бошқалар — барча кунлар
-        return {i: (9, 24) for i in range(7)}
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", list(range(7)))
+    work_hours = data.get("work_hours", {})
+    schedule = {}
+    for d in work_days:
+        wh = work_hours.get(str(d), [10, 20])
+        schedule[d] = (wh[0], wh[1])
+    return schedule
 
 def get_available_dates_for_targets(targets):
-    """Агентлар учун кейинги 7 та иш кунини қайтаради."""
     now = datetime.now(TIMEZONE)
     available = []
     for i in range(14):
         d = now + timedelta(days=i)
         weekday = d.weekday()
-        all_work = all(
-            weekday in get_agent_work_schedule(u)
-            for u in targets
-        )
+        all_work = all(weekday in get_agent_work_schedule(u) for u in targets)
         if all_work:
             available.append(d)
         if len(available) >= 7:
@@ -1134,10 +1245,8 @@ def get_available_dates_for_targets(targets):
     return available
 
 def get_available_times_for_targets(targets, date_str):
-    """Берилган сана учун агентлар иш вақтига мос вақт слотларини қайтаради."""
     now = datetime.now(TIMEZONE)
     year = now.year
-    from datetime import date as date_cls
     d = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y")
     weekday = d.weekday()
 
@@ -1157,12 +1266,10 @@ def get_available_times_for_targets(targets, date_str):
 
     slots = []
     for h in range(start_hour, end_hour):
-        # Агар бугун бўлса ўтган вақтни кўрсатмаймиз
         if d.date() == now.date() and h <= now.hour:
             continue
         slots.append(f"{h:02d}:00")
     return slots
-
 
 # =========================
 # ZADACHA COMMAND
@@ -1171,19 +1278,16 @@ def get_available_times_for_targets(targets, date_str):
 async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
     user_id = update.effective_user.id
     zadacha_state[user_id] = {"step": "executor", "messages": []}
 
+    all_agents = list(AGENTS_DATA.keys())
     keyboard = [
-        [InlineKeyboardButton("👤 Ozodbek", callback_data="ze_sirlyinfo")],
-        [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ze_Muhammadhumoyun_Mudarris")],
-        [InlineKeyboardButton("👤 Azamjon", callback_data="ze_al_xorazm1y")],
-        [InlineKeyboardButton("👤 Xojiakbar", callback_data="ze_kh_nosirov")],
-        [InlineKeyboardButton("👤 Umid", callback_data="ze_umidpulatov")],
-        [InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")],
-        [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+        [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")]
+        for u in all_agents
     ]
+    keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")])
+    keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
 
     sent = await update.message.reply_text(
         "👷 Ijro etuvchi hodimni tanlang:",
@@ -1198,8 +1302,17 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def zadacha_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-
     user_id = update.effective_user.id
+
+    # addagent text handler
+    if user_id in addagent_state:
+        await addagent_text_handler(update, context)
+        return
+
+    # editagent text handler
+    if user_id in editagent_state:
+        await editagent_text_handler(update, context)
+        return
 
     if user_id not in zadacha_state:
         return
@@ -1246,47 +1359,41 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
-
     await query.answer()
 
     # --- OTMEN ---
     if data == "zt_otmen":
-        await zadacha_delete_messages(context.bot, user_id)
+        msgs = zadacha_state.get(user_id, {}).get("messages", [])
+        for msg_id in msgs:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=msg_id)
+            except:
+                pass
         zadacha_state.pop(user_id, None)
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="❌ Vazifa bekor qilindi.",
-        )
+        await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.")
         return
 
-    if user_id not in zadacha_state and not data.startswith(("zacc_", "zes_", "zdone_", "zext_")):
+    if user_id not in zadacha_state and not data.startswith(("zacc_", "zes_", "zdone_", "zext_", "zcancel_")):
         return
 
-    # --- EXECUTOR (ижро этувчи) ---
+    # --- EXECUTOR ---
     if data.startswith("ze_"):
         target = data[3:]
-
-        all_agents = list(ZADACHA_AGENTS.keys())
-        if target == "all":
-            targets = all_agents
-        elif target == "both":
-            targets = ["sirlyinfo", "Muhammadhumoyun_Mudarris"]
-        else:
-            targets = [target]
+        all_agents = list(AGENTS_DATA.keys())
+        targets = all_agents if target == "all" else [target]
 
         zadacha_state[user_id]["targets"] = targets
         zadacha_state[user_id]["step"] = "supervisor"
 
         keyboard = [
-            [InlineKeyboardButton("👤 Ozodbek", callback_data="zs_sirlyinfo")],
-            [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="zs_Muhammadhumoyun_Mudarris")],
-            [InlineKeyboardButton("👤 Azamjon", callback_data="zs_al_xorazm1y")],
-            [InlineKeyboardButton("👤 Xojiakbar (CEO)", callback_data="zs_kh_nosirov")],
-            [InlineKeyboardButton("👤 Umid (COO)", callback_data="zs_umidpulatov")],
-            [InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
-            [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+            [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")]
+            for u in all_agents
+            if u not in targets  # O'ziga o'zi nazoratchi bo'la olmaydi (agar bitta target)
+            or len(targets) > 1
         ]
+        keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")])
+        keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+        keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
 
         sent = await context.bot.send_message(
             chat_id=user_id,
@@ -1295,28 +1402,31 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
-    # --- SUPERVISOR (назорат қилувчи) ---
+    # --- SUPERVISOR ---
     elif data.startswith("zs_"):
         supervisor = data[3:]
+        all_agents = list(AGENTS_DATA.keys())
+        targets = zadacha_state[user_id].get("targets", [])
 
-        all_agents = list(ZADACHA_AGENTS.keys())
         if supervisor == "all":
             supervisors = all_agents
         else:
+            # O'ziga o'zi nazoratchi bo'la olmaydi (agar bitta target)
+            if len(targets) == 1 and supervisor == targets[0]:
+                await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
+                return
             supervisors = [supervisor]
 
         zadacha_state[user_id]["supervisor"] = supervisors
         zadacha_state[user_id]["step"] = "text"
 
-        keyboard = [
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
-            [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
-        ]
-
         sent = await context.bot.send_message(
             chat_id=user_id,
             text="✏️ Vazifa matnini yozing:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
+                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+            ]),
         )
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
@@ -1364,40 +1474,35 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         creator = query.from_user.first_name
         target_str = zadacha_target_str(targets)
 
-        keyboard = [
-            [InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")],
-            [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
-        ]
-
         sent = await context.bot.send_message(
             chat_id=user_id,
             text=(
                 f"📌 {creator} → {target_str}\n"
-                f"Vazifa:\n"
-                f"━━━━━━━━━━━━━━\n"
-                f'"{text}"\n'
-                f"━━━━━━━━━━━━━━\n"
-                f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
-                f"Yuborilsinmi?"
+                f"Vazifa:\n━━━━━━━━━━━━━━\n"
+                f'"{text}"\n━━━━━━━━━━━━━━\n'
+                f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\nYuborilsinmi?"
             ),
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")],
+                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+            ]),
         )
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     # --- BACK ---
     elif data.startswith("zback_"):
         where = data[6:]
+        all_agents = list(AGENTS_DATA.keys())
 
         if where == "start":
             zadacha_state[user_id]["step"] = "executor"
             keyboard = [
-                [InlineKeyboardButton("👤 Ozodbek", callback_data="ze_sirlyinfo")],
-                [InlineKeyboardButton("👤 Muhammadhumoyun", callback_data="ze_Muhammadhumoyun_Mudarris")],
-                [InlineKeyboardButton("👤 Azamjon", callback_data="ze_al_xorazm1y")],
-                [InlineKeyboardButton("👥 Ozodbek + Muhammadhumoyun", callback_data="ze_both")],
-                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+                [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")]
+                for u in all_agents
             ]
+            keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")])
+            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(
                 chat_id=user_id,
                 text="👷 Ijro etuvchi hodimni tanlang:",
@@ -1407,12 +1512,15 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif where == "supervisor":
             zadacha_state[user_id]["step"] = "supervisor"
+            targets = zadacha_state[user_id].get("targets", [])
             keyboard = [
-                [InlineKeyboardButton("👤 Xojiakbar (CEO)", callback_data="zs_kh_nosirov")],
-                [InlineKeyboardButton("👤 Umid (COO)", callback_data="zs_umidpulatov")],
-                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")],
-                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+                [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")]
+                for u in all_agents
+                if u not in targets or len(targets) > 1
             ]
+            keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")])
+            keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(
                 chat_id=user_id,
                 text="🧑‍💼 Nazorat qiluvchi hodimni tanlang:",
@@ -1422,14 +1530,13 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif where == "target":
             zadacha_state[user_id]["step"] = "text"
-            keyboard = [
-                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
-                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
-            ]
             sent = await context.bot.send_message(
                 chat_id=user_id,
                 text="✏️ Vazifa matnini yozing:",
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
+                    [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")],
+                ]),
             )
             zadacha_state[user_id]["messages"].append(sent.message_id)
 
@@ -1461,7 +1568,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             zadacha_state[user_id]["step"] = "time"
             targets = zadacha_state[user_id].get("targets", [])
             date_str = zadacha_state[user_id].get("deadline_date", "")
-            available_times = get_available_times_for_targets(targets, date_str) if date_str else DEADLINE_SLOTS
+            available_times = get_available_times_for_targets(targets, date_str) if date_str else []
             slots = [
                 [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")]
                 for t in available_times
@@ -1487,6 +1594,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         time_str = s["deadline_time"]
         creator = query.from_user.first_name
         creator_username = query.from_user.username
+        supervisors = s.get("supervisor", [])
+        if isinstance(supervisors, str):
+            supervisors = [supervisors]
 
         now = datetime.now(TIMEZONE)
         year = now.year
@@ -1508,27 +1618,19 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         target_str = zadacha_target_str(targets)
-
-        supervisors = s.get("supervisor", [])
-        if isinstance(supervisors, str):
-            supervisors = [supervisors]
-        supervisor_names = " + ".join(ZADACHA_AGENTS.get(u, u) for u in supervisors)
-        supervisor_tags = " ".join(f"@{u}" for u in supervisors)
+        supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
 
         for username in targets:
-            name = ZADACHA_AGENTS[username]
+            name = AGENTS_DATA.get(username, {}).get("name", username)
             tag = f"@{username}"
-
             keyboard = [[InlineKeyboardButton("✅ Qabul qildim", callback_data=f"zacc_{tid}_{username}")]]
-
             await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text=(
                     f"📌 {creator} → {name}\n"
                     f"🧑‍💼 Nazorat: {supervisor_names}\n"
                     f"━━━━━━━━━━━━━━\n"
-                    f"📝 Vazifa:\n"
-                    f'"{text}"\n'
+                    f"📝 Vazifa:\n\"{text}\"\n"
                     f"━━━━━━━━━━━━━━\n"
                     f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
                     f"{tag}, iltimos tasdiqlang."
@@ -1544,7 +1646,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 name=f"zpre_{tid}",
                 data={"task_id": tid},
             )
-
         if dt > datetime.now(TIMEZONE):
             context.job_queue.run_once(
                 zadacha_deadline_job,
@@ -1553,7 +1654,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data={"task_id": tid},
             )
 
-        msg_ids = s.get("messages", [])
         save_tasks()
 
         await context.bot.send_message(
@@ -1562,8 +1662,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Vazifa yuborildi.\n"
                 f"📌 {creator} → {target_str}\n"
                 f"━━━━━━━━━━━━━━\n"
-                f"📝 Vazifa:\n"
-                f'"{text}"\n'
+                f"📝 Vazifa:\n\"{text}\"\n"
                 f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {date_str}  ⏰ {time_str}"
             ),
@@ -1571,7 +1670,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         import asyncio
         await asyncio.sleep(5)
-        for msg_id in msg_ids:
+        for msg_id in s.get("messages", []):
             try:
                 await context.bot.delete_message(chat_id=user_id, message_id=msg_id)
             except:
@@ -1584,17 +1683,14 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = int(rest[:first_underscore])
         username = rest[first_underscore + 1:]
 
-        # ТАСК 11: фақат ўзи боса олади
         if query.from_user.username != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-
         if tid not in zadacha_tasks:
             await query.answer("❌ Vazifa topilmadi.")
             return
 
         task = zadacha_tasks[tid]
-
         if username in task["accepted"]:
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
@@ -1602,7 +1698,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task["accepted"].add(username)
         save_tasks()
 
-        name = ZADACHA_AGENTS.get(username, username)
+        name = AGENTS_DATA.get(username, {}).get("name", username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
 
@@ -1617,8 +1713,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"@{task['creator_username']}"
             ),
         )
-
-        # ТАСК 5: "iltimos tasdiqlang" хабарини ўчириш
         try:
             await query.message.delete()
         except:
@@ -1637,11 +1731,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-
         if tid not in zadacha_tasks:
             return
 
-        # ТАСК 10: 10 сониядан кейин ўчириш
         import asyncio
         msg_to_delete = query.message
 
@@ -1653,7 +1745,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
         asyncio.create_task(delete_after_10())
-
         try:
             await query.message.edit_reply_markup(reply_markup=None)
         except:
@@ -1669,7 +1760,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-
         if tid not in zadacha_tasks:
             return
 
@@ -1677,12 +1767,12 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task["done"].add(username)
         save_tasks()
 
-        name = ZADACHA_AGENTS.get(username, username)
+        name = AGENTS_DATA.get(username, {}).get("name", username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
-
         supervisors = task.get("supervisor", [])
-        if isinstance(supervisors, str): supervisors = [supervisors]
+        if isinstance(supervisors, str):
+            supervisors = [supervisors]
         supervisor_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
 
         await context.bot.send_message(
@@ -1696,7 +1786,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"@{task['creator_username']}{supervisor_tag}"
             ),
         )
-
         try:
             await query.message.delete()
         except:
@@ -1715,7 +1804,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-
         if tid not in zadacha_tasks:
             return
 
@@ -1723,11 +1811,12 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task.setdefault("cancelled", set()).add(username)
         save_tasks()
 
-        name = ZADACHA_AGENTS.get(username, username)
+        name = AGENTS_DATA.get(username, {}).get("name", username)
         now = datetime.now(TIMEZONE)
         deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
         supervisors = task.get("supervisor", [])
-        if isinstance(supervisors, str): supervisors = [supervisors]
+        if isinstance(supervisors, str):
+            supervisors = [supervisors]
         supervisor_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
 
         await context.bot.send_message(
@@ -1741,7 +1830,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"@{task['creator_username']}{supervisor_tag}"
             ),
         )
-
         try:
             await query.message.delete()
         except:
@@ -1760,7 +1848,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != username:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-
         if tid not in zadacha_tasks:
             return
 
@@ -1769,7 +1856,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_tasks()
 
         new_deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
-
         try:
             await query.message.edit_reply_markup(reply_markup=None)
         except:
@@ -1801,7 +1887,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
-
     if tid not in zadacha_tasks:
         return
 
@@ -1811,19 +1896,14 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     for username in task["targets"]:
         if username in task["done"]:
             continue
-
         tag = f"@{username}"
-
         keyboard = [
             [
                 InlineKeyboardButton("✅ Ha, esimda", callback_data=f"zes_{tid}_{username}"),
                 InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}"),
             ],
-            [
-                InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}"),
-            ]
+            [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
         ]
-
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
@@ -1837,13 +1917,11 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 
 async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
-
     if tid not in zadacha_tasks:
         return
 
     task = zadacha_tasks[tid]
     deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
-
     not_done = [u for u in task["targets"] if u not in task["done"]]
 
     if not not_done:
@@ -1851,8 +1929,7 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 
     for username in not_done:
         tag = f"@{username}"
-        name = ZADACHA_AGENTS.get(username, username)
-
+        name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [
             [InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
             [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
@@ -1862,7 +1939,6 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("⏰ Yana 2 soat", callback_data=f"zext_{tid}_{username}_120"),
             ],
         ]
-
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
@@ -1876,7 +1952,7 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =========================
-# ZADACHIS COMMAND
+# ZADACHI COMMAND
 # =========================
 
 async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1887,20 +1963,17 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     lines = []
-
     for tid, task in zadacha_tasks.items():
         deadline_str = task["deadline"].strftime("%d.%m  ⏰ %H:%M")
         creator = task["creator"]
 
-        # Admin — барча задачаларни кўради
         if requester == ADMIN_USERNAME:
             show_targets = task["targets"]
         else:
-            # Ижрочи — фақат ўзига тегишли
             show_targets = [u for u in task["targets"] if u == requester]
 
         for username in show_targets:
-            name = ZADACHA_AGENTS.get(username, username)
+            name = AGENTS_DATA.get(username, {}).get("name", username)
             accepted = "✅ Qabul qildi" if username in task["accepted"] else "⏳ Qabul qilmadi"
             cancelled = task.get("cancelled", set())
             if username in task.get("done", set()):
@@ -1910,7 +1983,6 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 status = "⏳ Bajarilmadi"
             text_short = task["text"][:50] + ("..." if len(task["text"]) > 50 else "")
-
             lines.append(
                 f"━━━━━━━━━━━━━━\n"
                 f"📌 #{tid} | {creator} → {name}\n"
@@ -1932,16 +2004,23 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 def main():
-    application = (
-        Application.builder()
-        .token(TOKEN)
-        .build()
-    )
+    application = Application.builder().token(TOKEN).build()
 
     load_tasks()
 
     state["cycle_id"] += 1
 
+    # Reminder default o'chiq — faqat checklist ishlaydi
+    for time_key in CHECKLIST_TIMES:
+        hour, minute = map(int, time_key.split(":"))
+        application.job_queue.run_once(
+            checklist_job,
+            when=seconds_until_time(hour, minute),
+            name=f"checklist_{time_key}",
+            data={"cycle_id": state["cycle_id"], "time_key": time_key},
+        )
+
+    # Reminder job ham scheduled bo'ladi lekin reminder_stopped=True bo'lgani uchun xabar yuborilmaydi
     application.job_queue.run_once(
         reminder_job,
         when=seconds_until_next_30(),
@@ -1949,19 +2028,7 @@ def main():
         data={"cycle_id": state["cycle_id"]},
     )
 
-    for time_key in CHECKLIST_TIMES:
-        hour, minute = map(int, time_key.split(":"))
-
-        application.job_queue.run_once(
-            checklist_job,
-            when=seconds_until_time(hour, minute),
-            name=f"checklist_{time_key}",
-            data={
-                "cycle_id": state["cycle_id"],
-                "time_key": time_key
-            },
-        )
-
+    # Commands
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
     application.add_handler(CommandHandler("reminder_start", reminder_start_command))
@@ -1970,7 +2037,11 @@ def main():
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
+    application.add_handler(CommandHandler("addagent", addagent_command))
+    application.add_handler(CommandHandler("editagent", editagent_command))
+    application.add_handler(CommandHandler("delagent", delagent_command))
 
+    # Text handler
     application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
@@ -1978,19 +2049,26 @@ def main():
         )
     )
 
-    application.add_handler(
-        CallbackQueryHandler(
-            zadacha_callback,
-            pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_|zcancel_)"
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(button_callback)
-    )
+    # Callback handlers
+    application.add_handler(CallbackQueryHandler(
+        addagent_callback,
+        pattern="^(addday_|adddays_done|addconfirm_yes|add_cancel)"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        editagent_callback,
+        pattern="^(edit_)"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        delagent_callback,
+        pattern="^(delagent_)"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        zadacha_callback,
+        pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_|zacc_|zes_|zdone_|zext_|zcancel_)"
+    ))
+    application.add_handler(CallbackQueryHandler(button_callback))
 
     logger.info("Bot starting...")
-
     application.run_polling(drop_pending_updates=True)
 
 # =========================
