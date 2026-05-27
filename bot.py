@@ -845,6 +845,17 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         editagent_state.pop(user_id, None)
         await update.message.reply_text(f"✅ Ismi '{text}' ga ozgartirildi.")
 
+    elif step == "username_edit":
+        new_username = text.lstrip("@").strip()
+        old_username = s["username"]
+        # Rename key in AGENTS_DATA
+        agent_data = AGENTS_DATA.pop(old_username)
+        agent_data["username"] = new_username
+        AGENTS_DATA[new_username] = agent_data
+        save_agents(AGENTS_DATA)
+        editagent_state.pop(user_id, None)
+        await update.message.reply_text(f"✅ Username '@{old_username}' => '@{new_username}' ga ozgartirildi.")
+
     elif step == "phone":
         AGENTS_DATA[s["username"]]["phone"] = text
         save_agents(AGENTS_DATA)
@@ -897,6 +908,7 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         keyboard = [
             [InlineKeyboardButton("📛 Ismini ozgartir", callback_data="edit_field_name")],
+            [InlineKeyboardButton("👤 Usernameni ozgartir", callback_data="edit_field_username")],
             [InlineKeyboardButton("📞 Telefonni ozgartir", callback_data="edit_field_phone")],
             [InlineKeyboardButton("📅 Ish kunlarini ozgartir", callback_data="edit_field_days")],
             [InlineKeyboardButton("🕐 Ish vaqtini ozgartir", callback_data="edit_field_hours")],
@@ -918,6 +930,11 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif data == "edit_field_name":
         s["step"] = "name"
         sent = await context.bot.send_message(chat_id=user_id, text="Yangi ismini kiriting:")
+        s["messages"].append(sent.message_id)
+
+    elif data == "edit_field_username":
+        s["step"] = "username_edit"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi username kiriting (@ belgisisiz):")
         s["messages"].append(sent.message_id)
 
     elif data == "edit_field_phone":
