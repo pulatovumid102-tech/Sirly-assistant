@@ -53,6 +53,24 @@ ADMIN_USERNAME = "umidpulatov"
 
 NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
 
+
+# =========================
+# AUTO-DELETE HELPER
+# =========================
+
+async def delete_messages_after(bot, chat_id, message_ids, delay=10):
+    import asyncio
+    await asyncio.sleep(delay)
+    for mid in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except:
+            pass
+
+def schedule_delete(bot, chat_id, message_ids, delay=10):
+    import asyncio
+    asyncio.create_task(delete_messages_after(bot, chat_id, message_ids, delay))
+
 # =========================
 # AGENTS FILE
 # =========================
@@ -743,8 +761,9 @@ async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if data == "add_cancel":
-        addagent_state.pop(user_id, None)
-        await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        msgs = addagent_state.pop(user_id, {}).get("messages", [])
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
         return
 
     if user_id not in addagent_state:
@@ -790,12 +809,14 @@ async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "work_hours": work_hours,
         }
         save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
         addagent_state.pop(user_id, None)
 
-        await context.bot.send_message(
+        sent_ok = await context.bot.send_message(
             chat_id=user_id,
             text=f"✅ {s['name']} (@{username}) muvaffaqiyatli qoshildi!"
         )
+        schedule_delete(context.bot, user_id, msgs + [sent_ok.message_id])
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=f"👤 Yangi hodim qoshildi: {s['name']} (@{username})\n📞 {s['phone']}"
@@ -842,25 +863,30 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         s["new_name"] = text
         AGENTS_DATA[s["username"]]["name"] = text
         save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
         editagent_state.pop(user_id, None)
-        await update.message.reply_text(f"✅ Ismi '{text}' ga ozgartirildi.")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ismi '{text}' ga ozgartirildi.")
+        schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
 
     elif step == "username_edit":
         new_username = text.lstrip("@").strip()
         old_username = s["username"]
-        # Rename key in AGENTS_DATA
         agent_data = AGENTS_DATA.pop(old_username)
         agent_data["username"] = new_username
         AGENTS_DATA[new_username] = agent_data
         save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
         editagent_state.pop(user_id, None)
-        await update.message.reply_text(f"✅ Username '@{old_username}' => '@{new_username}' ga ozgartirildi.")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Username '@{old_username}' => '@{new_username}' ga ozgartirildi.")
+        schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
 
     elif step == "phone":
         AGENTS_DATA[s["username"]]["phone"] = text
         save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
         editagent_state.pop(user_id, None)
-        await update.message.reply_text(f"✅ Telefon '{text}' ga ozgartirildi.")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Telefon '{text}' ga ozgartirildi.")
+        schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
 
     elif step == "start_hour":
         try:
@@ -879,8 +905,10 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
             for d in AGENTS_DATA[username]["work_days"]:
                 AGENTS_DATA[username]["work_hours"][str(d)] = [s["start_hour"], h]
             save_agents(AGENTS_DATA)
+            msgs = s.get("messages", [])
             editagent_state.pop(user_id, None)
-            await update.message.reply_text(f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
+            sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
+            schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
         except:
             await update.message.reply_text("❌ Notogri format.")
 
@@ -891,8 +919,9 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     if data == "edit_cancel":
-        editagent_state.pop(user_id, None)
-        await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        msgs = editagent_state.pop(user_id, {}).get("messages", [])
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
         return
 
     if user_id not in editagent_state:
@@ -979,9 +1008,11 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             new_hours[str(d)] = old
         AGENTS_DATA[username]["work_hours"] = new_hours
         save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
         editagent_state.pop(user_id, None)
         days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
-        await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
+        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
 
 # =========================
 # DELAGENT COMMAND
@@ -1014,7 +1045,12 @@ async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if data == "delagent_cancel":
-        await query.message.edit_text("❌ Bekor qilindi.")
+        try:
+            await query.message.delete()
+        except:
+            pass
+        sent = await context.bot.send_message(chat_id=query.from_user.id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, query.from_user.id, [sent.message_id])
         return
 
     if data.startswith("delagent_confirm_"):
@@ -1023,7 +1059,12 @@ async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = AGENTS_DATA[username]["name"]
             del AGENTS_DATA[username]
             save_agents(AGENTS_DATA)
-            await query.message.edit_text(f"✅ {name} (@{username}) ochirildi.")
+            sent = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ {name} (@{username}) ochirildi.")
+            try:
+                await query.message.delete()
+            except:
+                pass
+            schedule_delete(context.bot, query.from_user.id, [sent.message_id])
         return
 
     if data.startswith("delagent_"):
