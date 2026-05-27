@@ -67,7 +67,7 @@ def load_agents():
                 "name": "Ozodbek",
                 "username": "sirlyinfo",
                 "phone": "+998 93 798 13 04",
-                "work_days": [0, 1, 2, 3, 4, 6],  # Dush-Juma + Yakshanba
+                "work_days": [0, 1, 2, 3, 4, 6],
                 "work_hours": {
                     "0": [10, 20], "1": [10, 20], "2": [10, 20],
                     "3": [10, 20], "4": [10, 20],
@@ -284,12 +284,12 @@ def build_checklist_text(time_key, active_agents):
         get_agent_info(u) for u in get_agent_order() if u in active_agents
     )
     return (
-        f"📋 ЧЕКЛИСТ — {time_key}\n\n"
+        f"📋 CHECKLIST — {time_key}\n\n"
         f"{task_lines}\n\n"
         "━━━━━━━━━━━━━━\n\n"
         f"{agent_block}\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ ЎҚИМАСДАН ТУРИБ БОСМАНГ\n"
+        "⚠️ O'qimasdan turib bosmang\n"
         "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
@@ -303,7 +303,7 @@ def build_reminder_text(active_agents):
         "💬 Mijozlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "🤝 Hamkorlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ ЎҚИМАСДАН ТУРИБ БОСМАНГ\n"
+        "⚠️ O'qimasdan turib bosmang\n"
         "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
     )
 
@@ -654,13 +654,13 @@ async def addagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if step == "username":
         s["username"] = text
         s["step"] = "name"
-        sent = await update.message.reply_text("2️⃣ Ismini kiriting (masalan: Ozodbek):")
+        sent = await update.message.reply_text("2. Ismini kiriting (masalan: Ozodbek):")
         s["messages"].append(sent.message_id)
 
     elif step == "name":
         s["name"] = text
         s["step"] = "phone"
-        sent = await update.message.reply_text("3️⃣ Telefon raqamini kiriting (masalan: +998 93 798 13 04):")
+        sent = await update.message.reply_text("3. Telefon raqamini kiriting (masalan: +998 93 798 13 04):")
         s["messages"].append(sent.message_id)
 
     elif step == "phone":
@@ -668,7 +668,7 @@ async def addagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
         s["step"] = "days"
         s["selected_days"] = []
         sent = await update.message.reply_text(
-            "4️⃣ Ish kunlarini tanlang:",
+            "4. Ish kunlarini tanlang:",
             reply_markup=build_days_keyboard(s["selected_days"], prefix="add")
         )
         s["messages"].append(sent.message_id)
@@ -680,10 +680,10 @@ async def addagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 h = int(text.split(":")[0])
             s["start_hour"] = h
             s["step"] = "end_hour"
-            sent = await update.message.reply_text("6️⃣ Ish tugash vaqtini kiriting (masalan: 20 yoki 23:59 uchun 24):")
+            sent = await update.message.reply_text("6. Ish tugash vaqtini kiriting (masalan: 20, yoki 24 = 23:59):")
             s["messages"].append(sent.message_id)
         except:
-            sent = await update.message.reply_text("❌ Noto'g'ri format. Qayta kiriting (masalan: 10):")
+            sent = await update.message.reply_text("❌ Notogri format. Qayta kiriting (masalan: 10):")
             s["messages"].append(sent.message_id)
 
     elif step == "end_hour":
@@ -713,7 +713,7 @@ async def addagent_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
             )
             s["messages"].append(sent.message_id)
         except:
-            sent = await update.message.reply_text("❌ Noto'g'ri format. Qayta kiriting (masalan: 20):")
+            sent = await update.message.reply_text("❌ Notogri format. Qayta kiriting (masalan: 20):")
             s["messages"].append(sent.message_id)
 
 async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -752,7 +752,7 @@ async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         s["step"] = "start_hour"
         sent = await context.bot.send_message(
             chat_id=user_id,
-            text="5️⃣ Ish boshlash vaqtini kiriting (masalan: 10):"
+            text="5. Ish boshlash vaqtini kiriting (masalan: 10):"
         )
         s["messages"].append(sent.message_id)
 
@@ -774,11 +774,11 @@ async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"✅ {s['name']} (@{username}) muvaffaqiyatli qo'shildi!"
+            text=f"✅ {s['name']} (@{username}) muvaffaqiyatli qoshildi!"
         )
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text=f"👤 Yangi hodim qo'shildi: {s['name']} (@{username})\n📞 {s['phone']}"
+            text=f"👤 Yangi hodim qoshildi: {s['name']} (@{username})\n📞 {s['phone']}"
         )
 
 # =========================
@@ -791,7 +791,7 @@ async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if not AGENTS_DATA:
-        await context.bot.send_message(chat_id=user_id, text="❌ Hodimlar ro'yxati bo'sh.")
+        await context.bot.send_message(chat_id=user_id, text="❌ Hodimlar royxati bosh.")
         return
 
     keyboard = [
@@ -823,13 +823,13 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         AGENTS_DATA[s["username"]]["name"] = text
         save_agents(AGENTS_DATA)
         editagent_state.pop(user_id, None)
-        await update.message.reply_text(f"✅ Ismi '{text}' ga o'zgartirildi.")
+        await update.message.reply_text(f"✅ Ismi '{text}' ga ozgartirildi.")
 
     elif step == "phone":
         AGENTS_DATA[s["username"]]["phone"] = text
         save_agents(AGENTS_DATA)
         editagent_state.pop(user_id, None)
-        await update.message.reply_text(f"✅ Telefon '{text}' ga o'zgartirildi.")
+        await update.message.reply_text(f"✅ Telefon '{text}' ga ozgartirildi.")
 
     elif step == "start_hour":
         try:
@@ -839,7 +839,7 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
             sent = await update.message.reply_text("Yangi tugash vaqtini kiriting (masalan: 20):")
             s["messages"].append(sent.message_id)
         except:
-            await update.message.reply_text("❌ Noto'g'ri format.")
+            await update.message.reply_text("❌ Notogri format.")
 
     elif step == "end_hour":
         try:
@@ -849,9 +849,9 @@ async def editagent_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                 AGENTS_DATA[username]["work_hours"][str(d)] = [s["start_hour"], h]
             save_agents(AGENTS_DATA)
             editagent_state.pop(user_id, None)
-            await update.message.reply_text(f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga o'zgartirildi.")
+            await update.message.reply_text(f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
         except:
-            await update.message.reply_text("❌ Noto'g'ri format.")
+            await update.message.reply_text("❌ Notogri format.")
 
 async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -876,10 +876,10 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         days_str = ", ".join(WEEKDAY_UZ[day] for day in sorted(d["work_days"]))
 
         keyboard = [
-            [InlineKeyboardButton("📛 Ismini o'zgartir", callback_data="edit_field_name")],
-            [InlineKeyboardButton("📞 Telefonni o'zgartir", callback_data="edit_field_phone")],
-            [InlineKeyboardButton("📅 Ish kunlarini o'zgartir", callback_data="edit_field_days")],
-            [InlineKeyboardButton("🕐 Ish vaqtini o'zgartir", callback_data="edit_field_hours")],
+            [InlineKeyboardButton("📛 Ismini ozgartir", callback_data="edit_field_name")],
+            [InlineKeyboardButton("📞 Telefonni ozgartir", callback_data="edit_field_phone")],
+            [InlineKeyboardButton("📅 Ish kunlarini ozgartir", callback_data="edit_field_days")],
+            [InlineKeyboardButton("🕐 Ish vaqtini ozgartir", callback_data="edit_field_hours")],
             [InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")],
         ]
 
@@ -889,7 +889,7 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"👤 {d['name']} (@{username})\n"
                 f"📞 {d['phone']}\n"
                 f"📅 {days_str}\n\n"
-                f"Nimani o'zgartirmoqchisiz?"
+                f"Nimani ozgartirmoqchisiz?"
             ),
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -956,7 +956,7 @@ async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id2 = update.effective_user.id
     if not AGENTS_DATA:
-        await context.bot.send_message(chat_id=user_id2, text="❌ Hodimlar ro'yxati bo'sh.")
+        await context.bot.send_message(chat_id=user_id2, text="❌ Hodimlar royxati bosh.")
         return
 
     keyboard = [
@@ -967,7 +967,7 @@ async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(
         chat_id=user_id2,
-        text="🗑 Qaysi hodimni o'chirmoqchisiz?",
+        text="🗑 Qaysi hodimni ochirmoqchisiz?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -986,7 +986,7 @@ async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = AGENTS_DATA[username]["name"]
             del AGENTS_DATA[username]
             save_agents(AGENTS_DATA)
-            await query.message.edit_text(f"✅ {name} (@{username}) o'chirildi.")
+            await query.message.edit_text(f"✅ {name} (@{username}) ochirildi.")
         return
 
     if data.startswith("delagent_"):
@@ -995,11 +995,11 @@ async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         name = AGENTS_DATA[username]["name"]
         keyboard = [
-            [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"delagent_confirm_{username}")],
+            [InlineKeyboardButton("✅ Ha, ochirish", callback_data=f"delagent_confirm_{username}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="delagent_cancel")],
         ]
         await query.message.edit_text(
-            f"⚠️ {name} (@{username}) ni o'chirishni tasdiqlaysizmi?",
+            f"⚠️ {name} (@{username}) ni ochirishni tasdiqlaysizmi?",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -1099,7 +1099,7 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
-            "🛑 Bot to'xtatildi.\n\n"
+            "🛑 Bot toxtatildi.\n\n"
             "Eslatmalar va vazifalar yuborilmaydi.\n\n"
             "Qayta ishga tushirish uchun /start bosing."
         ),
@@ -1339,7 +1339,7 @@ async def zadacha_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
 
         if not days:
-            sent = await update.message.reply_text("❌ Ushbu agent uchun yaqin kunlarda ish vaqti topilmadi.")
+            sent = await update.message.reply_text("❌ Bu agent uchun yaqin kunlarda ish vaqti topilmadi.")
             zadacha_state[user_id]["messages"].append(sent.message_id)
             return
 
@@ -1398,7 +1398,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sent = await context.bot.send_message(
             chat_id=user_id,
-            text="🧑‍💼 Nazorat qiluvchi hodimni tanlang:",
+            text="🧑 Nazorat qiluvchi hodimni tanlang:",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
         zadacha_state[user_id]["messages"].append(sent.message_id)
@@ -1524,7 +1524,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(
                 chat_id=user_id,
-                text="🧑‍💼 Nazorat qiluvchi hodimni tanlang:",
+                text="🧑 Nazorat qiluvchi hodimni tanlang:",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
             zadacha_state[user_id]["messages"].append(sent.message_id)
@@ -1960,7 +1960,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     requester = update.effective_user.username
 
     if not zadacha_tasks:
-        await update.message.reply_text("📋 Faol vazifalar yo'q.")
+        await update.message.reply_text("📋 Faol vazifalar yoq.")
         return
 
     lines = []
@@ -1993,7 +1993,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     if not lines:
-        await update.message.reply_text("📋 Sizga tegishli faol vazifalar yo'q.")
+        await update.message.reply_text("📋 Sizga tegishli faol vazifalar yoq.")
         return
 
     lines.insert(0, "📋 Vazifalar:\n")
