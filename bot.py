@@ -2047,18 +2047,6 @@ def main():
     load_tasks()
     state["cycle_id"] += 1
 
-    for time_key in CHECKLIST_TIMES:
-        hour, minute = map(int, time_key.split(":"))
-        application.job_queue.run_once(checklist_job, when=seconds_until_time(hour, minute), name=f"checklist_{time_key}", data={"cycle_id": state["cycle_id"], "time_key": time_key})
-
-    application.job_queue.run_once(reminder_job, when=seconds_until_next_30(), name="reminder", data={"cycle_id": state["cycle_id"]})
-
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("umidstop", umidstop_command))
-    application.add_handler(CommandHandler("reminder_start", reminder_start_command))
-    application.add_handler(CommandHandler("reminder_stop", reminder_stop_command))
-    application.add_handler(CommandHandler("test_reminder", test_reminder_command))
-    application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
     application.add_handler(CommandHandler("addagent", addagent_command))
