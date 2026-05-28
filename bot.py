@@ -1685,11 +1685,23 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username
+    chat_type = update.effective_chat.type
+
+    # Guruhda /zadacha — lichkaga yo'naltir
+    if chat_type in ("group", "supergroup"):
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+        sent = await update.message.reply_text(
+            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⏱ Bu xabar 60 soniyadan keyin o'chadi"
+        )
+        schedule_delete(context.bot, update.effective_chat.id, [sent.message_id], delay=60)
+        return
+
     zadacha_state[user_id] = {"step": "executor", "messages": [], "creator_username": username}
     all_agents = list(AGENTS_DATA.keys())
     keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
     keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-    sent = await update.message.reply_text("👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+    sent = await context.bot.send_message(chat_id=user_id, text="👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
     zadacha_state[user_id]["messages"].append(sent.message_id)
 
 async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2011,24 +2023,58 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
+    user = update.effective_user
+    chat_type = update.effective_chat.type
+
+    # Guruhda /start — lichkaga yozishni tavsiya et
+    if chat_type in ("group", "supergroup"):
+        if user.username != ADMIN_USERNAME:
+            bot_info = await context.bot.get_me()
+            bot_username = bot_info.username
+            name = user.first_name or user.username or "Salom"
+            sent = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"👋 {name}! Bot bilan ishlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⏱ Bu xabar 60 soniyadan keyin o'chadi"
+            )
+            schedule_delete(context.bot, CHAT_ID, [sent.message_id], delay=60)
+            return
+        # Admin guruhda /start bosdi
+        active = get_active_agents()
+        active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
+        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv hodimlar:\n{active_text}")
         return
-    active = get_active_agents()
-    now = datetime.now(TIMEZONE)
-    state["stopped"] = False
-    state["cycle_id"] += 1
-    cancel_jobs_by_name(context.job_queue, "reminder")
-    for t in CHECKLIST_TIMES:
-        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
-    next_q_total = ((now.minute // 30) + 1) * 30
-    next_q_hour = (now.hour + next_q_total // 60) % 24
-    next_q_min = next_q_total % 60
-    context.job_queue.run_once(reminder_job, when=seconds_until_next_30(), name="reminder", data={"cycle_id": state["cycle_id"]})
-    for time_key in CHECKLIST_TIMES:
-        hour, minute = map(int, time_key.split(":"))
-        context.job_queue.run_once(checklist_job, when=seconds_until_time(hour, minute), name=f"checklist_{time_key}", data={"cycle_id": state["cycle_id"], "time_key": time_key})
-    active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
-    await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv supportlar:\n{active_text}\n\n📋 Cheklistlar: ✅ Faol\n🔔 Reminder: {'ON' if not state['reminder_stopped'] else 'OFF'}\n\n⏰ Birinchi reminder: {next_q_hour:02d}:{next_q_min:02d}")
+
+    # Shaxsiy xabarda /start — qo'llanma
+    if user.username == ADMIN_USERNAME:
+        active = get_active_agents()
+        active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
+        await context.bot.send_message(chat_id=user.id, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv hodimlar:\n{active_text}")
+        return
+
+    name = user.first_name or user.username or "Salom"
+    guide_text = (
+        f"👋 Salom, {name}!\n\n"
+        "📱 Bot bilan ishlash qo'llanmasi:\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "📌 VAZIFALAR\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "/zadacha — Yangi vazifa yaratish\n"
+        "• Ijrochi tanlaysiz\n"
+        "• Nazoratchi tanlaysiz\n"
+        "• Vazifa matnini yozasiz\n"
+        "• Deadline belgilaysiz\n\n"
+        "/zadachi — Vazifalar ro'yxati\n"
+        "• O'zingizga tegishli vazifalar\n"
+        "• Bajardim tugmasi\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "⚠️ ESLATMA\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "Vazifa yaratish faqat\n"
+        "shaxsiy xabar orqali ishlaydi!\n\n"
+        "⏱ Bu xabar 60 soniyadan keyin o'chadi"
+    )
+    sent = await context.bot.send_message(chat_id=user.id, text=guide_text)
+    schedule_delete(context.bot, user.id, [sent.message_id], delay=60)
 
 async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
