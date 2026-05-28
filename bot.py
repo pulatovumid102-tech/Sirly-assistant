@@ -1740,7 +1740,7 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
         sent = await update.message.reply_text(
-            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⏱ Bu xabar 60 soniyadan keyin o'chadi"
+            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
         )
         schedule_delete(context.bot, update.effective_chat.id, [sent.message_id], delay=60)
         return
@@ -1749,8 +1749,23 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     all_agents = list(AGENTS_DATA.keys())
     keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
     keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-    sent = await context.bot.send_message(chat_id=user_id, text="👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="👷 Ijro etuvchi hodimni tanlang:\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
     zadacha_state[user_id]["messages"].append(sent.message_id)
+    # Auto-delete all state messages after 60s if no action
+    async def auto_cleanup():
+        await asyncio.sleep(60)
+        if user_id in zadacha_state:
+            msgs = zadacha_state.pop(user_id, {}).get("messages", [])
+            for mid in msgs:
+                try:
+                    await context.bot.delete_message(chat_id=user_id, message_id=mid)
+                except:
+                    pass
+    asyncio.create_task(auto_cleanup())
 
 async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1766,7 +1781,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         zadacha_state.pop(user_id, None)
-        sent = await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.\n⏱ Bu xabar 10 soniyadan keyin o'chadi")
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.\n⚠️ Bu xabar ⏱ 10 soniyadan keyin o'chadi")
         schedule_delete(context.bot, user_id, [sent.message_id])
         return
 
@@ -1960,14 +1975,25 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Notify creator
         target_str = zadacha_target_str(targets)
-        sent_ok = await context.bot.send_message(chat_id=user_id, text=f"✅ Vazifa yuborildi.\n📌 {creator} → {target_str}\n━━━━━━━━━━━━━━\n\"{text}\"\n━━━━━━━━━━━━━━\nDeadline: 📅 {date_str}  ⏰ {time_str}")
+        sent_ok = await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"✅ Vazifa yuborildi.\n"
+                f"📌 {creator} → {target_str}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f'"{text}"\n'
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
+                f"⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi, vazifa guruhda qoladi"
+            )
+        )
         await asyncio.sleep(5)
         for mid in s.get("messages", []):
             try:
                 await context.bot.delete_message(chat_id=user_id, message_id=mid)
             except:
                 pass
-        schedule_delete(context.bot, user_id, [sent_ok.message_id], delay=5)
+        schedule_delete(context.bot, user_id, [sent_ok.message_id], delay=60)
 
 # =========================
 # ZADACHI COMMAND
@@ -2032,7 +2058,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboards.append(row)
 
     lines.append("━━━━━━━━━━━━━━")
-    lines.append("\n⏱ Bu xabar 30 soniyadan keyin o'chadi")
+    lines.append("\n⚠️ Bu xabar ⏱ 30 soniyadan keyin o'chadi")
 
     sent = await update.message.reply_text(
         "\n".join(lines),
@@ -2114,7 +2140,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = user.first_name or user.username or "Salom"
             sent = await context.bot.send_message(
                 chat_id=CHAT_ID,
-                text=f"👋 {name}! Bot bilan ishlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⏱ Bu xabar 60 soniyadan keyin o'chadi"
+                text=f"👋 {name}! Bot bilan ishlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
             )
             schedule_delete(context.bot, CHAT_ID, [sent.message_id], delay=60)
             return
@@ -2151,7 +2177,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━\n\n"
         "Vazifa yaratish faqat\n"
         "shaxsiy xabar orqali ishlaydi!\n\n"
-        "⏱ Bu xabar 60 soniyadan keyin o'chadi"
+        "⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
     )
     sent = await context.bot.send_message(chat_id=user.id, text=guide_text)
     schedule_delete(context.bot, user.id, [sent.message_id], delay=60)
