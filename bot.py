@@ -570,6 +570,45 @@ async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
 # ZADACHA ACCEPT REMINDER JOB (har 5 daqiqa)
 # =========================
 
+def is_agent_working_now(username):
+    """Hodim hozir ish vaqtidami?"""
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    hour = now.hour
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", [])
+    work_hours = data.get("work_hours", {})
+    if weekday not in work_days:
+        return False
+    wh = work_hours.get(str(weekday), [0, 24])
+    return wh[0] <= hour < wh[1]
+
+def seconds_until_agent_works(username):
+    """Hodim keyingi ish boshlanishigacha necha sekund?"""
+    now = datetime.now(TIMEZONE)
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", [])
+    work_hours = data.get("work_hours", {})
+    for days_ahead in range(8):
+        check_day = now + timedelta(days=days_ahead)
+        wd = check_day.weekday()
+        if wd in work_days:
+            wh = work_hours.get(str(wd), [0, 24])
+            sh, eh = wh[0], wh[1]
+            if days_ahead == 0:
+                if now.hour >= sh and now.hour < eh:
+                    return 0  # hozir ish vaqti
+                if now.hour >= eh:
+                    continue  # bugun tugadi
+                # Bugun boshlanmagan
+                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
+            else:
+                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
+            secs = (work_start - now).total_seconds()
+            if secs > 0:
+                return secs
+    return 300  # fallback
+
 async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
     if tid not in zadacha_tasks:
@@ -586,8 +625,16 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     time_str = task["deadline"].strftime("%H:%M")
     text_short = task["text"][:60]
 
+    next_schedule = 300  # default 5 daqiqa
+
     for username in targets:
         if username in accepted_exec:
+            continue
+        # Ish vaqtini tekshir
+        if not is_agent_working_now(username):
+            secs = seconds_until_agent_works(username)
+            if secs < next_schedule or next_schedule == 300:
+                next_schedule = max(secs, 60)
             continue
         name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [[InlineKeyboardButton(f"⬜ Xop, bajaraman — {name}", callback_data=f"zacc_exec_{tid}_{username}")]]
@@ -605,6 +652,12 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     for username in supervisors:
         if username in accepted_sup:
             continue
+        # Ish vaqtini tekshir
+        if not is_agent_working_now(username):
+            secs = seconds_until_agent_works(username)
+            if secs < next_schedule or next_schedule == 300:
+                next_schedule = max(secs, 60)
+            continue
         name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [[InlineKeyboardButton(f"⬜ Xop, nazorat qilaman — {name}", callback_data=f"zacc_sup_{tid}_{username}")]]
         sent = await context.bot.send_message(
@@ -620,41 +673,9 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     save_tasks()
 
-    # Qayta schedule — faqat ish vaqtida
-    now_r = datetime.now(TIMEZONE)
-    next_when = 300  # 5 daqiqa
-
-    # Agar hozir hech kim ish vaqtida bo'lmasa, keyingi ish boshlanishiga qadar kutish
-    all_remaining = [u for u in task["targets"] if u not in task.get("accepted_executors", set())]
-    all_remaining += [u for u in task.get("supervisor", []) if u not in task.get("accepted_supervisors", set())]
-
-    earliest_work = None
-    for u in all_remaining:
-        schedule = get_agent_work_schedule(u)
-        for days_ahead in range(8):
-            check_day = now_r + timedelta(days=days_ahead)
-            wd = check_day.weekday()
-            if wd in schedule:
-                sh, eh = schedule[wd]
-                if days_ahead == 0 and now_r.hour >= eh:
-                    continue
-                if days_ahead == 0 and now_r.hour >= sh:
-                    earliest_work = 300
-                    break
-                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
-                secs = (work_start - now_r).total_seconds()
-                if secs > 0:
-                    if earliest_work is None or secs < earliest_work:
-                        earliest_work = secs
-                    break
-        if earliest_work == 300:
-            break
-
-    next_when = earliest_work if earliest_work else 300
-
     context.job_queue.run_once(
         zadacha_accept_reminder_job,
-        when=next_when,
+        when=next_schedule,
         name=f"zaccrem_{tid}",
         data={"task_id": tid}
     )
@@ -1069,7 +1090,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")],
         ]
         await query.message.reply_text(
-            f"📌 #{tid} | \"{task['text'][:50]}\"\n\nNimani o'zgartirmoqchisiz?",
+            f"📌 №{tid} | \"{task['text'][:50]}\"\n\nNimani o'zgartirmoqchisiz?",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
@@ -1250,7 +1271,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
         ]
-        confirm_sent = await query.message.reply_text(f"⚠️ #{tid} vazifani o'chirishni tasdiqlaysizmi?\n\"{task['text'][:50]}\"", reply_markup=InlineKeyboardMarkup(keyboard))
+        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n\"{task['text'][:50]}\"", reply_markup=InlineKeyboardMarkup(keyboard))
         # Store confirm msg id and zadachi msg id for later deletion
         zadacha_state[f"del_confirm_{tid}"] = {
             "confirm_msg_id": confirm_sent.message_id,
@@ -1288,7 +1309,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
         # Send success and delete it + zadachi message after 5 seconds
-        sent_ok = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ #{tid} vazifa o'chirildi.")
+        sent_ok = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ №{tid} vazifa o'chirildi.")
         del_info = zadacha_state.pop(f"del_confirm_{tid}", {})
         zadachi_msg_id = del_info.get("zadachi_msg_id")
         msgs_to_del = [sent_ok.message_id]
@@ -1923,8 +1944,17 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if dt > now:
             context.job_queue.run_once(zadacha_deadline_job, when=(dt - now).total_seconds(), name=f"zdue_{tid}", data={"task_id": tid})
 
-        # Accept reminder — 5 daqiqada
-        context.job_queue.run_once(zadacha_accept_reminder_job, when=300, name=f"zaccrem_{tid}", data={"task_id": tid})
+        # Accept reminder — ish vaqtini tekshirib schedule qilish
+        all_users = targets + supervisors
+        earliest = 300
+        for u in all_users:
+            if is_agent_working_now(u):
+                earliest = 300
+                break
+            secs = seconds_until_agent_works(u)
+            if secs < earliest:
+                earliest = max(secs, 60)
+        context.job_queue.run_once(zadacha_accept_reminder_job, when=earliest, name=f"zaccrem_{tid}", data={"task_id": tid})
 
         save_tasks()
 
@@ -1984,7 +2014,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             lines.append(
                 f"━━━━━━━━━━━━━━\n"
-                f"📌 #{tid} | {creator} → {name}\n"
+                f"📌 №{tid} | {creator} → {name}\n"
                 f"📝 \"{text_short}\"\n"
                 f"📅 {deadline_str}\n"
                 f"{accepted} | {status}"
@@ -1992,12 +2022,12 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             row = []
             if is_creator:
-                row.append(InlineKeyboardButton(f"✏️ #{tid}", callback_data=f"ztask_edit_{tid}"))
-                row.append(InlineKeyboardButton(f"🗑 #{tid}", callback_data=f"ztask_delete_{tid}"))
+                row.append(InlineKeyboardButton(f"✏️ №{tid}", callback_data=f"ztask_edit_{tid}"))
+                row.append(InlineKeyboardButton(f"🗑 №{tid}", callback_data=f"ztask_delete_{tid}"))
             if username == requester and not is_done:
                 keyboards.append(row) if row else None
                 row = []
-                row.append(InlineKeyboardButton(f"✅ Bajardim — #{tid}", callback_data=f"ztask_done_{tid}_{username}"))
+                row.append(InlineKeyboardButton(f"✅ Bajardim — №{tid}", callback_data=f"ztask_done_{tid}_{username}"))
             if row:
                 keyboards.append(row)
 
