@@ -370,6 +370,27 @@ def checklist_all_confirmed(time_key, active_agents, checklist_confs):
     return True
 
 # =========================
+# ZADACHA CLEANUP
+# =========================
+
+async def zadacha_cleanup_job(context: ContextTypes.DEFAULT_TYPE):
+    """Har 5 daqiqada eski zadacha state larni tozalash (10 daqiqa timeout)"""
+    now_ts = datetime.now(TIMEZONE).timestamp()
+    to_delete = []
+    for uid, s in list(zadacha_state.items()):
+        created = s.get("created_ts", now_ts)
+        # 10 daqiqadan eski bo'lsa o'chir
+        if now_ts - created > 600:
+            to_delete.append(uid)
+    for uid in to_delete:
+        msgs = zadacha_state.pop(uid, {}).get("messages", [])
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=uid, message_id=mid)
+            except:
+                pass
+
+# =========================
 # ZADACHA — SAVE / LOAD
 # =========================
 
@@ -1755,17 +1776,7 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     zadacha_state[user_id]["messages"].append(sent.message_id)
-    # Auto-delete all state messages after 60s if no action
-    async def auto_cleanup():
-        await asyncio.sleep(300)
-        if user_id in zadacha_state:
-            msgs = zadacha_state.pop(user_id, {}).get("messages", [])
-            for mid in msgs:
-                try:
-                    await context.bot.delete_message(chat_id=user_id, message_id=mid)
-                except:
-                    pass
-    asyncio.create_task(auto_cleanup())
+    zadacha_state[user_id]["created_ts"] = datetime.now(TIMEZONE).timestamp()
 
 async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2231,6 +2242,9 @@ def main():
     application = Application.builder().token(TOKEN).build()
     load_tasks()
     state["cycle_id"] += 1
+
+    # Zadacha cleanup job — har 5 daqiqada
+    application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
 
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
