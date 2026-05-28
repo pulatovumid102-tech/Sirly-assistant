@@ -1751,7 +1751,7 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
     sent = await context.bot.send_message(
         chat_id=user_id,
-        text="👷 Ijro etuvchi hodimni tanlang:\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi",
+        text="👷 Ijro etuvchi hodimni tanlang:\n\n⚠️ Bu xabar ⏱ 5 daqiqadan keyin o'chadi",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     zadacha_state[user_id]["messages"].append(sent.message_id)
