@@ -620,10 +620,41 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     save_tasks()
 
-    # Qayta schedule
+    # Qayta schedule — faqat ish vaqtida
+    now_r = datetime.now(TIMEZONE)
+    next_when = 300  # 5 daqiqa
+
+    # Agar hozir hech kim ish vaqtida bo'lmasa, keyingi ish boshlanishiga qadar kutish
+    all_remaining = [u for u in task["targets"] if u not in task.get("accepted_executors", set())]
+    all_remaining += [u for u in task.get("supervisor", []) if u not in task.get("accepted_supervisors", set())]
+
+    earliest_work = None
+    for u in all_remaining:
+        schedule = get_agent_work_schedule(u)
+        for days_ahead in range(8):
+            check_day = now_r + timedelta(days=days_ahead)
+            wd = check_day.weekday()
+            if wd in schedule:
+                sh, eh = schedule[wd]
+                if days_ahead == 0 and now_r.hour >= eh:
+                    continue
+                if days_ahead == 0 and now_r.hour >= sh:
+                    earliest_work = 300
+                    break
+                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
+                secs = (work_start - now_r).total_seconds()
+                if secs > 0:
+                    if earliest_work is None or secs < earliest_work:
+                        earliest_work = secs
+                    break
+        if earliest_work == 300:
+            break
+
+    next_when = earliest_work if earliest_work else 300
+
     context.job_queue.run_once(
         zadacha_accept_reminder_job,
-        when=300,
+        when=next_when,
         name=f"zaccrem_{tid}",
         data={"task_id": tid}
     )
@@ -1870,6 +1901,10 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             show_targets = [u for u in task["targets"] if u == requester]
             # also show if creator
             if not show_targets and requester == task["creator_username"]:
+                show_targets = task["targets"]
+            # also show if supervisor
+            supervisors_list = task.get("supervisor", [])
+            if not show_targets and requester in supervisors_list:
                 show_targets = task["targets"]
 
         for username in show_targets:
