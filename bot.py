@@ -1620,27 +1620,30 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     if step == "text":
         zs["text"] = update.message.text
-        zs["step"] = "date"
+        zs["step"] = "confirm"
         targets = zs.get("targets", [])
-        now = datetime.now(TIMEZONE)
-        available_dates = get_available_dates_for_targets(targets)
-        days = []
-        for d in available_dates:
-            diff = (d.date() - now.date()).days
-            if diff == 0:
-                label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
-            elif diff == 1:
-                label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
-            else:
-                label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
-            days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
-        if not days:
-            sent = await update.message.reply_text("❌ Bu agent uchun yaqin kunlarda ish vaqti topilmadi.")
-            zs["messages"].append(sent.message_id)
-            return
-        days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_target")])
-        days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-        sent = await update.message.reply_text("📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
+        supervisors = zs.get("supervisor", [])
+        date_str = zs.get("deadline_date", "")
+        time_str2 = zs.get("deadline_time", "")
+        creator = update.effective_user.first_name or update.effective_user.username
+        supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"📌 {creator} → {zadacha_target_str(targets)}\n"
+                f"🧑 Nazorat: {supervisor_names}\n"
+                f"Vazifa:\n━━━━━━━━━━━━━━\n"
+                f'"{update.message.text}"\n'
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {date_str}  ⏰ {time_str2}\n\n"
+                f"Yuborilsinmi?"
+            ),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
+                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]
+            ])
+        )
         zs["messages"].append(sent.message_id)
 
     elif step == "edit_text":
@@ -1682,6 +1685,30 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 # ZADACHA COMMAND + CALLBACKS
 # =========================
 
+
+def get_available_supervisors_for_deadline(targets, date_str, time_str):
+    """Deadline vaqtida ish vaqti bor hodimlarni qaytaradi (targetlardan tashqari)."""
+    try:
+        now = datetime.now(TIMEZONE)
+        year = now.year
+        d = datetime.strptime(f"{date_str}.{year} {time_str}", "%d.%m.%Y %H:%M")
+        weekday = d.weekday()
+        deadline_hour = d.hour
+    except:
+        return list(AGENTS_DATA.keys())
+
+    available = []
+    for username, data in AGENTS_DATA.items():
+        if username in targets:
+            continue
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), [0, 24])
+            if wh[0] <= deadline_hour < wh[1]:
+                available.append(username)
+    return available
+
 async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username
@@ -1718,7 +1745,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         zadacha_state.pop(user_id, None)
-        sent = await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.")
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.\n⏱ Bu xabar 10 soniyadan keyin o'chadi")
         schedule_delete(context.bot, user_id, [sent.message_id])
         return
 
@@ -1726,34 +1753,30 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("ze_"):
+        # Step 1: Ijrochi tanlandi -> Step 2: Deadline sana
         target = data[3:]
-        all_agents = list(AGENTS_DATA.keys())
-        targets = [target]  # "all" removed
+        targets = [target]
         zadacha_state[user_id]["targets"] = targets
-        zadacha_state[user_id]["step"] = "supervisor"
-        keyboard = [
-            [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")]
-            for u in all_agents if u not in targets or len(targets) > 1
-        ]
-        keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
-        keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
-        zadacha_state[user_id]["messages"].append(sent.message_id)
-
-    elif data.startswith("zs_"):
-        supervisor = data[3:]
-        all_agents = list(AGENTS_DATA.keys())
-        targets = zadacha_state[user_id].get("targets", [])
-        if len(targets) == 1 and supervisor == targets[0]:
-            await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
-            return
-        supervisors = [supervisor]
-        zadacha_state[user_id]["supervisor"] = supervisors
-        zadacha_state[user_id]["step"] = "text"
-        sent = await context.bot.send_message(chat_id=user_id, text="✏️ Vazifa matnini yozing:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]]))
+        zadacha_state[user_id]["step"] = "date"
+        now2 = datetime.now(TIMEZONE)
+        available_dates = get_available_dates_for_targets(targets)
+        days = []
+        for d in available_dates:
+            diff = (d.date() - now2.date()).days
+            if diff == 0:
+                label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
+            elif diff == 1:
+                label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
+            else:
+                label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
+            days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
+        days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+        days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+        sent = await context.bot.send_message(chat_id=user_id, text="📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data.startswith("zd_"):
+        # Step 2: Deadline sana tanlandi -> Step 3: Deadline vaqt
         date_str = data[3:]
         zadacha_state[user_id]["deadline_date"] = date_str
         targets = zadacha_state[user_id].get("targets", [])
@@ -1763,22 +1786,41 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             zadacha_state[user_id]["messages"].append(sent.message_id)
             return
         slots = [[InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")] for t in available_times]
-        slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_text")])
+        slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
         slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
         sent = await context.bot.send_message(chat_id=user_id, text="🕐 Deadline vaqtini tanlang:", reply_markup=InlineKeyboardMarkup(slots))
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data.startswith("ztime_"):
+        # Step 3: Vaqt tanlandi -> Step 4: Nazoratchi (deadline vaqtida ish vaqti borlar)
         time_str = data[6:]
         zadacha_state[user_id]["deadline_time"] = time_str
-        targets = zadacha_state[user_id]["targets"]
-        text = zadacha_state[user_id]["text"]
-        date_str = zadacha_state[user_id]["deadline_date"]
-        creator = query.from_user.first_name
+        zadacha_state[user_id]["step"] = "supervisor"
+        targets = zadacha_state[user_id].get("targets", [])
+        date_str = zadacha_state[user_id].get("deadline_date", "")
+        available_sups = get_available_supervisors_for_deadline(targets, date_str, time_str)
+        if not available_sups:
+            # Hech kim ish vaqtida bo'lmasa — barchani ko'rsat
+            available_sups = [u for u in AGENTS_DATA.keys() if u not in targets]
+        keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in available_sups]
+        keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")])
+        keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang (deadline vaqtida ish vaqti borlar):", reply_markup=InlineKeyboardMarkup(keyboard))
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data.startswith("zs_"):
+        # Step 4: Nazoratchi tanlandi -> Step 5: Matn
+        supervisor = data[3:]
+        targets = zadacha_state[user_id].get("targets", [])
+        if len(targets) == 1 and supervisor == targets[0]:
+            await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
+            return
+        zadacha_state[user_id]["supervisor"] = [supervisor]
+        zadacha_state[user_id]["step"] = "text"
         sent = await context.bot.send_message(
             chat_id=user_id,
-            text=f"📌 {creator} → {zadacha_target_str(targets)}\nVazifa:\n━━━━━━━━━━━━━━\n\"{text}\"\n━━━━━━━━━━━━━━\nDeadline: 📅 {date_str}  ⏰ {time_str}\n\nYuborilsinmi?",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes")], [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]])
+            text="✏️ Vazifa matnini yozing:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]])
         )
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
@@ -1786,22 +1828,13 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         where = data[6:]
         all_agents = list(AGENTS_DATA.keys())
         if where == "start":
+            # Back to executor
             keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
-            keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")])
             keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(chat_id=user_id, text="👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
             zadacha_state[user_id]["messages"].append(sent.message_id)
-        elif where == "supervisor":
-            targets = zadacha_state[user_id].get("targets", [])
-            keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in all_agents if u not in targets or len(targets) > 1]
-            keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
-            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-            sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
-            zadacha_state[user_id]["messages"].append(sent.message_id)
-        elif where in ("target", "text"):
-            sent = await context.bot.send_message(chat_id=user_id, text="✏️ Vazifa matnini yozing:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]]))
-            zadacha_state[user_id]["messages"].append(sent.message_id)
-        elif where in ("date", "back"):
+        elif where == "date":
+            # Back to date selection
             targets = zadacha_state[user_id].get("targets", [])
             now2 = datetime.now(TIMEZONE)
             available_dates = get_available_dates_for_targets(targets)
@@ -1815,9 +1848,26 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
                 days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
-            days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_target")])
+            days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
             days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(chat_id=user_id, text="📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+        elif where == "supervisor":
+            # Back to supervisor (show available for deadline)
+            targets = zadacha_state[user_id].get("targets", [])
+            date_str2 = zadacha_state[user_id].get("deadline_date", "")
+            time_str3 = zadacha_state[user_id].get("deadline_time", "")
+            available_sups = get_available_supervisors_for_deadline(targets, date_str2, time_str3)
+            if not available_sups:
+                available_sups = [u for u in AGENTS_DATA.keys() if u not in targets]
+            keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in available_sups]
+            keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")])
+            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+            sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+        elif where in ("target", "text"):
+            # Back to text input
+            sent = await context.bot.send_message(chat_id=user_id, text="✏️ Vazifa matnini yozing:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]]))
             zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data == "zconfirm_yes":
