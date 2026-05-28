@@ -1740,7 +1740,7 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
         sent = await update.message.reply_text(
-            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
+            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 5 daqiqadan keyin o'chadi"
         )
         schedule_delete(context.bot, update.effective_chat.id, [sent.message_id], delay=60)
         return
@@ -1757,7 +1757,7 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     zadacha_state[user_id]["messages"].append(sent.message_id)
     # Auto-delete all state messages after 60s if no action
     async def auto_cleanup():
-        await asyncio.sleep(60)
+        await asyncio.sleep(300)
         if user_id in zadacha_state:
             msgs = zadacha_state.pop(user_id, {}).get("messages", [])
             for mid in msgs:
