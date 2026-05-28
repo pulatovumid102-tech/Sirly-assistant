@@ -1474,13 +1474,14 @@ async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
     user_id = update.effective_user.id
+    username = update.effective_user.username
     text = update.message.text.strip()
 
-    # ADDAGENT
+    # ADDAGENT — only admin
     if user_id in addagent_state:
+        if username != ADMIN_USERNAME:
+            return
         s = addagent_state[user_id]
         step = s.get("step")
         clean = text.lstrip("@")
@@ -1525,8 +1526,10 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                 await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
         return
 
-    # EDITAGENT
+    # EDITAGENT — only admin
     if user_id in editagent_state:
+        if username != ADMIN_USERNAME:
+            return
         s = editagent_state[user_id]
         step = s.get("step")
         if step == "name":
@@ -1650,10 +1653,10 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    zadacha_state[user_id] = {"step": "executor", "messages": []}
+    username = update.effective_user.username
+    zadacha_state[user_id] = {"step": "executor", "messages": [], "creator_username": username}
     all_agents = list(AGENTS_DATA.keys())
     keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
-    keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="ze_all")])
     keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
     sent = await update.message.reply_text("👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
     zadacha_state[user_id]["messages"].append(sent.message_id)
@@ -1682,14 +1685,13 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ze_"):
         target = data[3:]
         all_agents = list(AGENTS_DATA.keys())
-        targets = all_agents if target == "all" else [target]
+        targets = [target]  # "all" removed
         zadacha_state[user_id]["targets"] = targets
         zadacha_state[user_id]["step"] = "supervisor"
         keyboard = [
             [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")]
             for u in all_agents if u not in targets or len(targets) > 1
         ]
-        keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")])
         keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
         keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
         sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -1699,13 +1701,10 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supervisor = data[3:]
         all_agents = list(AGENTS_DATA.keys())
         targets = zadacha_state[user_id].get("targets", [])
-        if supervisor == "all":
-            supervisors = all_agents
-        else:
-            if len(targets) == 1 and supervisor == targets[0]:
-                await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
-                return
-            supervisors = [supervisor]
+        if len(targets) == 1 and supervisor == targets[0]:
+            await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
+            return
+        supervisors = [supervisor]
         zadacha_state[user_id]["supervisor"] = supervisors
         zadacha_state[user_id]["step"] = "text"
         sent = await context.bot.send_message(chat_id=user_id, text="✏️ Vazifa matnini yozing:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]]))
@@ -1752,7 +1751,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif where == "supervisor":
             targets = zadacha_state[user_id].get("targets", [])
             keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in all_agents if u not in targets or len(targets) > 1]
-            keyboard.append([InlineKeyboardButton("👥 Barchasi", callback_data="zs_all")])
             keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
             keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -1787,7 +1785,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = s["text"]
         date_str = s["deadline_date"]
         time_str = s["deadline_time"]
-        creator = query.from_user.first_name
+        creator = query.from_user.first_name or query.from_user.username or "Noma'lum"
         creator_username = query.from_user.username
         supervisors = s.get("supervisor", [])
         if isinstance(supervisors, str):
