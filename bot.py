@@ -2652,7 +2652,7 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
                 f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
                 f"haqida tasdiqlovchi screenshot yuboring\n\n"
                 f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
-                f"⚠️ 10 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
+                f"⚠️ 10 daqiqa ichida yuborilmasa 20,000 so'm jarima"
             )
         )
         # Save reminder msg id for all pending agents
@@ -2678,7 +2678,7 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
                 f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
                 f"haqida tasdiqlovchi screenshot yuboring\n\n"
                 f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
-                f"⚠️ 10 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
+                f"⚠️ 10 daqiqa ichida yuborilmasa 20,000 so'm jarima"
             )
         )
         attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{username}"] = reminder_sent.message_id
