@@ -1794,6 +1794,9 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     zadacha_state[user_id] = {"step": "executor", "messages": [], "creator_username": username}
+    # Track /zadacha command message for deletion
+    if update.message:
+        zadacha_state[user_id]["messages"].append(update.message.message_id)
     all_agents = list(AGENTS_DATA.keys())
     keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
     keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
@@ -2329,4 +2332,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
