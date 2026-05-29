@@ -753,19 +753,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
 
-        # Mark this task as green in main checklist
+        # Mark as verified in state
         task_index = task_num - 1
-        # Already confirmed in state when Ozodbek pressed — just update keyboard
+        state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
+        verified_set = state["checklist_verified"][time_key]
+
+        # Update checklist main message keyboard
         if time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=CHAT_ID,
-                    message_id=state["checklist_message_ids"].get(time_key),
-                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key])
-                )
-            except:
-                pass
+            msg_id = state["checklist_message_ids"].get(time_key)
+            if msg_id:
+                # Try both CHAT_ID and private chat
+                for chat_id_try in [CHAT_ID, query.message.chat.id]:
+                    try:
+                        await context.bot.edit_message_reply_markup(
+                            chat_id=chat_id_try,
+                            message_id=msg_id,
+                            reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
+                        )
+                        break
+                    except:
+                        pass
 
         # Remove this item from pending
         vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
