@@ -119,10 +119,11 @@ def get_agent_info(username):
 
 CHECKLIST_CONFIG = {
     "10:15": [
+        "Olib ketilmagan statusini tekshiring va guruhga qisqacha hisobot yuboring: soni va nima bo'ldi suhbat paytida",
         "Muammoli mijozlar jadvalini ko'rib chiqing, jarayondagilarni yakunlanganlarga o'tkazing va guruhga @umidpulatov tag qilib qisqacha hisobot yuboring",
         "Bugalteriya jadvalini to'ldiring, shoshмang xato bo'lmasin",
-        "Olib ketilmagan statusini tekshiring va guruhga qisqacha hisobot yuboring: soni va nima bo'ldi suhbat paytida",
         "Bugalteriya sotuvlarini hamkorlar telegram guruhlariga yuboring",
+        "Sotuv tablitsasini to'ldiring, xato qilmang, shoshмang",
         "Umid akaga checklist bajarilganini screenshotini yuboring",
     ],
 }
@@ -2478,10 +2479,10 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             f"Bugungi kod: {code}\n\n"
             f"📌 Bajaring:\n"
             f"1. Kodni katta qilib qog'ozga yozing\n"
-            f"2. Qog'ozni ushlab selfie oling\n"
+            f"2. Ofis fonida qog'ozni suratga oling\n"
             f"3. Ofisda ekaningiz suratda bilinsin\n"
-            f"4. Selfiini guruhga yuboring\n\n"
-            f"⚠️ Soat {agent['deadline']} gacha selfie yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
+            f"4. Suratni guruhga yuboring\n\n"
+            f"⚠️ Soat {agent['deadline']} gacha surat yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
             f"ℹ️ Kod har kuni yangilanadi"
         )
     )
