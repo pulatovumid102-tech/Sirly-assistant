@@ -282,20 +282,30 @@ def build_days_keyboard(selected_days, prefix="add"):
 # CHECKLIST / REMINDER BUILDERS
 # =========================
 
-def build_checklist_keyboard(time_key, active_agents, checklist_confs):
+def build_checklist_keyboard(time_key, active_agents, checklist_confs, verified_tasks=None):
+    """verified_tasks: set of task indices verified by admin"""
+    if verified_tasks is None:
+        verified_tasks = set()
     keyboard = []
     tasks = CHECKLIST_CONFIG.get(time_key, [])
     for username in get_agent_order():
         if username not in active_agents:
             continue
-        name = AGENTS_DATA[username]["name"]
         user_conf = checklist_confs.get(username, {})
         for i, task in enumerate(tasks):
-            done = user_conf.get(i, False)
-            keyboard.append([InlineKeyboardButton(
-                f"{'✅' if done else '⬜'} {i+1} — Bajardim",
-                callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
-            )])
+            done = user_conf.get(i, False)  # Ozodbek bosdi
+            verified = i in verified_tasks   # Admin tekshirdi
+            row = [
+                InlineKeyboardButton(
+                    f"{'✅' if done else '⬜'} {i+1} — Bajardim",
+                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
+                ),
+                InlineKeyboardButton(
+                    f"{'✅' if verified else '⬜'}",
+                    callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{i+1}"
+                )
+            ]
+            keyboard.append(row)
     return InlineKeyboardMarkup(keyboard)
 
 def build_checklist_text(time_key, active_agents):
