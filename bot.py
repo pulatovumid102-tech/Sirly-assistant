@@ -2447,36 +2447,46 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reset_attendance_if_new_day()
 
-    # Davomat tekshirish
+    # Davomat tekshirish — faqat deadline vaqtidan oldin
     if sender in ATTENDANCE_AGENTS and sender not in attendance_state["arrived"]:
         agent = ATTENDANCE_AGENTS[sender]
-        attendance_state["arrived"].add(sender)
+        deadline_h, deadline_m = map(int, agent["deadline"].split(":"))
+        deadline_dt = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
 
-        keyboard = [[InlineKeyboardButton(
-            f"⬜ Tasdiqlandi — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
-            callback_data=f"att_confirm_{sender}"
-        )]]
+        # Faqat deadline vaqtidan oldin kelgan rasm arrival sifatida qabul qilinadi
+        if now <= deadline_dt:
+            attendance_state["arrived"].add(sender)
+            # Cancel fine check job
+            cancel_jobs_by_name(context.job_queue, f"att_check_{sender}")
 
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=(
-                f"✅ {agent['name']} ishga keldi!\n"
-                f"📅 {date_str} | 🕐 {time_str}\n\n"
-                f"@{ADMIN_USERNAME}"
-            ),
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        return
+            keyboard = [[InlineKeyboardButton(
+                f"⬜ Tasdiqlandi — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+                callback_data=f"att_confirm_{sender}"
+            )]]
 
-    # Screenshot tekshirish
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=(
+                    f"✅ {agent['name']} ishga keldi!\n"
+                    f"📅 {date_str} | 🕐 {time_str}\n\n"
+                    f"@{ADMIN_USERNAME}"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+
+    # Screenshot tekshirish — oxirgi 10 daqiqa ichidagi vaqt
     current_time_key = None
+    best_diff = None
     for tk in SCREENSHOT_SCHEDULE:
         if sender in SCREENSHOT_SCHEDULE[tk]:
-            # Find the most recent past time_key
             tk_h, tk_m = map(int, tk.split(":"))
             tk_dt = now.replace(hour=tk_h, minute=tk_m, second=0, microsecond=0)
-            if tk_dt <= now:
-                current_time_key = tk
+            diff = (now - tk_dt).total_seconds()
+            if 0 <= diff <= 600:  # 10 daqiqa ichida
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    current_time_key = tk
 
     if current_time_key and sender in SCREENSHOT_SCHEDULE.get(current_time_key, []):
         done = attendance_state["screenshot_done"].get(current_time_key, set())
@@ -2499,6 +2509,8 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(sender)
             # Cancel fine job
+            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
+            # Also cancel screenshot reminder if pending
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
 
 # =========================
