@@ -2600,7 +2600,14 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(sender)
+            # Mark all agents for this time slot as done (one screenshot is enough)
+            agents_for_slot = SCREENSHOT_SCHEDULE.get(current_time_key, [sender])
+            for _u in agents_for_slot:
+                attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(_u)
+            # Cancel fine jobs for all agents in slot
+            for _u in agents_for_slot:
+                cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{_u}")
+            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}")
             # Save msg ids for deletion: confirm msg, photo msg, reminder msg
             ss_key = f"ss_{current_time_key.replace(':', '')}_{sender}"
             attendance_state.setdefault("ss_msg_ids", {})[ss_key] = {
@@ -2624,14 +2631,44 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(TIMEZONE)
     date_str = now.strftime("%d.%m")
 
-    for username in agents:
+    done = attendance_state["screenshot_done"].get(time_key, set())
+    # Filter agents who haven't submitted yet
+    pending_agents = [u for u in agents if u not in done]
+    if not pending_agents:
+        return
+
+    # If multiple agents - send one combined message
+    if len(pending_agents) > 1:
+        names_tags = " | ".join(
+            f"{ATTENDANCE_AGENTS.get(u, {}).get('name', u)} @{u}"
+            for u in pending_agents
+        )
+        reminder_sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"📸 {names_tags}\n"
+                f"Iltimos screenshot yuboring:\n\n"
+                f"1. Admin panelda — javob yozilmagan mijozlar qolmagani\n"
+                f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
+                f"haqida tasdiqlovchi screenshot yuboring\n\n"
+                f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
+                f"⚠️ 10 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
+            )
+        )
+        # Save reminder msg id for all pending agents
+        for u in pending_agents:
+            attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{u}"] = reminder_sent.message_id
+        # Schedule fine after 10 minutes for all
+        context.job_queue.run_once(
+            screenshot_fine_job,
+            when=600,
+            name=f"ss_fine_{time_key.replace(':', '')}",
+            data={"time_key": time_key, "username": pending_agents[0], "all_agents": pending_agents}
+        )
+    else:
+        username = pending_agents[0]
         agent = ATTENDANCE_AGENTS.get(username, {})
         name = agent.get("name", username)
-
-        done = attendance_state["screenshot_done"].get(time_key, set())
-        if username in done:
-            continue
-
         reminder_sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
@@ -2641,17 +2678,15 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
                 f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
                 f"haqida tasdiqlovchi screenshot yuboring\n\n"
                 f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
-                f"⚠️ 5 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
+                f"⚠️ 10 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
             )
         )
         attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{username}"] = reminder_sent.message_id
-
-        # Schedule fine after 5 minutes
         context.job_queue.run_once(
             screenshot_fine_job,
-            when=300,
+            when=600,
             name=f"ss_fine_{time_key.replace(':', '')}_{username}",
-            data={"time_key": time_key, "username": username}
+            data={"time_key": time_key, "username": username, "all_agents": [username]}
         )
 
     # Reschedule next day
