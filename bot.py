@@ -644,7 +644,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     accepted_sup = task.get("accepted_supervisors", set())
     deadline_str = task["deadline"].strftime("%d.%m")
     time_str = task["deadline"].strftime("%H:%M")
-    text_short = task["text"][:60]
+    text_short = task["text"]
 
     next_schedule = 300  # default 5 daqiqa
 
@@ -722,10 +722,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "zadachi_group_cancel":
+        stored_id = zadacha_state.get(f"zadachi_group_{query.message.message_id}")
+        if stored_id and query.from_user.id != stored_id:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        zadacha_state.pop(f"zadachi_group_{query.message.message_id}", None)
+        cmd_msg = query.message.reply_to_message
         try:
             await query.message.delete()
         except:
             pass
+        if cmd_msg:
+            try:
+                await cmd_msg.delete()
+            except:
+                pass
         return
 
     now = datetime.now(TIMEZONE)
@@ -1044,7 +1055,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         created_str = created_at.strftime("%d.%m soat %H:%M") if created_at else "—"
         accepted_str = accepted_at.strftime("%d.%m soat %H:%M") if accepted_at else "—"
         done_str = now_done.strftime("%d.%m soat %H:%M")
-        text_short = task["text"][:60]
+        text_short = task["text"]
 
         msg_text = (
             f"✅ {name} vazifani bajardi!\n"
@@ -2056,14 +2067,16 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
         keyboard = [[InlineKeyboardButton("❌ Otmen", callback_data="zadachi_group_cancel")]]
+        cmd_msg_id = update.message.message_id
         sent = await update.message.reply_text(
             f"📋 Vazifalar ro'yxatini ko'rish va tahrirlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        cmd_msg_id = update.message.message_id
+        requester_id = update.effective_user.id
+        # Store requester for cancel button check
+        zadacha_state[f"zadachi_group_{sent.message_id}"] = requester_id
         # Auto-delete both after 60s
         async def auto_del():
-            import asyncio
             await asyncio.sleep(60)
             try:
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=sent.message_id)
