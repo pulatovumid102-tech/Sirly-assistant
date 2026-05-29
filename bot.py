@@ -301,7 +301,7 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs, verified_
                     callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
                 ),
                 InlineKeyboardButton(
-                    f"{'✅' if verified else '⬜'}",
+                    f"{'✅' if verified else '⬜'} Tekshirdim",
                     callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{i+1}"
                 )
             ]
