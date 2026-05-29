@@ -721,6 +721,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "noop":
         return
 
+    if data == "zadachi_group_cancel":
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
     now = datetime.now(TIMEZONE)
     time_str = now.strftime("%H:%M")
 
@@ -1680,6 +1687,8 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     if step == "text":
         zs["text"] = update.message.text
         zs["step"] = "confirm"
+        # Track user's text message for later deletion
+        zs["messages"].append(update.message.message_id)
         targets = zs.get("targets", [])
         supervisors = zs.get("supervisor", [])
         date_str = zs.get("deadline_date", "")
@@ -2037,6 +2046,33 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     requester = update.effective_user.username
+    chat_type = update.effective_chat.type
+
+    # Guruhda /zadachi — lichkaga yo'naltir
+    if chat_type in ("group", "supergroup"):
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+        keyboard = [[InlineKeyboardButton("❌ Otmen", callback_data="zadachi_group_cancel")]]
+        sent = await update.message.reply_text(
+            f"📋 Vazifalar ro'yxatini ko'rish va tahrirlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        cmd_msg_id = update.message.message_id
+        # Auto-delete both after 60s
+        async def auto_del():
+            import asyncio
+            await asyncio.sleep(60)
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=sent.message_id)
+            except:
+                pass
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=cmd_msg_id)
+            except:
+                pass
+        asyncio.create_task(auto_del())
+        return
+
     if not zadacha_tasks:
         await update.message.reply_text("📋 Faol vazifalar yoq.")
         return
@@ -2098,7 +2134,8 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent = await update.message.reply_text(
         "\n".join(lines),
-        reply_markup=InlineKeyboardMarkup(keyboards) if keyboards else None
+        reply_markup=InlineKeyboardMarkup(keyboards) if keyboards else None,
+        parse_mode="HTML"
     )
     # Delete original /zadachi command message too
     try:
@@ -2292,3 +2329,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
