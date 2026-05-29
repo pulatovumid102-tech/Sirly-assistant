@@ -71,8 +71,8 @@ DEFAULT_AGENTS = {
     },
     "al_xorazm1y": {
         "name": "Azamjon", "username": "al_xorazm1y", "phone": "+998 99 737 11 99",
-        "work_days": [0, 1, 2, 3, 4, 5, 6],
-        "work_hours": {"0": [9, 24], "1": [9, 24], "2": [9, 24], "3": [9, 24], "4": [9, 24], "5": [9, 24], "6": [9, 24]},
+        "work_days": [0, 1, 2, 3, 4, 5],
+        "work_hours": {"0": [10, 20], "1": [10, 20], "2": [10, 20], "3": [10, 20], "4": [10, 20], "5": [10, 20]},
     },
 }
 
@@ -645,8 +645,9 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     deadline_str = task["deadline"].strftime("%d.%m")
     time_str = task["deadline"].strftime("%H:%M")
     text_short = task["text"]
-
-    next_schedule = 300  # default 5 daqiqa
+    creator = task["creator"]
+    target_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in targets)
+    sup_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
 
     # Oldingi eslatma xabarlarini o'chir
     for mid in task.get("reminder_msg_ids", []):
@@ -656,52 +657,67 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             pass
     task["reminder_msg_ids"] = []
 
+    # Har bir ijrochi uchun alohida schedule
+    exec_next = 600  # 10 daqiqa
     for username in targets:
         if username in accepted_exec:
             continue
         if not is_agent_working_now(username):
             secs = seconds_until_agent_works(username)
-            if secs < next_schedule or next_schedule == 300:
-                next_schedule = max(secs, 60)
+            exec_next = min(exec_next, max(secs, 60))
             continue
         name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [[InlineKeyboardButton(f"⬜ Xop, bajaraman — {name}", callback_data=f"zacc_exec_{tid}_{username}")]]
         sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
-                f"📌 {name} @{username}, Sizga yuborilgan vazifani hali qabul qilmadingiz!\n\n"
-                f"<tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"🔔 {name} @{username}\n"
+                f"Sizga vazifa tayinlandi, hali qabul qilmadingiz!\n\n"
+                f"👤 Vazifani bergan: {creator}\n"
+                f"🧑 Nazoratchi: {sup_names}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 Vazifa: <tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
             ),
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        ,
-            parse_mode="HTML")
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         task["reminder_msg_ids"].append(sent.message_id)
 
+    # Har bir nazoratchi uchun alohida schedule
+    sup_next = 600  # 10 daqiqa
     for username in supervisors:
         if username in accepted_sup:
             continue
         if not is_agent_working_now(username):
             secs = seconds_until_agent_works(username)
-            if secs < next_schedule or next_schedule == 300:
-                next_schedule = max(secs, 60)
+            sup_next = min(sup_next, max(secs, 60))
             continue
         name = AGENTS_DATA.get(username, {}).get("name", username)
         keyboard = [[InlineKeyboardButton(f"⬜ Xop, nazorat qilaman — {name}", callback_data=f"zacc_sup_{tid}_{username}")]]
         sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
-                f"📌 @{username}, siz nazorat qilishingiz kerak bo'lgan vazifa bor!\n\n"
-                f"<tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"🔔 {name} @{username}\n"
+                f"Sizga nazorat qilish uchun vazifa tayinlandi!\n\n"
+                f"👤 Vazifani bergan: {creator}\n"
+                f"👷 Ijrochi: {target_names}\n"
+                f"🧑 Nazoratchi: {name}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 Vazifa: <tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
             ),
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        ,
-            parse_mode="HTML")
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         task["reminder_msg_ids"].append(sent.message_id)
 
     save_tasks()
 
+    # Keyingi schedule — eng tez keladigan vaqt
+    next_schedule = min(exec_next, sup_next)
     context.job_queue.run_once(
         zadacha_accept_reminder_job,
         when=next_schedule,
@@ -1413,7 +1429,8 @@ async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton(f"👤 {d['name']} (@{u})", callback_data=f"edit_select_{u}")] for u, d in AGENTS_DATA.items()]
     keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")])
     sent = await context.bot.send_message(chat_id=user_id, text="✏️ Qaysi hodimni tahrirlaysiz?", reply_markup=InlineKeyboardMarkup(keyboard))
-    editagent_state[user_id] = {"messages": [sent.message_id]}
+    cmd_msg_id = update.message.message_id if update.message else None
+    editagent_state[user_id] = {"messages": [sent.message_id], "cmd_msg_id": cmd_msg_id}
 
 async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
@@ -1536,10 +1553,14 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         AGENTS_DATA[username]["work_hours"] = new_hours
         save_agents(AGENTS_DATA)
         msgs = s.get("messages", [])
+        cmd_msg = s.get("cmd_msg_id")
         editagent_state.pop(user_id, None)
         days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
+        warn = await context.bot.send_message(chat_id=user_id, text="⚠️ Jarayon xabarlari ⏱ 5 soniyadan keyin o'chadi")
         sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
-        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
+        del_list = msgs + [sent.message_id, warn.message_id]
+        if cmd_msg: del_list.append(cmd_msg)
+        schedule_delete(context.bot, user_id, del_list)
 
 async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
