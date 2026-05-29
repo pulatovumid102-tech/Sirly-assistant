@@ -648,10 +648,17 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     next_schedule = 300  # default 5 daqiqa
 
+    # Oldingi eslatma xabarlarini o'chir
+    for mid in task.get("reminder_msg_ids", []):
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+        except:
+            pass
+    task["reminder_msg_ids"] = []
+
     for username in targets:
         if username in accepted_exec:
             continue
-        # Ish vaqtini tekshir
         if not is_agent_working_now(username):
             secs = seconds_until_agent_works(username)
             if secs < next_schedule or next_schedule == 300:
@@ -668,12 +675,11 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             ),
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        task.setdefault("reminder_msg_ids", []).append(sent.message_id)
+        task["reminder_msg_ids"].append(sent.message_id)
 
     for username in supervisors:
         if username in accepted_sup:
             continue
-        # Ish vaqtini tekshir
         if not is_agent_working_now(username):
             secs = seconds_until_agent_works(username)
             if secs < next_schedule or next_schedule == 300:
@@ -690,7 +696,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             ),
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        task.setdefault("reminder_msg_ids", []).append(sent.message_id)
+        task["reminder_msg_ids"].append(sent.message_id)
 
     save_tasks()
 
