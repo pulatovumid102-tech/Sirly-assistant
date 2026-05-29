@@ -300,7 +300,7 @@ def build_checklist_text(time_key, active_agents):
     task_lines = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
     return (
-        f"📋 CHECKLIST — {time_key}\n\n"
+        f"📋 CHECKLIST\n\n"
         f"{agent_block}\n\n"
         "━━━━━━━━━━━━━━\n"
         f"📝 Vazifalar: <tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
@@ -878,7 +878,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         confirm_type = without_prefix.split("_")[-1]
         username = without_prefix[:-(len(confirm_type) + 1)]
         presser = query.from_user.username
-        if presser != username:
+        if presser != username and presser != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         active = set(state["confirmations"].keys()) or get_active_agents()
@@ -2835,4 +2835,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
