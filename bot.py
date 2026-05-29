@@ -2755,10 +2755,22 @@ async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
+    await send_checklist_now(update, context)
+
+async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    await send_checklist_now(update, context)
+
+async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_key = "10:15"
     active = {"sirlyinfo"}
     target_chat = update.effective_chat.id
+    # Reset confirmations for fresh test
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
+    # Reset verify state
+    vkey = f"{time_key}_sirlyinfo"
+    checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
     sent = await context.bot.send_message(
         chat_id=target_chat,
         text=build_checklist_text(time_key, active),
@@ -2803,6 +2815,7 @@ def main():
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
 
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
+    application.add_handler(CommandHandler("checklist", checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
     application.add_handler(CommandHandler("addagent", addagent_command))
@@ -2822,3 +2835,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
