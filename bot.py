@@ -487,7 +487,7 @@ def build_zadacha_main_text(task):
         f"📌 {creator} → {target_str}\n"
         f"🧑 Nazorat: {supervisor_names}\n"
         f"━━━━━━━━━━━━━━\n"
-        f"📝 Vazifa:\n\"{text}\"\n"
+        f"📝 Vazifa:\n||{text}||\n"
         f"━━━━━━━━━━━━━━\n"
         f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
         f"{all_tags}"
@@ -670,7 +670,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             chat_id=CHAT_ID,
             text=(
                 f"📌 {name} @{username}, Sizga yuborilgan vazifani hali qabul qilmadingiz!\n\n"
-                f"\"{text_short}\"\n"
+                f"||{text_short}||\n"
                 f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
             ),
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -691,7 +691,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             chat_id=CHAT_ID,
             text=(
                 f"📌 @{username}, siz nazorat qilishingiz kerak bo'lgan vazifa bor!\n\n"
-                f"\"{text_short}\"\n"
+                f"||{text_short}||\n"
                 f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
             ),
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -920,7 +920,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = AGENTS_DATA.get(username, {}).get("name", username)
         supervisors = task.get("supervisor", [])
         sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ {name} vazifani bajardi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 \"{task['text'][:50]}\"\n@{task['creator_username']}{sup_tag}")
+        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ {name} vazifani bajardi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 ||{task['text'][:50]}||\n@{task['creator_username']}{sup_tag}")
         try:
             await query.message.delete()
         except:
@@ -944,7 +944,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = AGENTS_DATA.get(username, {}).get("name", username)
         supervisors = task.get("supervisor", [])
         sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"❌ {name} vazifani bekor qildi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 \"{task['text'][:50]}\"\n@{task['creator_username']}{sup_tag}")
+        await context.bot.send_message(chat_id=CHAT_ID, text=f"❌ {name} vazifani bekor qildi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 ||{task['text'][:50]}||\n@{task['creator_username']}{sup_tag}")
         try:
             await query.message.delete()
         except:
@@ -974,7 +974,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"⏰ Deadline uzaytirildi.\n📌 \"{task['text'][:50]}\"\nYangi deadline: 📅 {new_dl}\n@{task['creator_username']}")
+        await context.bot.send_message(chat_id=CHAT_ID, text=f"⏰ Deadline uzaytirildi.\n📌 ||{task['text'][:50]}||\nYangi deadline: 📅 {new_dl}\n@{task['creator_username']}")
         return
 
     # ESIMDA
@@ -1037,7 +1037,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_text = (
             f"✅ {name} vazifani bajardi!\n"
             f"━━━━━━━━━━━━━━\n"
-            f"📌 \"{text_short}\"\n"
+            f"📌 ||{text_short}||\n"
             f"━━━━━━━━━━━━━━\n"
             f"📋 Vazifa berildi: {created_str}\n"
             f"✅ Qabul qilindi: {accepted_str}\n"
@@ -1116,10 +1116,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("👷 Ijrochini o'zgartir", callback_data=f"ztask_editfield_target_{tid}")],
             [InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")],
         ]
-        await query.message.reply_text(
-            f"📌 №{tid} | \"{task['text'][:50]}\"\n\nNimani o'zgartirmoqchisiz?",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        # Save zadachi message id to prevent auto-delete
+        zadacha_state[f"edit_zadachi_{query.from_user.id}"] = {"zadachi_msg_id": query.message.message_id}
+        edit_sent = await query.message.reply_text(
+            f"📌 №{tid} | ||{task['text'][:50]}||\n\nNimani o'zgartirmoqchisiz?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="MarkdownV2"
         )
+        zadacha_state[f"edit_zadachi_{query.from_user.id}"]["edit_msg_id"] = edit_sent.message_id
         return
 
     if data.startswith("ztask_editfield_"):
@@ -1298,7 +1302,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
         ]
-        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n\"{task['text'][:50]}\"", reply_markup=InlineKeyboardMarkup(keyboard))
+        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n||{task['text'][:50]}||", reply_markup=InlineKeyboardMarkup(keyboard))
         # Store confirm msg id and zadachi msg id for later deletion
         zadacha_state[f"del_confirm_{tid}"] = {
             "confirm_msg_id": confirm_sent.message_id,
@@ -1998,19 +2002,24 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Vazifa yuborildi.\n"
                 f"📌 {creator} → {target_str}\n"
                 f"━━━━━━━━━━━━━━\n"
-                f'"{text}"\n'
+                f'||{text}||\n'
                 f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
                 f"⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi, vazifa guruhda qoladi"
             )
         )
-        await asyncio.sleep(5)
+        # Warn then delete all process messages after 10s
+        warn_sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Jarayon xabarlari ⏱ 10 soniyadan keyin o'chadi"
+        )
+        await asyncio.sleep(10)
         for mid in s.get("messages", []):
             try:
                 await context.bot.delete_message(chat_id=user_id, message_id=mid)
             except:
                 pass
-        schedule_delete(context.bot, user_id, [sent_ok.message_id], delay=60)
+        schedule_delete(context.bot, user_id, [warn_sent.message_id, sent_ok.message_id], delay=50)
 
 # =========================
 # ZADACHI COMMAND
@@ -2058,7 +2067,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines.append(
                 f"━━━━━━━━━━━━━━\n"
                 f"📌 №{tid} | {creator} → {name}\n"
-                f"📝 \"{text_short}\"\n"
+                f"📝 ||{text_short}||\n"
                 f"📅 {deadline_str}\n"
                 f"{accepted} | {status}"
             )
@@ -2111,7 +2120,7 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         sup_line = f"\n🧑 Nazorat: {sup_tags}" if sup_tags else ""
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n\"{task['text']}\"\nDeadline: 📅 {deadline_str}{sup_line}",
+            text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n||{task['text']}||\nDeadline: 📅 {deadline_str}{sup_line}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -2137,7 +2146,7 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         ]
         await context.bot.send_message(
             chat_id=CHAT_ID,
-            text=f"📌 {name}, deadline tugadi.\n━━━━━━━━━━━━━━\n\"{task['text']}\"\nDeadline: 📅 {deadline_str}\n\n@{username} @{task['creator_username']}",
+            text=f"📌 {name}, deadline tugadi.\n━━━━━━━━━━━━━━\n||{task['text']}||\nDeadline: 📅 {deadline_str}\n\n@{username} @{task['creator_username']}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
