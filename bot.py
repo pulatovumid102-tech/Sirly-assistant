@@ -841,12 +841,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rest = data[11:]  # after "ss_confirm_"
         ss_key = f"ss_{rest}"
         ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
+        chat_id_del = ss_info.get("chat_id", CHAT_ID)
         to_delete = [query.message.message_id]
         if ss_info.get("photo_msg_id"):
             to_delete.append(ss_info["photo_msg_id"])
         if ss_info.get("reminder_msg_id"):
             to_delete.append(ss_info["reminder_msg_id"])
-        schedule_delete(context.bot, CHAT_ID, to_delete, delay=5)
+        schedule_delete(context.bot, chat_id_del, to_delete, delay=5)
         return
 
     # SCREENSHOT FINE — Qabul qildim
@@ -2606,6 +2607,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "confirm_msg_id": sent.message_id,
                 "photo_msg_id": update.message.message_id,
                 "reminder_msg_id": attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}"),
+                "chat_id": update.effective_chat.id,
             }
             # Cancel fine job
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
