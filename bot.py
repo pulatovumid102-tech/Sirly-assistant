@@ -118,28 +118,12 @@ def get_agent_info(username):
 # =========================
 
 CHECKLIST_CONFIG = {
-    "10:00": [
-        "Admin panel (support) tozalandi",
-        "Muammoli mijozlar jadvali to'liq tekshirildi",
-        "Bugalteriya jadvali to'ldirildi",
-        "Olib ketilmagan statusini tekshirildi",
-        "Bugalteriya kunlik holati hamkorlar telegram guruhlariga yuborildi",
-        "Umid akaga checklist skrinshoti yuborildi",
-    ],
-    "14:00": [
-        "Muammoli mijozlar jadvali to'liq tekshirildi",
-        "Sotuv tablitsasi to'ldirildi",
-        "Umid akaga checklist skrinshoti yuborildi",
-    ],
-    "18:00": [
-        "Muammoli mijozlar jadvali to'liq tekshirildi",
-        "Sirly bug va task guruhidagi barcha bug hamda tasklar jadvalga kiritildi",
-        "Umid akaga checklist skrinshoti yuborildi",
-    ],
-    "23:00": [
-        "Support va telegramdagi murojaatlar qolib ketmadi",
-        "Checklist to'liq tekshirildi",
-        "To'liq tekshirilgani haqida Sirly STAFF ga xabar yuborildi? Umid akani tag qilib",
+    "10:15": [
+        "Muammoli mijozlar jadvalini ko'rib chiqing, jarayondagilarni yakunlanganlarga o'tkazing va guruhga @umidpulatov tag qilib qisqacha hisobot yuboring",
+        "Bugalteriya jadvalini to'ldiring, shoshмang xato bo'lmasin",
+        "Olib ketilmagan statusini tekshiring va guruhga qisqacha hisobot yuboring: soni va nima bo'ldi suhbat paytida",
+        "Bugalteriya sotuvlarini hamkorlar telegram guruhlariga yuboring",
+        "Umid akaga checklist bajarilganini screenshotini yuboring",
     ],
 }
 
