@@ -2794,6 +2794,7 @@ def main():
     # Photo handler
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
 
+    application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
     application.add_handler(CommandHandler("addagent", addagent_command))
