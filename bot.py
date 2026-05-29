@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 TIMEZONE = ZoneInfo("Asia/Tashkent")
 ADMIN_USERNAME = "umidpulatov"
-NOTIFY_TAGS = "@umidpulatov @kh_nosirov"
+NOTIFY_TAGS = "@umidpulatov"
 
 # =========================
 # AUTO-DELETE HELPER
@@ -727,30 +727,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
+        # Format: chk_verify_HHMM_username_tasknum
         rest = data[11:]
-        last_underscore = rest.rindex("_")
-        time_raw = rest[:last_underscore]
-        username = rest[last_underscore + 1:]
+        parts = rest.split("_")
+        # time_raw is first part (4 digits), last part is task num, middle is username
+        time_raw = parts[0]
+        task_num = int(parts[-1])
+        username = "_".join(parts[1:-1])
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         vkey = f"{time_key}_{username}"
-
-        vs = checklist_verify_state.get(vkey, {})
-        pending = vs.get("pending_items", [])
-
-        # Update checklist keyboard - mark verified items as ✅
-        if time_key in state["checklist_confirmations"] and username in state["checklist_confirmations"][time_key]:
-            pass  # already marked
-
-        # Update verify button to green
         admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
-        try:
-            await query.message.edit_reply_markup(
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
-            )
-        except:
-            pass
 
-        # Update checklist main message keyboard
+        vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
+
+        # Mark this task as green in main checklist
+        task_index = task_num - 1
+        # Already confirmed in state when Ozodbek pressed — just update keyboard
         if time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
             try:
@@ -762,13 +754,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
-        # Delete verify message after 5 seconds
-        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+        # Remove this item from pending
+        vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
 
-        # Clear pending
-        if vkey in checklist_verify_state:
-            checklist_verify_state[vkey]["pending_items"] = []
-            checklist_verify_state[vkey]["verify_msg_id"] = None
+        if vs["pending_items"]:
+            # Update verify message with remaining items
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            nums_str = ", ".join(str(n) for n, _ in sorted(vs["pending_items"]))
+            new_text = f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang"
+            new_keyboard = [
+                [InlineKeyboardButton(
+                    f"⬜ {n} ni Tekshirdim — {admin_name}",
+                    callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{n}"
+                )]
+                for n, _ in sorted(vs["pending_items"])
+            ]
+            try:
+                await query.message.edit_text(
+                    text=new_text,
+                    reply_markup=InlineKeyboardMarkup(new_keyboard)
+                )
+            except:
+                pass
+        else:
+            # All verified — delete verify message
+            try:
+                await query.message.delete()
+            except:
+                pass
+            vs["verify_msg_id"] = None
+
         return
 
     # DAVOMAT — Tasdiqlandi
@@ -2741,11 +2756,11 @@ async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_T
     if update.effective_user.username != ADMIN_USERNAME:
         return
     time_key = "10:15"
-    # Faqat Ozodbek
     active = {"sirlyinfo"}
+    target_chat = update.effective_chat.id
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
     sent = await context.bot.send_message(
-        chat_id=CHAT_ID,
+        chat_id=target_chat,
         text=build_checklist_text(time_key, active),
         reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
         parse_mode="HTML"
