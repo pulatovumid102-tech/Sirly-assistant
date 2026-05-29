@@ -737,6 +737,52 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "noop":
         return
 
+    # DAVOMAT — Tasdiqlandi
+    if data.startswith("att_confirm_"):
+        username = data[12:]
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+        return
+
+    # SCREENSHOT — Qabul qildim
+    if data.startswith("ss_confirm_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+        return
+
+    # SCREENSHOT FINE — Qabul qildim
+    if data.startswith("ss_fine_confirm_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        # Fine xabari o'chmaydi — faqat tugma yashil bo'ladi
+        return
+
     if data == "zadachi_group_cancel":
         stored_id = zadacha_state.get(f"zadachi_group_{query.message.message_id}")
         if stored_id and query.from_user.id != stored_id:
@@ -2236,6 +2282,306 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         ,
             parse_mode="HTML")
 
+
+# =========================
+# DAVOMAT TIZIMI
+# =========================
+
+import random
+import string
+
+ATTENDANCE_AGENTS = {
+    "sirlyinfo": {
+        "name": "Ozodbek",
+        "phone": "+998 93 798 13 04",
+        "code_time": "09:50",
+        "deadline": "10:10",
+        "fine": "100,000",
+    },
+    "boniii0616": {
+        "name": "Bonu",
+        "phone": "+998 91 016 77 47",
+        "code_time": "13:50",
+        "deadline": "14:10",
+        "fine": "100,000",
+    },
+}
+
+# Screenshot jadval
+SCREENSHOT_SCHEDULE = {
+    "10:30": ["sirlyinfo"],
+    "11:00": ["sirlyinfo"],
+    "11:30": ["sirlyinfo"],
+    "12:00": ["sirlyinfo"],
+    "12:30": ["sirlyinfo"],
+    "12:50": ["sirlyinfo"],
+    "14:00": ["sirlyinfo", "boniii0616"],
+    "14:30": ["sirlyinfo", "boniii0616"],
+    "15:00": ["sirlyinfo", "boniii0616"],
+    "15:30": ["sirlyinfo", "boniii0616"],
+    "16:00": ["sirlyinfo", "boniii0616"],
+    "16:30": ["sirlyinfo", "boniii0616"],
+    "17:00": ["sirlyinfo", "boniii0616"],
+    "17:30": ["sirlyinfo", "boniii0616"],
+    "18:00": ["sirlyinfo", "boniii0616"],
+    "18:30": ["sirlyinfo", "boniii0616"],
+    "19:00": ["sirlyinfo", "boniii0616"],
+    "19:30": ["sirlyinfo", "boniii0616"],
+    "19:50": ["sirlyinfo", "boniii0616"],
+    "20:30": ["boniii0616"],
+    "21:00": ["boniii0616"],
+    "21:30": ["boniii0616"],
+    "22:00": ["boniii0616"],
+    "22:30": ["boniii0616"],
+    "23:00": ["boniii0616"],
+    "23:30": ["boniii0616"],
+}
+
+# State
+attendance_state = {
+    "daily_codes": {},        # username -> code
+    "arrived": set(),         # arrived today
+    "arrived_date": "",       # DD.MM.YYYY
+    "screenshot_msg_ids": {}, # time_key -> {username -> msg_id}
+    "screenshot_done": {},    # time_key -> set of usernames
+    "screenshot_date": "",
+}
+
+def generate_code():
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=4))
+
+def reset_attendance_if_new_day():
+    today = datetime.now(TIMEZONE).strftime("%d.%m.%Y")
+    if attendance_state["arrived_date"] != today:
+        attendance_state["arrived"] = set()
+        attendance_state["arrived_date"] = today
+        attendance_state["daily_codes"] = {}
+    if attendance_state["screenshot_date"] != today:
+        attendance_state["screenshot_done"] = {}
+        attendance_state["screenshot_date"] = today
+
+# =========================
+# DAVOMAT JOBS
+# =========================
+
+async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+
+    if username in attendance_state["arrived"]:
+        return
+
+    agent = ATTENDANCE_AGENTS[username]
+    code = generate_code()
+    attendance_state["daily_codes"][username] = code
+
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"🔑 {agent['name']} @{username}\n"
+            f"📞 {agent['phone']}\n\n"
+            f"Bugungi kod: {code}\n\n"
+            f"📌 Bajaring:\n"
+            f"1. Kodni katta qilib qog'ozga yozing\n"
+            f"2. Qog'ozni ushlab selfie oling\n"
+            f"3. Ofisda ekaningiz suratda bilinsin\n"
+            f"4. Selfiini guruhga yuboring\n\n"
+            f"⚠️ Soat {agent['deadline']} gacha selfie yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
+            f"ℹ️ Kod har kuni yangilanadi"
+        )
+    )
+
+    # Schedule fine check
+    deadline_h, deadline_m = map(int, agent["deadline"].split(":"))
+    target = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
+    if target > now:
+        secs = (target - now).total_seconds()
+        context.job_queue.run_once(
+            check_attendance_job,
+            when=secs,
+            name=f"att_check_{username}",
+            data={"username": username}
+        )
+
+async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+
+    if username in attendance_state["arrived"]:
+        return
+
+    agent = ATTENDANCE_AGENTS[username]
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"⚠️ {agent['name']} @{username} ishga vaqtida kelmadi!\n"
+            f"📅 {date_str} | 🕐 {time_str}\n\n"
+            f"💰 Oyligidan {agent['fine']} so'm ayriladi\n\n"
+            f"@{ADMIN_USERNAME}"
+        )
+    )
+
+# =========================
+# PHOTO HANDLER
+# =========================
+
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != CHAT_ID:
+        return
+
+    sender = update.effective_user.username
+    if not sender:
+        return
+
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+
+    reset_attendance_if_new_day()
+
+    # Davomat tekshirish
+    if sender in ATTENDANCE_AGENTS and sender not in attendance_state["arrived"]:
+        agent = ATTENDANCE_AGENTS[sender]
+        attendance_state["arrived"].add(sender)
+
+        keyboard = [[InlineKeyboardButton(
+            f"⬜ Tasdiqlandi — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+            callback_data=f"att_confirm_{sender}"
+        )]]
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"✅ {agent['name']} ishga keldi!\n"
+                f"📅 {date_str} | 🕐 {time_str}\n\n"
+                f"@{ADMIN_USERNAME}"
+            ),
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    # Screenshot tekshirish
+    current_time_key = None
+    for tk in SCREENSHOT_SCHEDULE:
+        if sender in SCREENSHOT_SCHEDULE[tk]:
+            # Find the most recent past time_key
+            tk_h, tk_m = map(int, tk.split(":"))
+            tk_dt = now.replace(hour=tk_h, minute=tk_m, second=0, microsecond=0)
+            if tk_dt <= now:
+                current_time_key = tk
+
+    if current_time_key and sender in SCREENSHOT_SCHEDULE.get(current_time_key, []):
+        done = attendance_state["screenshot_done"].get(current_time_key, set())
+        if sender not in done:
+            agent = ATTENDANCE_AGENTS.get(sender, {})
+            name = agent.get("name", sender)
+            keyboard = [[InlineKeyboardButton(
+                f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+                callback_data=f"ss_confirm_{current_time_key.replace(':', '')}_{sender}"
+            )]]
+            sent = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=(
+                    f"📸 {name} screenshot yubordi!\n"
+                    f"📅 {date_str} | 🕐 {time_str}\n\n"
+                    f"1. Admin panelda — javob yozilmagan mijozlar qolmadi\n"
+                    f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozildi"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(sender)
+            # Cancel fine job
+            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
+
+# =========================
+# SCREENSHOT JOBS
+# =========================
+
+async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
+    time_key = context.job.data["time_key"]
+    agents = context.job.data["agents"]
+    reset_attendance_if_new_day()
+
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+
+    for username in agents:
+        agent = ATTENDANCE_AGENTS.get(username, {})
+        name = agent.get("name", username)
+
+        done = attendance_state["screenshot_done"].get(time_key, set())
+        if username in done:
+            continue
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"📸 {name} @{username}\n"
+                f"Iltimos screenshot yuboring:\n\n"
+                f"1. Admin panelda — javob yozilmagan mijozlar qolmagani\n"
+                f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
+                f"haqida tasdiqlovchi screenshot yuboring\n\n"
+                f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
+                f"⚠️ 5 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
+            )
+        )
+
+        # Schedule fine after 5 minutes
+        context.job_queue.run_once(
+            screenshot_fine_job,
+            when=300,
+            name=f"ss_fine_{time_key.replace(':', '')}_{username}",
+            data={"time_key": time_key, "username": username}
+        )
+
+    # Reschedule next day
+    h, m = map(int, time_key.split(":"))
+    context.job_queue.run_once(
+        screenshot_reminder_job,
+        when=seconds_until_time(h, m),
+        name=f"ss_reminder_{time_key}",
+        data={"time_key": time_key, "agents": agents}
+    )
+
+async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
+    time_key = context.job.data["time_key"]
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+
+    done = attendance_state["screenshot_done"].get(time_key, set())
+    if username in done:
+        return
+
+    agent = ATTENDANCE_AGENTS.get(username, {})
+    name = agent.get("name", username)
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+
+    keyboard = [[InlineKeyboardButton(
+        f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+        callback_data=f"ss_fine_confirm_{time_key.replace(':', '')}_{username}"
+    )]]
+
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"⚠️ {name} @{username} screenshot yubormadi!\n"
+            f"📅 {date_str} | 🕐 {time_str}\n\n"
+            f"💰 Oyligidan 20,000 so'm ayriladi\n\n"
+            f"@{ADMIN_USERNAME}"
+        ),
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 # =========================
 # START / STOP COMMANDS
 # =========================
@@ -2346,6 +2692,29 @@ def main():
 
     # Zadacha cleanup job — har 5 daqiqada
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
+
+    # Davomat jobs
+    for username, agent in ATTENDANCE_AGENTS.items():
+        h, m = map(int, agent["code_time"].split(":"))
+        application.job_queue.run_once(
+            send_attendance_code_job,
+            when=seconds_until_time(h, m),
+            name=f"att_code_{username}",
+            data={"username": username}
+        )
+
+    # Screenshot reminder jobs
+    for time_key, agents in SCREENSHOT_SCHEDULE.items():
+        h, m = map(int, time_key.split(":"))
+        application.job_queue.run_once(
+            screenshot_reminder_job,
+            when=seconds_until_time(h, m),
+            name=f"ss_reminder_{time_key}",
+            data={"time_key": time_key, "agents": agents}
+        )
+
+    # Photo handler
+    application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
 
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
