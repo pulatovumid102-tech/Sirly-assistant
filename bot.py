@@ -759,13 +759,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        # Green button
         try:
             await query.message.edit_reply_markup(
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
             )
         except:
             pass
-        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+        # Find stored msg ids
+        rest = data[11:]  # after "ss_confirm_"
+        ss_key = f"ss_{rest}"
+        ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
+        to_delete = [query.message.message_id]
+        if ss_info.get("photo_msg_id"):
+            to_delete.append(ss_info["photo_msg_id"])
+        if ss_info.get("reminder_msg_id"):
+            to_delete.append(ss_info["reminder_msg_id"])
+        schedule_delete(context.bot, CHAT_ID, to_delete, delay=5)
         return
 
     # SCREENSHOT FINE — Qabul qildim
@@ -2508,9 +2518,14 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(sender)
+            # Save msg ids for deletion: confirm msg, photo msg, reminder msg
+            ss_key = f"ss_{current_time_key.replace(':', '')}_{sender}"
+            attendance_state.setdefault("ss_msg_ids", {})[ss_key] = {
+                "confirm_msg_id": sent.message_id,
+                "photo_msg_id": update.message.message_id,
+                "reminder_msg_id": attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}"),
+            }
             # Cancel fine job
-            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
-            # Also cancel screenshot reminder if pending
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
 
 # =========================
@@ -2533,7 +2548,7 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
         if username in done:
             continue
 
-        await context.bot.send_message(
+        reminder_sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
                 f"📸 {name} @{username}\n"
@@ -2545,6 +2560,7 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
                 f"⚠️ 5 daqiqa ichida yuborilmasa oyligingizdan 20,000 so'm ayriladi"
             )
         )
+        attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{username}"] = reminder_sent.message_id
 
         # Schedule fine after 5 minutes
         context.job_queue.run_once(
