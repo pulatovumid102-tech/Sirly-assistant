@@ -930,7 +930,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_index = int(rest[last_underscore + 1:])
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         presser = query.from_user.username
-        if presser != username:
+        if presser != username and presser != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         if time_key in state["checklist_confirmations"] and state["checklist_confirmations"][time_key]:
@@ -950,29 +950,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         tasks = CHECKLIST_CONFIG.get(time_key, [])
         task_text = tasks[task_index] if task_index < len(tasks) else str(task_index)
-        state.setdefault("checklist_log_lines", {}).setdefault(time_key, []).append(f"{AGENTS_DATA[username]['name']} {time_str} | {task_text} ni bajardi ✅")
-        log_text = "\n".join(state["checklist_log_lines"][time_key]) + f"\n{NOTIFY_TAGS}"
-        if state["checklist_log_message_ids"].get(time_key):
+        name = AGENTS_DATA[username]["name"]
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+
+        # Verify logic
+        vkey = f"{time_key}_{username}"
+        if vkey not in checklist_verify_state:
+            checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
+        vs = checklist_verify_state[vkey]
+        if task_index + 1 not in [item[0] for item in vs["pending_items"]]:
+            vs["pending_items"].append((task_index + 1, task_text))
+        vs["pending_items"].sort(key=lambda x: x[0])
+
+        nums_str = ", ".join(str(num) for num, _ in vs["pending_items"])
+        verify_text = f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang"
+        verify_keyboard = [
+            [InlineKeyboardButton(
+                f"⬜ {num} ni Tekshirdim — {admin_name}",
+                callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{num}"
+            )]
+            for num, _ in vs["pending_items"]
+        ]
+
+        if vs["verify_msg_id"]:
             try:
-                await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_log_message_ids"][time_key])
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=vs["verify_msg_id"])
             except:
                 pass
-        if checklist_all_confirmed(time_key, active, state["checklist_confirmations"][time_key]):
-            next_t = get_next_checklist_time(time_key)
-            log_text += f"\n✅ {time_key} checklist yakunlandi."
-            if next_t:
-                log_text += f" 🕐 Keyingi tekshiruv: {next_t}"
-            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
-            state["checklist_log_message_ids"][time_key] = sent.message_id
-            state["checklist_log_lines"][time_key] = []
-            if state["checklist_message_ids"].get(time_key):
-                try:
-                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["checklist_message_ids"][time_key])
-                except:
-                    pass
-        else:
-            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
-            state["checklist_log_message_ids"][time_key] = sent.message_id
+
+        sent_v = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=verify_text,
+            reply_markup=InlineKeyboardMarkup(verify_keyboard)
+        )
+        vs["verify_msg_id"] = sent_v.message_id
         return
 
     # ZADACHA ACCEPT — EXECUTOR
