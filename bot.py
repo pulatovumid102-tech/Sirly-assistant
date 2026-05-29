@@ -306,19 +306,20 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs):
         for i, task in enumerate(tasks):
             done = user_conf.get(i, False)
             keyboard.append([InlineKeyboardButton(
-                f"{'✅' if done else '⬜'} {name} — {i+1}",
+                f"{'✅' if done else '⬜'} {i+1} — Bajardim",
                 callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
             )])
     return InlineKeyboardMarkup(keyboard)
 
 def build_checklist_text(time_key, active_agents):
     tasks = CHECKLIST_CONFIG.get(time_key, [])
-    task_lines = "\n".join(f"{i+1}. {task} ☑️" for i, task in enumerate(tasks))
+    task_lines = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
     return (
-        f"📋 CHECKLIST — {time_key}\n\n{task_lines}\n\n"
-        "━━━━━━━━━━━━━━\n\n"
+        f"📋 CHECKLIST — {time_key}\n\n"
         f"{agent_block}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        f"📝 Vazifalar: <tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
         "━━━━━━━━━━━━━━\n\n"
         "⚠️ O'qimasdan turib bosmang\n"
         "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
@@ -567,7 +568,7 @@ async def send_checklist(bot, time_key):
             state[key][time_key] = None
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
     state["checklist_log_lines"][time_key] = []
-    sent = await bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]))
+    sent = await bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]), parse_mode="HTML")
     state["checklist_message_ids"][time_key] = sent.message_id
 
 async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
@@ -737,6 +738,55 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "noop":
         return
 
+    # CHECKLIST VERIFY
+    if data.startswith("chk_verify_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        rest = data[11:]
+        last_underscore = rest.rindex("_")
+        time_raw = rest[:last_underscore]
+        username = rest[last_underscore + 1:]
+        time_key = f"{time_raw[:2]}:{time_raw[2:]}"
+        vkey = f"{time_key}_{username}"
+
+        vs = checklist_verify_state.get(vkey, {})
+        pending = vs.get("pending_items", [])
+
+        # Update checklist keyboard - mark verified items as ✅
+        if time_key in state["checklist_confirmations"] and username in state["checklist_confirmations"][time_key]:
+            pass  # already marked
+
+        # Update verify button to green
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+
+        # Update checklist main message keyboard
+        if time_key in state["checklist_confirmations"]:
+            active2 = set(state["checklist_confirmations"][time_key].keys())
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=CHAT_ID,
+                    message_id=state["checklist_message_ids"].get(time_key),
+                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key])
+                )
+            except:
+                pass
+
+        # Delete verify message after 5 seconds
+        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+
+        # Clear pending
+        if vkey in checklist_verify_state:
+            checklist_verify_state[vkey]["pending_items"] = []
+            checklist_verify_state[vkey]["verify_msg_id"] = None
+        return
+
     # DAVOMAT — Tasdiqlandi
     if data.startswith("att_confirm_"):
         username = data[12:]
@@ -819,7 +869,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         time_key = data[9:]
         active = get_active_agents_for_time(time_key) or set(get_agent_order())
         state["checklist_confirmations"][time_key] = {u: {} for u in active}
-        sent = await context.bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]))
+        sent = await context.bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]), parse_mode="HTML")
         state["checklist_message_ids"][time_key] = sent.message_id
         return
 
