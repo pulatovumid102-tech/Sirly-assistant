@@ -129,6 +129,9 @@ CHECKLIST_CONFIG = {
 
 CHECKLIST_TIMES = list(CHECKLIST_CONFIG.keys())
 
+# Checklist verify state: vkey -> {pending_items, verify_msg_id}
+checklist_verify_state = {}
+
 WEEKDAY_UZ = {0: "Dushanba", 1: "Seshanba", 2: "Chorshanba", 3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"}
 MONTH_UZ = {1: "yanvar", 2: "fevral", 3: "mart", 4: "aprel", 5: "may", 6: "iyun", 7: "iyul", 8: "avgust", 9: "sentyabr", 10: "oktyabr", 11: "noyabr", 12: "dekabr"}
 
