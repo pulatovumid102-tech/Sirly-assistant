@@ -2041,7 +2041,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.delete_message(chat_id=user_id, message_id=mid)
             except:
                 pass
-        schedule_delete(context.bot, user_id, [warn_sent.message_id, sent_ok.message_id], delay=50)
+        schedule_delete(context.bot, user_id, [warn_sent.message_id, sent_ok.message_id], delay=10)
 
 # =========================
 # ZADACHI COMMAND
