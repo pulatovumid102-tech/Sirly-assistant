@@ -2756,8 +2756,17 @@ async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
-    keyboard = [[InlineKeyboardButton(t, callback_data=f"test_chk_{t}")] for t in CHECKLIST_TIMES]
-    await context.bot.send_message(chat_id=CHAT_ID, text="🧪 Qaysi checklist vaqtini test qilasiz?", reply_markup=InlineKeyboardMarkup(keyboard))
+    time_key = "10:15"
+    # Faqat Ozodbek
+    active = {"sirlyinfo"}
+    state["checklist_confirmations"][time_key] = {u: {} for u in active}
+    sent = await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=build_checklist_text(time_key, active),
+        reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
+        parse_mode="HTML"
+    )
+    state["checklist_message_ids"][time_key] = sent.message_id
 
 # =========================
 # MAIN
