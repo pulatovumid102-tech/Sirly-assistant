@@ -1126,7 +1126,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         edit_sent = await query.message.reply_text(
             f"📌 №{tid} | <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n\nNimani o'zgartirmoqchisiz?",
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="MarkdownV2"
+            parse_mode="HTML"
         )
         zadacha_state[f"edit_zadachi_{query.from_user.id}"]["edit_msg_id"] = edit_sent.message_id
         return
@@ -1219,6 +1219,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.edit_message_text(
                     chat_id=CHAT_ID, message_id=task["main_msg_id"],
                     text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                    parse_mode="HTML",
                     reply_markup=build_zadacha_main_keyboard(tid, task)
                 )
             except:
@@ -1258,6 +1259,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.edit_message_text(
                     chat_id=CHAT_ID, message_id=task["main_msg_id"],
                     text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                    parse_mode="HTML",
                     reply_markup=build_zadacha_main_keyboard(tid, task)
                 )
             except:
@@ -1307,7 +1309,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
         ]
-        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n<tg-spoiler>{task['text'][:50]}</tg-spoiler>", reply_markup=InlineKeyboardMarkup(keyboard))
+        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n<tg-spoiler>{task['text'][:50]}</tg-spoiler>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         # Store confirm msg id and zadachi msg id for later deletion
         zadacha_state[f"del_confirm_{tid}"] = {
             "confirm_msg_id": confirm_sent.message_id,
@@ -1716,6 +1718,7 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                     await context.bot.edit_message_text(
                         chat_id=CHAT_ID, message_id=task["main_msg_id"],
                         text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                    parse_mode="HTML",
                         reply_markup=build_zadacha_main_keyboard(tid, task)
                     )
                 except:
@@ -1974,7 +1977,8 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         main_sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=build_zadacha_main_text(zadacha_tasks[tid]),
-            reply_markup=build_zadacha_main_keyboard(tid, zadacha_tasks[tid])
+            reply_markup=build_zadacha_main_keyboard(tid, zadacha_tasks[tid]),
+            parse_mode="HTML"
         )
         zadacha_tasks[tid]["main_msg_id"] = main_sent.message_id
 
@@ -2010,7 +2014,7 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f'<tg-spoiler>{text}</tg-spoiler>\n'
                 f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
-                f"⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi, vazifa guruhda qoladi"
+                f"⚠️ Bu xabar ⏱ 10 soniyadan keyin o'chadi, vazifa guruhda qoladi"
             )
         ,
             parse_mode="HTML")
