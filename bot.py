@@ -1049,7 +1049,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = rest.index("_")
         tid = int(rest[:idx])
         username = rest[idx + 1:]
-        if query.from_user.username != username:
+        # Allow the assigned supervisor OR admin
+        if query.from_user.username != username and query.from_user.username != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         if tid not in zadacha_tasks:
@@ -2628,6 +2629,20 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     agents = context.job.data["agents"]
     reset_attendance_if_new_day()
 
+    # Filter agents who are working today
+    now_wd = datetime.now(TIMEZONE).weekday()
+    agents = [u for u in agents if now_wd in AGENTS_DATA.get(u, {}).get("work_days", list(range(7)))]
+    if not agents:
+        # Reschedule for next day same time
+        h, m = map(int, time_key.split(":"))
+        context.job_queue.run_once(
+            screenshot_reminder_job,
+            when=seconds_until_time(h, m),
+            name=f"ss_reminder_{time_key}",
+            data={"time_key": time_key, "agents": context.job.data["agents"]}
+        )
+        return
+
     now = datetime.now(TIMEZONE)
     date_str = now.strftime("%d.%m")
 
@@ -2884,6 +2899,10 @@ def main():
     # Photo handler
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
 
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application.add_handler(CommandHandler("reminder_start", reminder_start_command))
+    application.add_handler(CommandHandler("reminder_stop", reminder_stop_command))
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("checklist", checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
