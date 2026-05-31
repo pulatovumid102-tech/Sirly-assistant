@@ -2388,18 +2388,32 @@ ATTENDANCE_AGENTS = {
     "sirlyinfo": {
         "name": "Ozodbek",
         "phone": "+998 93 798 13 04",
-        "code_time": "09:50",
-        "deadline": "10:10",
         "fine": "100,000",
     },
     "boniii0616": {
         "name": "Bonu",
         "phone": "+998 91 016 77 47",
-        "code_time": "13:50",
-        "deadline": "14:10",
         "fine": "100,000",
     },
 }
+
+def get_attendance_code_time(username):
+    """Bugungi ish boshlanish vaqtiga qarab kod yuborish vaqtini qaytaradi (10 daqiqa oldin)"""
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    schedule = get_agent_work_schedule(username)
+    if weekday not in schedule:
+        return None, None
+    start_h, _ = schedule[weekday]
+    code_h = start_h
+    code_m = 50  # 10 daqiqa oldin (soat boshlanishidan 10 daqiqa oldin)
+    if code_m >= 60:
+        code_h += 1
+        code_m -= 60
+    code_h -= 1  # 10 daqiqa oldin deganda: 10:00 -> 09:50
+    deadline_h = start_h
+    deadline_m = 10
+    return f"{code_h:02d}:{code_m:02d}", f"{deadline_h:02d}:{deadline_m:02d}"
 
 # Screenshot jadval
 SCREENSHOT_SCHEDULE = {
@@ -2422,13 +2436,13 @@ SCREENSHOT_SCHEDULE = {
     "19:00": ["sirlyinfo", "boniii0616"],
     "19:30": ["sirlyinfo", "boniii0616"],
     "19:50": ["sirlyinfo", "boniii0616"],
-    "20:30": ["boniii0616"],
-    "21:00": ["boniii0616"],
-    "21:30": ["boniii0616"],
-    "22:00": ["boniii0616"],
-    "22:30": ["boniii0616"],
-    "23:00": ["boniii0616"],
-    "23:30": ["boniii0616"],
+    "20:30": ["sirlyinfo", "boniii0616"],
+    "21:00": ["sirlyinfo", "boniii0616"],
+    "21:30": ["sirlyinfo", "boniii0616"],
+    "22:00": ["sirlyinfo", "boniii0616"],
+    "22:30": ["sirlyinfo", "boniii0616"],
+    "23:00": ["sirlyinfo", "boniii0616"],
+    "23:30": ["sirlyinfo", "boniii0616"],
 }
 
 # State
@@ -2464,6 +2478,29 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
     reset_attendance_if_new_day()
 
     if username in attendance_state["arrived"]:
+        # Reschedule for next day
+        code_time, _ = get_attendance_code_time(username)
+        if code_time:
+            h, m = map(int, code_time.split(":"))
+            context.job_queue.run_once(
+                send_attendance_code_job,
+                when=seconds_until_time(h, m),
+                name=f"att_code_{username}",
+                data={"username": username}
+            )
+        return
+
+    code_time, deadline = get_attendance_code_time(username)
+    if not code_time:
+        # Not a work day, reschedule for tomorrow
+        now2 = datetime.now(TIMEZONE)
+        tomorrow = now2 + timedelta(days=1)
+        context.job_queue.run_once(
+            send_attendance_code_job,
+            when=(tomorrow.replace(hour=9, minute=0, second=0) - now2).total_seconds(),
+            name=f"att_code_{username}",
+            data={"username": username}
+        )
         return
 
     agent = ATTENDANCE_AGENTS[username]
@@ -2471,7 +2508,6 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
     attendance_state["daily_codes"][username] = code
 
     now = datetime.now(TIMEZONE)
-    date_str = now.strftime("%d.%m")
 
     await context.bot.send_message(
         chat_id=CHAT_ID,
@@ -2484,13 +2520,13 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             f"2. Ofis fonida qog'ozni suratga oling\n"
             f"3. Ofisda ekaningiz suratda bilinsin\n"
             f"4. Suratni guruhga yuboring\n\n"
-            f"⚠️ Soat {agent['deadline']} gacha surat yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
+            f"⚠️ Soat {deadline} gacha surat yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
             f"ℹ️ Kod har kuni yangilanadi"
         )
     )
 
     # Schedule fine check
-    deadline_h, deadline_m = map(int, agent["deadline"].split(":"))
+    deadline_h, deadline_m = map(int, deadline.split(":"))
     target = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
     if target > now:
         secs = (target - now).total_seconds()
@@ -2500,6 +2536,14 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             name=f"att_check_{username}",
             data={"username": username}
         )
+    
+    # Reschedule for next day
+    context.job_queue.run_once(
+        send_attendance_code_job,
+        when=seconds_until_time(deadline_h - 1, 50) if deadline_h > 0 else 86400,
+        name=f"att_code_{username}",
+        data={"username": username}
+    )
 
 async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
     username = context.job.data["username"]
@@ -2518,7 +2562,7 @@ async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
         text=(
             f"⚠️ {agent['name']} @{username} ishga vaqtida kelmadi!\n"
             f"📅 {date_str} | 🕐 {time_str}\n\n"
-            f"💰 Oyligidan {agent['fine']} so'm ayriladi\n\n"
+            f"💰 Oyligidan {agent['fine']} so'm jarima\n\n"
             f"@{ADMIN_USERNAME}"
         )
     )
@@ -2876,15 +2920,25 @@ def main():
     # Zadacha cleanup job — har 5 daqiqada
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
 
-    # Davomat jobs
-    for username, agent in ATTENDANCE_AGENTS.items():
-        h, m = map(int, agent["code_time"].split(":"))
-        application.job_queue.run_once(
-            send_attendance_code_job,
-            when=seconds_until_time(h, m),
-            name=f"att_code_{username}",
-            data={"username": username}
-        )
+    # Davomat jobs - dynamic based on today's work hours
+    for username in ATTENDANCE_AGENTS:
+        code_time, _ = get_attendance_code_time(username)
+        if code_time:
+            h, m = map(int, code_time.split(":"))
+            application.job_queue.run_once(
+                send_attendance_code_job,
+                when=seconds_until_time(h, m),
+                name=f"att_code_{username}",
+                data={"username": username}
+            )
+        else:
+            # Not a work day today, schedule for tomorrow morning to check again
+            application.job_queue.run_once(
+                send_attendance_code_job,
+                when=seconds_until_time(9, 0),
+                name=f"att_code_{username}",
+                data={"username": username}
+            )
 
     # Screenshot reminder jobs
     for time_key, agents in SCREENSHOT_SCHEDULE.items():
