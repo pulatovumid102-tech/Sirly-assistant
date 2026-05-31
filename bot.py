@@ -2651,18 +2651,15 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sender_in_schedule = sender in SCREENSHOT_SCHEDULE.get(current_time_key, [])
         done = attendance_state["screenshot_done"].get(current_time_key, set())
 
-        if not sender_in_schedule or not sender_working:
-            # Boshqa akkountdan keldi — xabar yuborib tushuntir
-            working_agents = [
-                u for u in SCREENSHOT_SCHEDULE.get(current_time_key, [])
-                if now_wd in AGENTS_DATA.get(u, {}).get("work_days", list(range(7)))
-            ]
-            if working_agents:
-                names = ", ".join(f"@{u}" for u in working_agents)
-                await context.bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=f"⚠️ Screenshot faqat iш vaqtidagi support profilidan qabul qilinadi: {names}"
-                )
+        # Allowed senders: anyone in the screenshot schedule for this slot
+        allowed_senders = set(SCREENSHOT_SCHEDULE.get(current_time_key, []))
+        if sender not in allowed_senders:
+            # Boshqa akkountdan keldi
+            names = ", ".join(f"@{u}" for u in allowed_senders)
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"⚠️ Screenshot faqat quyidagi profillardan qabul qilinadi: {names}"
+            )
             return
 
         if sender not in done:
