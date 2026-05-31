@@ -2672,7 +2672,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(
                 chat_id=CHAT_ID,
                 text=(
-                    f"📸 {name} screenshot yubordi!\n"
+                    f"📸 Screenshot yuborildi!\n"
                     f"📅 {date_str} | 🕐 {time_str}\n\n"
                     f"1. Admin panelda — javob yozilmagan mijozlar qolmadi\n"
                     f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozildi"
