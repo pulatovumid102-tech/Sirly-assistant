@@ -2644,12 +2644,28 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     best_diff = diff
                     current_time_key = tk
 
-    if current_time_key and sender in SCREENSHOT_SCHEDULE.get(current_time_key, []):
-        # Check if sender is working today
+    if current_time_key:
+        # Check if sender is working today and is in schedule
         now_wd = datetime.now(TIMEZONE).weekday()
         sender_working = now_wd in AGENTS_DATA.get(sender, {}).get("work_days", list(range(7)))
+        sender_in_schedule = sender in SCREENSHOT_SCHEDULE.get(current_time_key, [])
         done = attendance_state["screenshot_done"].get(current_time_key, set())
-        if sender not in done and sender_working:
+
+        if not sender_in_schedule or not sender_working:
+            # Boshqa akkountdan keldi — xabar yuborib tushuntir
+            working_agents = [
+                u for u in SCREENSHOT_SCHEDULE.get(current_time_key, [])
+                if now_wd in AGENTS_DATA.get(u, {}).get("work_days", list(range(7)))
+            ]
+            if working_agents:
+                names = ", ".join(f"@{u}" for u in working_agents)
+                await context.bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=f"⚠️ Screenshot faqat iш vaqtidagi support profilidan qabul qilinadi: {names}"
+                )
+            return
+
+        if sender not in done:
             agent = ATTENDANCE_AGENTS.get(sender, {})
             name = agent.get("name") or AGENTS_DATA.get(sender, {}).get("name", sender)
             keyboard = [[InlineKeyboardButton(
