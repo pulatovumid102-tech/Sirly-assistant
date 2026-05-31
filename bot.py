@@ -841,13 +841,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rest = data[11:]  # after "ss_confirm_"
         ss_key = f"ss_{rest}"
         ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
-        chat_id_del = ss_info.get("chat_id", CHAT_ID)
+
+        # Delete all related messages from group
         to_delete = [query.message.message_id]
         if ss_info.get("photo_msg_id"):
             to_delete.append(ss_info["photo_msg_id"])
         if ss_info.get("reminder_msg_id"):
             to_delete.append(ss_info["reminder_msg_id"])
-        schedule_delete(context.bot, chat_id_del, to_delete, delay=5)
+
+        # Delete each message individually with explicit CHAT_ID
+        async def delete_all():
+            import asyncio
+            await asyncio.sleep(5)
+            for mid in to_delete:
+                for cid in [CHAT_ID, query.message.chat.id]:
+                    try:
+                        await context.bot.delete_message(chat_id=cid, message_id=mid)
+                        break
+                    except:
+                        pass
+        asyncio.create_task(delete_all())
         return
 
     # SCREENSHOT FINE — Qabul qildim
@@ -2417,12 +2430,12 @@ def get_attendance_code_time(username):
 
 # Screenshot jadval
 SCREENSHOT_SCHEDULE = {
-    "10:30": ["sirlyinfo"],
-    "11:00": ["sirlyinfo"],
-    "11:30": ["sirlyinfo"],
-    "12:00": ["sirlyinfo"],
-    "12:30": ["sirlyinfo"],
-    "12:50": ["sirlyinfo"],
+    "10:30": ["sirlyinfo", "boniii0616"],
+    "11:00": ["sirlyinfo", "boniii0616"],
+    "11:30": ["sirlyinfo", "boniii0616"],
+    "12:00": ["sirlyinfo", "boniii0616"],
+    "12:30": ["sirlyinfo", "boniii0616"],
+    "12:50": ["sirlyinfo", "boniii0616"],
     "14:00": ["sirlyinfo", "boniii0616"],
     "14:30": ["sirlyinfo", "boniii0616"],
     "15:00": ["sirlyinfo", "boniii0616"],
@@ -2537,10 +2550,12 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             data={"username": username}
         )
     
-    # Reschedule for next day
+    # Reschedule for next day - check tomorrow's work start time
+    tomorrow = datetime.now(TIMEZONE) + timedelta(days=1)
+    # Schedule check at 09:00 tomorrow to recalculate
     context.job_queue.run_once(
         send_attendance_code_job,
-        when=seconds_until_time(deadline_h - 1, 50) if deadline_h > 0 else 86400,
+        when=seconds_until_time(9, 0),
         name=f"att_code_{username}",
         data={"username": username}
     )
@@ -2588,7 +2603,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Davomat tekshirish — faqat deadline vaqtidan oldin
     if sender in ATTENDANCE_AGENTS and sender not in attendance_state["arrived"]:
         agent = ATTENDANCE_AGENTS[sender]
-        deadline_h, deadline_m = map(int, agent["deadline"].split(":"))
+        _, deadline_str = get_attendance_code_time(sender)
+        if not deadline_str:
+            deadline_str = "10:10"
+        deadline_h, deadline_m = map(int, deadline_str.split(":"))
         deadline_dt = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
 
         # Faqat deadline vaqtidan oldin kelgan rasm arrival sifatida qabul qilinadi
