@@ -2645,10 +2645,13 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     current_time_key = tk
 
     if current_time_key and sender in SCREENSHOT_SCHEDULE.get(current_time_key, []):
+        # Check if sender is working today
+        now_wd = datetime.now(TIMEZONE).weekday()
+        sender_working = now_wd in AGENTS_DATA.get(sender, {}).get("work_days", list(range(7)))
         done = attendance_state["screenshot_done"].get(current_time_key, set())
-        if sender not in done:
+        if sender not in done and sender_working:
             agent = ATTENDANCE_AGENTS.get(sender, {})
-            name = agent.get("name", sender)
+            name = agent.get("name") or AGENTS_DATA.get(sender, {}).get("name", sender)
             keyboard = [[InlineKeyboardButton(
                 f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
                 callback_data=f"ss_confirm_{current_time_key.replace(':', '')}_{sender}"
