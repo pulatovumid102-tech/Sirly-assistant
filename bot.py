@@ -2492,15 +2492,13 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
 
     if username in attendance_state["arrived"]:
         # Reschedule for next day
-        code_time, _ = get_attendance_code_time(username)
-        if code_time:
-            h, m = map(int, code_time.split(":"))
-            context.job_queue.run_once(
-                send_attendance_code_job,
-                when=seconds_until_time(h, m),
-                name=f"att_code_{username}",
-                data={"username": username}
-            )
+        # Schedule for next day
+        context.job_queue.run_once(
+            send_attendance_code_job,
+            when=seconds_until_time(5, 0),
+            name=f"att_code_{username}",
+            data={"username": username}
+        )
         return
 
     code_time, deadline = get_attendance_code_time(username)
@@ -2533,7 +2531,7 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             f"2. Ofis fonida qog'ozni suratga oling\n"
             f"3. Ofisda ekaningiz suratda bilinsin\n"
             f"4. Suratni guruhga yuboring\n\n"
-            f"⚠️ Soat {deadline} gacha surat yuborilmasa oyligingizdan {agent['fine']} so'm ayriladi\n"
+            f"⚠️ Soat {deadline} gacha surat yuborilmasa {agent['fine']} so'm jarima\n"
             f"ℹ️ Kod har kuni yangilanadi"
         )
     )
@@ -2550,12 +2548,10 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             data={"username": username}
         )
     
-    # Reschedule for next day - check tomorrow's work start time
-    tomorrow = datetime.now(TIMEZONE) + timedelta(days=1)
-    # Schedule check at 09:00 tomorrow to recalculate
+    # Reschedule for next day - recalculate tomorrow's code time
     context.job_queue.run_once(
         send_attendance_code_job,
-        when=seconds_until_time(9, 0),
+        when=seconds_until_time(5, 0),  # Check at 05:00 next day
         name=f"att_code_{username}",
         data={"username": username}
     )
@@ -2959,17 +2955,28 @@ def main():
         code_time, _ = get_attendance_code_time(username)
         if code_time:
             h, m = map(int, code_time.split(":"))
-            application.job_queue.run_once(
-                send_attendance_code_job,
-                when=seconds_until_time(h, m),
-                name=f"att_code_{username}",
-                data={"username": username}
-            )
+            now_check = datetime.now(TIMEZONE)
+            target = now_check.replace(hour=h, minute=m, second=0, microsecond=0)
+            if target <= now_check:
+                # Already passed today — schedule for tomorrow
+                application.job_queue.run_once(
+                    send_attendance_code_job,
+                    when=seconds_until_time(h, m),
+                    name=f"att_code_{username}",
+                    data={"username": username}
+                )
+            else:
+                application.job_queue.run_once(
+                    send_attendance_code_job,
+                    when=seconds_until_time(h, m),
+                    name=f"att_code_{username}",
+                    data={"username": username}
+                )
         else:
-            # Not a work day today, schedule for tomorrow morning to check again
+            # Not a work day today, check tomorrow at 05:00
             application.job_queue.run_once(
                 send_attendance_code_job,
-                when=seconds_until_time(9, 0),
+                when=seconds_until_time(5, 0),
                 name=f"att_code_{username}",
                 data={"username": username}
             )
