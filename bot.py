@@ -6,7 +6,8 @@ import os
 import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-
+from api import start_api_thread
+start_api_thread()
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
