@@ -2685,10 +2685,18 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}")
             # Save msg ids for deletion: confirm msg, photo msg, reminder msg
             ss_key = f"ss_{current_time_key.replace(':', '')}_{sender}"
+            # Get reminder msg id - could be stored under any agent in the slot
+            reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}")
+            if not reminder_mid:
+                # Try other agents in the slot
+                for _u in SCREENSHOT_SCHEDULE.get(current_time_key, []):
+                    reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{_u}")
+                    if reminder_mid:
+                        break
             attendance_state.setdefault("ss_msg_ids", {})[ss_key] = {
                 "confirm_msg_id": sent.message_id,
                 "photo_msg_id": update.message.message_id,
-                "reminder_msg_id": attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}"),
+                "reminder_msg_id": reminder_mid,
                 "chat_id": update.effective_chat.id,
             }
             # Cancel fine job
