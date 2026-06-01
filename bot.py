@@ -51,13 +51,14 @@ AGENTS_FILE = "agents.json"
 DEFAULT_AGENTS = {
     "sirlyinfo": {
         "name": "Ozodbek", "username": "sirlyinfo", "phone": "+998 93 798 13 04",
-        "work_days": [0, 1, 2, 3, 4, 5],
-        "work_hours": {"0": [10, 20], "1": [10, 20], "2": [10, 20], "3": [10, 20], "4": [10, 20], "5": [10, 24]},
+        "work_days": [0, 1, 2, 3, 4, 5, 6],
+        "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
     },
-    "boniii0616": {
-        "name": "Bonu", "username": "boniii0616", "phone": "+998 91 016 77 47",
-        "work_days": [0, 1, 2, 3, 4, 6],
-        "work_hours": {"0": [14, 24], "1": [14, 24], "2": [14, 24], "3": [14, 24], "4": [14, 24], "6": [10, 24]},
+
+    "Muhammadhumoyun_Mudarris": {
+        "name": "Muhammadhumoyun", "username": "Muhammadhumoyun_Mudarris", "phone": "+998 88 811 88 51",
+        "work_days": [0, 1, 2, 3, 4, 5],
+        "work_hours": {"0": [10, 20], "1": [10, 20], "2": [10, 20], "3": [10, 20], "4": [10, 20], "5": [10, 20]},
     },
     "kh_nosirov": {
         "name": "Xojiakbar", "username": "kh_nosirov", "phone": "",
@@ -2398,16 +2399,8 @@ import random
 import string
 
 ATTENDANCE_AGENTS = {
-    "sirlyinfo": {
-        "name": "Ozodbek",
-        "phone": "+998 93 798 13 04",
-        "fine": "100,000",
-    },
-    "boniii0616": {
-        "name": "Bonu",
-        "phone": "+998 91 016 77 47",
-        "fine": "100,000",
-    },
+
+
 }
 
 def get_attendance_code_time(username):
@@ -2430,32 +2423,32 @@ def get_attendance_code_time(username):
 
 # Screenshot jadval
 SCREENSHOT_SCHEDULE = {
-    "10:30": ["sirlyinfo", "boniii0616"],
-    "11:00": ["sirlyinfo", "boniii0616"],
-    "11:30": ["sirlyinfo", "boniii0616"],
-    "12:00": ["sirlyinfo", "boniii0616"],
-    "12:30": ["sirlyinfo", "boniii0616"],
-    "12:50": ["sirlyinfo", "boniii0616"],
-    "14:00": ["sirlyinfo", "boniii0616"],
-    "14:30": ["sirlyinfo", "boniii0616"],
-    "15:00": ["sirlyinfo", "boniii0616"],
-    "15:30": ["sirlyinfo", "boniii0616"],
-    "16:00": ["sirlyinfo", "boniii0616"],
-    "16:30": ["sirlyinfo", "boniii0616"],
-    "17:00": ["sirlyinfo", "boniii0616"],
-    "17:30": ["sirlyinfo", "boniii0616"],
-    "18:00": ["sirlyinfo", "boniii0616"],
-    "18:30": ["sirlyinfo", "boniii0616"],
-    "19:00": ["sirlyinfo", "boniii0616"],
-    "19:30": ["sirlyinfo", "boniii0616"],
-    "19:50": ["sirlyinfo", "boniii0616"],
-    "20:30": ["sirlyinfo", "boniii0616"],
-    "21:00": ["sirlyinfo", "boniii0616"],
-    "21:30": ["sirlyinfo", "boniii0616"],
-    "22:00": ["sirlyinfo", "boniii0616"],
-    "22:30": ["sirlyinfo", "boniii0616"],
-    "23:00": ["sirlyinfo", "boniii0616"],
-    "23:30": ["sirlyinfo", "boniii0616"],
+    "10:30": ["sirlyinfo"],
+    "11:00": ["sirlyinfo"],
+    "11:30": ["sirlyinfo"],
+    "12:00": ["sirlyinfo"],
+    "12:30": ["sirlyinfo"],
+    "12:50": ["sirlyinfo"],
+    "14:00": ["sirlyinfo"],
+    "14:30": ["sirlyinfo"],
+    "15:00": ["sirlyinfo"],
+    "15:30": ["sirlyinfo"],
+    "16:00": ["sirlyinfo"],
+    "16:30": ["sirlyinfo"],
+    "17:00": ["sirlyinfo"],
+    "17:30": ["sirlyinfo"],
+    "18:00": ["sirlyinfo"],
+    "18:30": ["sirlyinfo"],
+    "19:00": ["sirlyinfo"],
+    "19:30": ["sirlyinfo"],
+    "19:50": ["sirlyinfo"],
+    "20:30": ["sirlyinfo"],
+    "21:00": ["sirlyinfo"],
+    "21:30": ["sirlyinfo"],
+    "22:00": ["sirlyinfo"],
+    "22:30": ["sirlyinfo"],
+    "23:00": ["sirlyinfo"],
+    "23:30": ["sirlyinfo"],
 }
 
 # State
