@@ -2703,9 +2703,28 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     agents = context.job.data["agents"]
     reset_attendance_if_new_day()
 
-    # Filter agents who are working today
-    now_wd = datetime.now(TIMEZONE).weekday()
-    agents = [u for u in agents if now_wd in AGENTS_DATA.get(u, {}).get("work_days", list(range(7)))]
+    # Filter agents who are working right now (check work_days AND work_hours)
+    now_check = datetime.now(TIMEZONE)
+    now_wd = now_check.weekday()
+    now_h = now_check.hour
+    tk_h = int(time_key.split(":")[0])
+
+    def is_working_at_time(username, hour):
+        data = AGENTS_DATA.get(username, {})
+        work_days = data.get("work_days", list(range(7)))
+        work_hours = data.get("work_hours", {})
+        if now_wd not in work_days:
+            return False
+        wh = work_hours.get(str(now_wd), [0, 24])
+        return wh[0] <= hour < wh[1]
+
+    agents = [u for u in agents if is_working_at_time(u, tk_h)]
+
+    # Also filter: only send to agents who have confirmed arrival
+    agents = [
+        u for u in agents
+        if u in attendance_state.get("arrived", set()) or u not in ATTENDANCE_AGENTS
+    ]
     if not agents:
         # Reschedule for next day same time
         h, m = map(int, time_key.split(":"))
