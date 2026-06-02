@@ -182,8 +182,26 @@ let curSection=null,curCat=null,curFlow=null;
 let navStack=['p-home'];
 
 // ---- STORAGE ----
-function save(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
-function load(){try{const d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}catch(e){}}
+const SB_URL='https://ubakgpkcemlchpfejmke.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
+const SB_H={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+
+async function save(){
+  try{
+    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{
+      method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({data:db})
+    });
+  }catch(e){localStorage.setItem(DB_KEY,JSON.stringify(db));}
+}
+async function load(){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{headers:SB_H});
+    const rows=await r.json();
+    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections) db=rows[0].data;
+    else{const d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
+  }catch(e){const d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
+}
 
 // ---- NAV ----
 function goTo(p){
@@ -530,7 +548,7 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function notify(m){const n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
 document.getElementById('login-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
-load();renderSections();
+load().then(()=>{renderSections();updateBc();});
 </script>
 </body>
 </html>
