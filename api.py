@@ -25,7 +25,11 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-os.makedirs("webapp", exist_ok=True)
+if not os.path.isdir("webapp"):
+    if os.path.exists("webapp"):
+        os.remove("webapp")
+    os.makedirs("webapp")
+
 app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
 
 @app.get("/")
