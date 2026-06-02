@@ -17,7 +17,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8616037861:AAEpNThIHz2x4KTpMZcTQjCoJa2Hcnf_I0Q"
+TOKEN = "8935324683:AAHSZ-41FA_e-FUt61mBAvCnClIbY8H5v00"
 CHAT_ID = -5247953376
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
