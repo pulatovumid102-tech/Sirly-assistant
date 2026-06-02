@@ -423,7 +423,7 @@ function renderCats(){
       <div style="display:flex;align-items:center;flex:1;min-width:0">
         ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
         <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="section-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)}</div>
+        <div class="section-name">${esc(c.title)}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isAdmin?`<div class="action-btns">
@@ -487,7 +487,7 @@ function renderFlows(){
       <div style="display:flex;align-items:center;flex:1;min-width:0">
         ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
         <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="section-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.title)}</div>
+        <div class="section-name">${esc(f.title)}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isAdmin?`<div class="action-btns">
