@@ -25,7 +25,7 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# Serve webapp
+os.makedirs("webapp", exist_ok=True)
 app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
 
 @app.get("/")
