@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 import httpx
 import os
 import json
+import threading
 
 app = FastAPI()
 
@@ -61,7 +62,18 @@ async def save_data(request: Request):
             raise HTTPException(status_code=500, detail="Supabase error")
         return {"ok": True}
 
+def start_api_thread():
+    import uvicorn
+    port = int(os.getenv("PORT", 8080))
+    thread = threading.Thread(
+        target=uvicorn.run,
+        args=(app,),
+        kwargs={"host": "0.0.0.0", "port": port},
+        daemon=True
+    )
+    thread.start()
+
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
