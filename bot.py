@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+
 import json
 import logging
 import os
 import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from api import start_api_thread
-start_api_thread()
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -17,7 +17,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8935324683:AAHSZ-41FA_e-FUt61mBAvCnClIbY8H5v00"
+TOKEN = "8616037861:AAEpNThIHz2x4KTpMZcTQjCoJa2Hcnf_I0Q"
 CHAT_ID = -5247953376
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -2721,11 +2721,7 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     agents = [u for u in agents if is_working_at_time(u, tk_h)]
 
-    # Also filter: only send to agents who have confirmed arrival
-    agents = [
-        u for u in agents
-        if u in attendance_state.get("arrived", set()) or u not in ATTENDANCE_AGENTS
-    ]
+    agents = [u for u in agents]
     if not agents:
         # Reschedule for next day same time
         h, m = map(int, time_key.split(":"))
@@ -2832,7 +2828,7 @@ async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
         text=(
             f"⚠️ {name} @{username} screenshot yubormadi!\n"
             f"📅 {date_str} | 🕐 {time_str}\n\n"
-            f"💰 Oyligidan 20,000 so'm ayriladi\n\n"
+            f"💰 20,000 so'm jarima\n\n"
             f"@{ADMIN_USERNAME}"
         ),
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -3011,8 +3007,9 @@ def main():
             data={"time_key": time_key, "agents": agents}
         )
 
-    # Photo handler
+    # Photo handler — rasm va fayl sifatida yuborilgan screenshotlarni ham qabul qilish
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
+    application.add_handler(MessageHandler(filters.Document.IMAGE & filters.Chat(CHAT_ID), photo_handler))
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
