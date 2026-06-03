@@ -30,8 +30,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 .cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .nav-card{background:var(--bg2);border-radius:12px;padding:16px;cursor:pointer;position:relative;min-height:80px}
 .nav-card:active{opacity:.7}
+.nav-card.dragging{opacity:.4}
+.nav-card.drag-over{outline:2px dashed var(--acc)}
 .nav-card-title{font-size:14px;font-weight:700}
 .nav-card-arrow{position:absolute;bottom:12px;right:12px;font-size:14px;opacity:.2}
+.nav-card-drag{position:absolute;top:6px;left:6px;display:flex;flex-direction:column;gap:2px;padding:3px;cursor:grab;opacity:.3}
+.nav-card-drag span{display:block;width:12px;height:2px;background:var(--hint);border-radius:2px}
 .add-btn{width:100%;padding:13px;background:transparent;border:1.5px dashed var(--border);border-radius:12px;font-size:13px;color:var(--hint);cursor:pointer;font-family:inherit;margin-top:4px}
 .add-item-btn{width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border);border-radius:10px;font-size:13px;color:var(--hint);cursor:pointer;font-family:inherit;margin-top:6px}
 .search-wrap{margin-bottom:12px}
@@ -262,27 +266,23 @@ function logout(){
   notify('Chiqildi');render(navStack[navStack.length-1]);
 }
 
-// ---- DRAG & DROP ----
-let dragSrcIndex=null;
-let dragContext=null;
-
-function initDrag(listEl, getItems, setItems){
-  const items=listEl.querySelectorAll('.section-item[draggable="true"]');
+// ---- DRAG LIST ----
+let dragSrcIndex=null,dragContext=null;
+function initDrag(listEl,getItems,setItems){
+  const items=listEl.querySelectorAll('[draggable="true"]');
   items.forEach((el,i)=>{
     el.addEventListener('dragstart',e=>{
-      dragSrcIndex=i;
-      dragContext={getItems,setItems};
+      dragSrcIndex=i;dragContext={getItems,setItems};
       e.dataTransfer.effectAllowed='move';
       setTimeout(()=>el.classList.add('dragging'),0);
     });
     el.addEventListener('dragend',()=>{
       el.classList.remove('dragging');
-      listEl.querySelectorAll('.section-item').forEach(x=>x.classList.remove('drag-over'));
+      listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));
     });
     el.addEventListener('dragover',e=>{
       e.preventDefault();
-      e.dataTransfer.dropEffect='move';
-      listEl.querySelectorAll('.section-item').forEach(x=>x.classList.remove('drag-over'));
+      listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));
       el.classList.add('drag-over');
     });
     el.addEventListener('drop',e=>{
@@ -292,98 +292,80 @@ function initDrag(listEl, getItems, setItems){
       const moved=arr.splice(dragSrcIndex,1)[0];
       arr.splice(i,0,moved);
       dragContext.setItems(arr);
-      save();
-      dragSrcIndex=null;
-      dragContext=null;
+      save();dragSrcIndex=null;dragContext=null;
     });
   });
 }
 
-// Touch drag support
-function initTouchDrag(listEl, getItems, setItems){
-  let touchSrcIndex=null;
-  let touchClone=null;
-  let touchStartY=0;
-
-  const items=()=>listEl.querySelectorAll('.section-item[draggable="true"]');
-
+function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){
+  let ti=null,clone=null,startY=0;
+  const items=()=>listEl.querySelectorAll(selector);
   listEl.addEventListener('touchstart',e=>{
-    const handle=e.target.closest('.drag-handle');
+    const handle=e.target.closest('.drag-handle,.nav-card-drag');
     if(!handle) return;
-    const item=handle.closest('.section-item');
-    const allItems=[...items()];
-    touchSrcIndex=allItems.indexOf(item);
-    touchStartY=e.touches[0].clientY;
-
-    touchClone=item.cloneNode(true);
-    touchClone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;background:var(--bg2);border-radius:12px;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,0.2)`;
+    const item=handle.closest(selector);
+    const all=[...items()];
+    ti=all.indexOf(item);startY=e.touches[0].clientY;
+    clone=item.cloneNode(true);
     const rect=item.getBoundingClientRect();
-    touchClone.style.top=rect.top+'px';
-    touchClone.style.left=rect.left+'px';
-    document.body.appendChild(touchClone);
+    clone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);top:${rect.top}px;left:${rect.left}px`;
+    document.body.appendChild(clone);
     item.style.opacity='0.4';
   },{passive:true});
-
   listEl.addEventListener('touchmove',e=>{
-    if(touchSrcIndex===null||!touchClone) return;
+    if(ti===null||!clone) return;
     e.preventDefault();
     const y=e.touches[0].clientY;
-    const dy=y-touchStartY;
-    const rect=listEl.querySelectorAll('.section-item')[touchSrcIndex].getBoundingClientRect();
-    touchClone.style.top=(rect.top+dy)+'px';
-
-    const allItems=[...items()];
-    allItems.forEach((el,i)=>{
+    const dy=y-startY;
+    const rect=[...items()][ti].getBoundingClientRect();
+    clone.style.top=(rect.top+dy)+'px';
+    [...items()].forEach((el,i)=>{
       const r=el.getBoundingClientRect();
-      const mid=r.top+r.height/2;
-      el.classList.toggle('drag-over', i!==touchSrcIndex && y>r.top && y<r.bottom);
+      el.classList.toggle('drag-over',i!==ti&&y>r.top&&y<r.bottom);
     });
   },{passive:false});
-
   listEl.addEventListener('touchend',e=>{
-    if(touchSrcIndex===null) return;
-    if(touchClone){touchClone.remove();touchClone=null;}
-    listEl.querySelectorAll('.section-item').forEach(x=>{
-      x.classList.remove('drag-over');
-      x.style.opacity='';
-    });
-
+    if(ti===null) return;
+    if(clone){clone.remove();clone=null;}
+    [...items()].forEach(x=>{x.classList.remove('drag-over');x.style.opacity='';});
     const y=e.changedTouches[0].clientY;
-    const allItems=[...items()];
-    let targetIndex=touchSrcIndex;
-    allItems.forEach((el,i)=>{
+    let target=ti;
+    [...items()].forEach((el,i)=>{
       const r=el.getBoundingClientRect();
-      if(y>r.top && y<r.bottom && i!==touchSrcIndex) targetIndex=i;
+      if(y>r.top&&y<r.bottom&&i!==ti) target=i;
     });
-
-    if(targetIndex!==touchSrcIndex){
+    if(target!==ti){
       const arr=getItems();
-      const moved=arr.splice(touchSrcIndex,1)[0];
-      arr.splice(targetIndex,0,moved);
-      setItems(arr);
-      save();
+      const moved=arr.splice(ti,1)[0];
+      arr.splice(target,0,moved);
+      setItems(arr);save();
     }
-    touchSrcIndex=null;
+    ti=null;
   },{passive:true});
 }
 
-// ---- SECTIONS ----
+// ---- SECTIONS (grid) ----
 function renderSections(){
   const g=document.getElementById('sections-grid');
   let h='';
   db.sections.forEach(s=>{
-    h+=`<div class="nav-card" onclick="openSection('${s.id}')">
+    h+=`<div class="nav-card" onclick="openSection('${s.id}')" ${isAdmin?'draggable="true"':''}>
+      ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
       ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
         <button class="abtn" onclick="editSection('${s.id}')">✏</button>
         <button class="abtn abtn-red" onclick="delSection('${s.id}')">✕</button>
       </div>`:''}
-      <div class="nav-card-title">${esc(s.title)}</div>
+      <div class="nav-card-title" style="margin-top:${isAdmin?'14px':'0'}">${esc(s.title)}</div>
       <div class="nav-card-arrow">→</div>
     </div>`;
   });
   if(isAdmin) h+=`<button class="add-btn" onclick="showSecForm()">＋ Bo'lim</button>`;
   g.innerHTML=h;
   document.getElementById('section-form').innerHTML='';
+  if(isAdmin){
+    initDrag(g,()=>db.sections,arr=>{db.sections=arr;renderSections();});
+    initTouchDrag(g,()=>db.sections,arr=>{db.sections=arr;renderSections();},'[draggable="true"]');
+  }
 }
 function openSection(id){curSection=id;goTo('p-section')}
 function showSecForm(id){
@@ -548,7 +530,7 @@ function renderTree(){
   document.getElementById('flow-name-form').style.display='none';
   document.getElementById('root-form').innerHTML='';
   let h='<div class="tree-col">';
-  flow.nodes.forEach((n,i)=>h+=nodeHTML(n,String(i+1).padStart(2,'00')));
+  flow.nodes.forEach((n,i)=>h+=nodeHTML(n,String(i+1).padStart(2,'0')));
   h+='</div>';
   if(isAdmin) h+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;
   document.getElementById('tree-wrap').innerHTML=h;
