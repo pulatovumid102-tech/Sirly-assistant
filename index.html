@@ -60,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 .node-num{position:absolute;top:10px;left:10px;width:26px;height:26px;background:rgba(0,0,0,0.06);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--tg-theme-text-color,#1a1a1a)}
 .node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:30px;padding-right:36px}
 .node-msg{background:rgba(0,0,0,0.04);border-radius:6px;padding:8px 30px 8px 8px;font-size:11px;line-height:1.6;margin-top:8px;white-space:pre-wrap;position:relative;font-family:monospace}
-.copy-btn{position:absolute;top:5px;right:5px;width:20px;height:20px;border:1px solid var(--border);background:var(--bg2);border-radius:4px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:.7}
+.copy-btn{width:20px;height:20px;border:1px solid var(--border);background:var(--bg2);border-radius:4px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:.7}
 .node-link{font-size:11px;color:var(--hint);margin-top:6px;word-break:break-all}
 .node-link a{color:var(--acc)}
 .node-corner{position:absolute;top:5px;right:5px;display:flex;gap:2px;opacity:0}
@@ -92,6 +92,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .breadcrumb{padding:8px 16px 0;font-size:12px;color:var(--hint);display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .bc-item{cursor:pointer;color:var(--acc)}.bc-sep{opacity:.4}.bc-cur{color:var(--tg-theme-text-color,#1a1a1a);font-weight:500}
+.node-msg-collapsed{max-height:80px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 100%);mask-image:linear-gradient(to bottom,black 40%,transparent 100%)}
+.node-msg-btns{position:absolute;top:5px;right:5px;display:flex;gap:3px}
+.expand-btn{width:20px;height:20px;border:1px solid var(--border);background:var(--bg2);border-radius:4px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--hint)}
 
 /* ACADEMY */
 .acad-section{margin-bottom:8px}
@@ -678,7 +681,7 @@ function nodeHTML(n,num){
     <div class="node-num">${num}</div>
     ${ab}
     <div class="node-name">${esc(n.name)}</div>
-    ${n.msg?`<div class="node-msg">${esc(n.msg)}<button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''}
+    ${n.msg?`<div class="node-msg node-msg-collapsed" id="nm-wrap-${n.id}">${esc(n.msg)}<div class="node-msg-btns"><button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><button class="expand-btn" id="nm-btn-${n.id}" onclick="toggleMsg('${n.id}')">▼</button></div><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''}
     ${n.link?`<div class="node-link"><a href="${esc(n.link)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,122,255,0.08);color:var(--acc);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">🔗 Link</a></div>`:''}
   </div>`;
   const hasC=n.children?.length>0;
@@ -1078,6 +1081,14 @@ function delAcadSection(id){
   acadSave();notify("O'chirildi ✓");renderSections();
 }
 
+function toggleMsg(id){
+  var wrap=document.getElementById('nm-wrap-'+id);
+  var btn=document.getElementById('nm-btn-'+id);
+  if(!wrap) return;
+  var collapsed=wrap.classList.contains('node-msg-collapsed');
+  if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}
+  else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}
+}
 load().then(()=>{renderSections();updateBc();});
 acadLoad().catch(()=>{});
 </script>
