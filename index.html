@@ -92,6 +92,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .breadcrumb{padding:8px 16px 0;font-size:12px;color:var(--hint);display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .bc-item{cursor:pointer;color:var(--acc)}.bc-sep{opacity:.4}.bc-cur{color:var(--tg-theme-text-color,#1a1a1a);font-weight:500}
+
+/* ACADEMY */
+.acad-section{margin-bottom:8px}
+.acad-cat{background:var(--bg2);border-radius:12px;margin-bottom:8px}
+.acad-cat-header{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.acad-cat-title{font-size:15px;font-weight:700}
+.acad-cat-arrow{font-size:16px;color:var(--hint);transition:transform .2s}
+.acad-cat.open .acad-cat-arrow{transform:rotate(90deg)}
+.acad-cat-body{display:none;padding:0 16px 14px}
+.acad-cat.open .acad-cat-body{display:block}
+.acad-cat-desc{font-size:13px;color:var(--hint);margin-bottom:12px;line-height:1.6}
+.acad-item{background:rgba(0,0,0,0.03);border-radius:10px;margin-bottom:6px;overflow:hidden}
+.acad-item-header{padding:11px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.acad-item-title{font-size:13px;font-weight:600}
+.acad-item-arrow{font-size:14px;color:var(--hint);transition:transform .2s}
+.acad-item.open .acad-item-arrow{transform:rotate(90deg)}
+.acad-item-body{display:none;padding:12px 14px;border-top:1px solid var(--border)}
+.acad-item.open .acad-item-body{display:block}
+.acad-intro{background:rgba(0,122,255,0.06);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.7;color:var(--tg-theme-text-color,#1a1a1a)}
+.acad-content{font-size:13px;line-height:1.8;color:var(--tg-theme-text-color,#1a1a1a)}
+.acad-content ul{padding-left:18px;margin:6px 0}
+.acad-content li{margin-bottom:4px}
+.acad-content b{font-weight:700}
+.acad-section-block{background:var(--bg2);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.acad-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding:3px 8px;border-radius:6px;display:inline-block}
+.acad-label-violation{background:rgba(220,38,38,.1);color:#dc2626}
+.acad-label-action{background:rgba(0,122,255,.1);color:#007aff}
+.acad-label-decision{background:rgba(34,197,94,.1);color:#16a34a}
+.acad-add-btn{width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border);border-radius:10px;font-size:13px;color:var(--hint);cursor:pointer;font-family:inherit;margin-top:6px}
+.acad-form{background:var(--bg2);border-radius:12px;padding:14px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -150,6 +180,42 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
   </div>
 </div>
 
+
+<div class="page" id="p-acad-cats">
+  <div class="breadcrumb" id="bc-acad-cats"></div>
+  <div style="padding:16px">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-home')">← Orqaga</button>
+      <span class="page-title" id="acad-sec-title"></span>
+    </div>
+    <div id="acad-cats-list" class="section-list"></div>
+    <div id="acad-cats-form"></div>
+  </div>
+</div>
+
+<div class="page" id="p-acad-items">
+  <div class="breadcrumb" id="bc-acad-items"></div>
+  <div style="padding:16px">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-acad-cats')">← Orqaga</button>
+      <span class="page-title" id="acad-cat-title"></span>
+    </div>
+    <div id="acad-cat-intro-box"></div>
+    <div id="acad-items-list" class="section-list"></div>
+    <div id="acad-items-form"></div>
+  </div>
+</div>
+
+<div class="page" id="p-acad-detail">
+  <div class="breadcrumb" id="bc-acad-detail"></div>
+  <div style="padding:16px">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-acad-items')">← Orqaga</button>
+      <span class="page-title" id="acad-item-title"></span>
+    </div>
+    <div id="acad-detail-body"></div>
+  </div>
+</div>
 <div class="modal-bg" id="login-modal">
   <div class="modal-box">
     <div class="modal-title">Admin kirish</div>
@@ -221,6 +287,9 @@ function render(p){
   else if(p==='p-section') renderCats();
   else if(p==='p-cat') renderFlows();
   else if(p==='p-flow') renderTree();
+  else if(p==='p-acad-cats') renderAcadCats();
+  else if(p==='p-acad-items') renderAcadItems();
+  else if(p==='p-acad-detail') renderAcadDetail();
   updateBc();
 }
 function updateBc(){
@@ -229,12 +298,15 @@ function updateBc(){
   const flow=cat?.flows.find(f=>f.id===curFlow);
   const map={'p-home':'Bosh sahifa','p-section':sec?.title||'','p-cat':cat?.title||'','p-flow':flow?.title||''};
   navStack.forEach((p,i)=>{
+    // Skip academy pages — they handle their own breadcrumbs
+    if(p.startsWith('p-acad')) return;
     const el=document.getElementById('bc-'+p.replace('p-',''));
     if(!el) return;
     let html='';
     navStack.slice(0,i+1).forEach((pp,ii)=>{
-      if(ii<i) html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]}</span><span class="bc-sep">›</span>`;
-      else html+=`<span class="bc-cur">${map[pp]}</span>`;
+      if(pp.startsWith('p-acad')) return;
+      if(ii<i) html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]||''}</span><span class="bc-sep">›</span>`;
+      else html+=`<span class="bc-cur">${map[pp]||''}</span>`;
     });
     el.innerHTML=html;
   });
@@ -348,6 +420,7 @@ function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){
 function renderSections(){
   const g=document.getElementById('sections-grid');
   let h='';
+  // Regular sections
   db.sections.forEach(s=>{
     h+=`<div class="nav-card" onclick="openSection('${s.id}')" ${isAdmin?'draggable="true"':''}>
       ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
@@ -359,13 +432,53 @@ function renderSections(){
       <div class="nav-card-arrow">→</div>
     </div>`;
   });
-  if(isAdmin) h+=`<button class="add-btn" onclick="showSecForm()">＋ Bo'lim</button>`;
+  // Academy sections
+  (acadDb.sections||[]).forEach(s=>{
+    h+=`<div class="nav-card" style="background:linear-gradient(135deg,#f0f4ff,#e8f0fe)" onclick="openAcadSection('${s.id}')" ${isAdmin?'draggable="true"':''}>
+      ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
+      ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
+        <button class="abtn" onclick="editAcadSection('${s.id}')">✏</button>
+        <button class="abtn abtn-red" onclick="delAcadSection('${s.id}')">✕</button>
+      </div>`:''}
+      <div style="position:absolute;top:8px;left:${isAdmin?'24':'8'}px;font-size:9px;font-weight:700;color:#4a6cf7;text-transform:uppercase;letter-spacing:.5px">Akademiya</div>
+      <div class="nav-card-title" style="margin-top:18px">${esc(s.title)}</div>
+      <div class="nav-card-arrow">→</div>
+    </div>`;
+  });
+  if(isAdmin) h+=`<button class="add-btn" onclick="showSecForm()">＋ Jarayon bo'limi</button>
+    <button class="add-btn" style="margin-top:4px" onclick="showAcadSecForm()">＋ Akademiya bo'limi</button>`;
   g.innerHTML=h;
   document.getElementById('section-form').innerHTML='';
   if(isAdmin){
-    initDrag(g,()=>db.sections,arr=>{db.sections=arr;renderSections();});
+    initDrag(g,()=>[...db.sections,...(acadDb.sections||[])],arr=>{});
     initTouchDrag(g,()=>db.sections,arr=>{db.sections=arr;renderSections();},'[draggable="true"]');
   }
+}
+
+function showAcadSecForm(id){
+  const sec=id?acadDb.sections.find(s=>s.id===id):null;
+  document.getElementById('section-form').innerHTML=`<div class="form-box fade">
+    <div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button>
+      <button class="fcancel" onclick="renderSections()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('asf-title').focus();
+}
+function saveAcadSection(id){
+  const title=document.getElementById('asf-title').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  if(!acadDb.sections)acadDb.sections=[];
+  if(id){const s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}
+  else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});
+  acadSave();notify('Saqlandi ✓');renderSections();
+}
+function editAcadSection(id){showAcadSecForm(id)}
+function delAcadSection(id){
+  if(!confirm('O\'chirasizmi?'))return;
+  acadDb.sections=acadDb.sections.filter(s=>s.id!==id);
+  acadSave();notify("O'chirildi ✓");renderSections();
 }
 function openSection(id){curSection=id;goTo('p-section')}
 function showSecForm(id){
@@ -648,7 +761,313 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function notify(m){const n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
 document.getElementById('login-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
+
+// ======== ACADEMY ========
+const ACAD_KEY='academy_db_v1';
+let acadDb={sections:[]};
+let curAcadSec=null,curAcadCat=null,curAcadItem=null;
+
+async function acadSave(){
+  try{
+    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{
+      method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({data:acadDb})
+    });
+  }catch(e){localStorage.setItem(ACAD_KEY,JSON.stringify(acadDb));}
+}
+async function acadLoad(){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{headers:SB_H});
+    const rows=await r.json();
+    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){
+      acadDb=rows[0].data;
+    }else{
+      const d=localStorage.getItem(ACAD_KEY);
+      if(d) acadDb=JSON.parse(d);
+      // Create record in Supabase
+      try{
+        await fetch(SB_URL+'/rest/v1/biznes_data',{
+          method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+          body:JSON.stringify({id:'academy',data:acadDb})
+        });
+      }catch(e2){}
+    }
+  }catch(e){const d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);}
+  renderSections();
+}
+
+// Format text: **bold**, * list item, newlines
+function formatAcadText(t){
+  if(!t) return '';
+  let s=esc(t);
+  s=s.split('**').map((p,i)=>i%2===1?'<b>'+p+'</b>':p).join('');
+  const lines=s.split('\n');
+  let out=[],inList=false;
+  lines.forEach(line=>{
+    if(line.startsWith('* ')){
+      if(!inList){out.push('<ul>');inList=true;}
+      out.push('<li>'+line.slice(2)+'</li>');
+    }else{
+      if(inList){out.push('</ul>');inList=false;}
+      out.push(line?(line+'<br>'):'<br>');
+    }
+  });
+  if(inList) out.push('</ul>');
+  return out.join('');
+}
+
+// Level 1: Open academy section → show categories
+function openAcadSection(id){
+  curAcadSec=id;curAcadCat=null;curAcadItem=null;
+  goTo('p-acad-cats');
+}
+
+function renderAcadCats(){
+  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
+  document.getElementById('acad-sec-title').textContent=sec.title;
+  let h='';
+  (sec.cats||[]).forEach((cat,i)=>{
+    h+=`<div class="section-item" onclick="openAcadCat('${cat.id}')" ${isAdmin?'draggable="true"':''}>
+      <div style="display:flex;align-items:center;flex:1;min-width:0">
+        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
+        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
+        <div style="min-width:0">
+          <div class="section-name">${esc(cat.title)}</div>
+          ${cat.intro?`<div style="font-size:11px;color:var(--hint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat.intro.substring(0,60))}${cat.intro.length>60?'...':''}</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${isAdmin?`<div class="action-btns">
+          <button class="abtn" onclick="event.stopPropagation();showAcadCatForm('${curAcadSec}','${cat.id}')">✏</button>
+          <button class="abtn abtn-red" onclick="event.stopPropagation();delAcadCat('${curAcadSec}','${cat.id}')">✕</button>
+        </div>`:''}
+        <span class="chevron">›</span>
+      </div>
+    </div>`;
+  });
+  if(!sec.cats||!sec.cats.length) h='<div style="text-align:center;padding:24px;color:var(--hint);font-size:13px">Kategoriyalar yo\'q</div>';
+  document.getElementById('acad-cats-list').innerHTML=h;
+  if(isAdmin){
+    document.getElementById('acad-cats-form').innerHTML=`<button class="add-item-btn" onclick="showAcadCatForm('${curAcadSec}')">＋ Kategoriya qo'shish</button>`;
+    const listEl=document.getElementById('acad-cats-list');
+    initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});
+    initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});
+  } else document.getElementById('acad-cats-form').innerHTML='';
+  updateAcadBc();
+}
+
+// Level 2: Open category → show items list
+function openAcadCat(id){
+  curAcadCat=id;curAcadItem=null;
+  goTo('p-acad-items');
+}
+
+function renderAcadItems(){
+  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
+  const cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;
+  document.getElementById('acad-cat-title').textContent=cat.title;
+  // Intro box
+  const introBox=document.getElementById('acad-cat-intro-box');
+  introBox.innerHTML=cat.intro?`<div class="acad-intro">${formatAcadText(cat.intro)}</div>`:'';
+  let h='';
+  (cat.items||[]).forEach((item,i)=>{
+    h+=`<div class="section-item" onclick="openAcadItem('${item.id}')" ${isAdmin?'draggable="true"':''}>
+      <div style="display:flex;align-items:center;flex:1;min-width:0">
+        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
+        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="section-name">${esc(item.title)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${isAdmin?`<div class="action-btns">
+          <button class="abtn" onclick="event.stopPropagation();showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}')">✏</button>
+          <button class="abtn abtn-red" onclick="event.stopPropagation();delAcadItem('${curAcadSec}','${curAcadCat}','${item.id}')">✕</button>
+        </div>`:''}
+        <span class="chevron">›</span>
+      </div>
+    </div>`;
+  });
+  if(!cat.items||!cat.items.length) h='<div style="text-align:center;padding:24px;color:var(--hint);font-size:13px">Mavzular yo\'q</div>';
+  document.getElementById('acad-items-list').innerHTML=h;
+  if(isAdmin){
+    document.getElementById('acad-items-form').innerHTML=`<button class="add-item-btn" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}')">＋ Mavzu qo'shish</button>`;
+    const listEl=document.getElementById('acad-items-list');
+    initDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});
+    initTouchDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});
+  } else document.getElementById('acad-items-form').innerHTML='';
+  updateAcadBc();
+}
+
+// Level 3: Open item → show full content
+function openAcadItem(id){
+  curAcadItem=id;
+  goTo('p-acad-detail');
+}
+
+function renderAcadDetail(){
+  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
+  const cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;
+  const item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;
+  document.getElementById('acad-item-title').textContent=item.title;
+  let h='';
+  if(item.violation){
+    h+=`<div class="acad-section-block">
+      <div class="acad-section-label acad-label-violation">⚠️ Qoidabuzarlik</div>
+      <div class="acad-content">${formatAcadText(item.violation)}</div>
+    </div>`;
+  }
+  if(item.action){
+    h+=`<div class="acad-section-block">
+      <div class="acad-section-label acad-label-action">🔍 Harakat</div>
+      <div class="acad-content">${formatAcadText(item.action)}</div>
+    </div>`;
+  }
+  if(item.decision){
+    h+=`<div class="acad-section-block">
+      <div class="acad-section-label acad-label-decision">✅ Qaror</div>
+      <div class="acad-content">${formatAcadText(item.decision)}</div>
+    </div>`;
+  }
+  if(!item.violation&&!item.action&&!item.decision&&item.content){
+    h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;
+  }
+  if(isAdmin){
+    h+=`<div style="margin-top:16px">
+      <button class="fsave" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}',true)">✏ Tahrirlash</button>
+    </div>
+    <div id="acad-detail-form" style="margin-top:8px"></div>`;
+  }
+  document.getElementById('acad-detail-body').innerHTML=h;
+  updateAcadBc();
+}
+
+// Breadcrumb for academy
+function updateAcadBc(){
+  const sec=acadDb.sections.find(s=>s.id===curAcadSec);
+  const cat=sec?.cats?.find(c=>c.id===curAcadCat);
+  const item=cat?.items?.find(i=>i.id===curAcadItem);
+  const pages=['p-acad-cats','p-acad-items','p-acad-detail'];
+  const titles={
+    'p-home':'Bosh sahifa',
+    'p-acad-cats':sec?.title||'',
+    'p-acad-items':cat?.title||'',
+    'p-acad-detail':item?.title||''
+  };
+  pages.forEach(p=>{
+    const el=document.getElementById('bc-'+p.replace('p-',''));
+    if(!el) return;
+    const stack=['p-home',...pages.slice(0,pages.indexOf(p)+1)];
+    let html='';
+    stack.forEach((pp,ii)=>{
+      if(ii<stack.length-1) html+=`<span class="bc-item" onclick="goBack('${pp}')">${titles[pp]}</span><span class="bc-sep">›</span>`;
+      else html+=`<span class="bc-cur">${titles[pp]}</span>`;
+    });
+    el.innerHTML=html;
+  });
+}
+
+// Forms
+function showAcadCatForm(secId,catId){
+  const sec=acadDb.sections.find(s=>s.id===secId);
+  const cat=catId?sec?.cats.find(c=>c.id===catId):null;
+  document.getElementById('acad-cats-form').innerHTML=`<div class="form-box fade">
+    <div class="frow"><label class="flbl">Kategoriya nomi</label><input class="fi" id="acf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div>
+    <div class="frow"><label class="flbl">Kirish matni (sarlavha)</label><textarea class="fi" id="acf-intro" style="min-height:80px;resize:vertical" placeholder="Bu bo'limda nima o'rganiladi...">${esc(cat?.intro||'')}</textarea></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="saveAcadCat('${secId}','${catId||''}')">Saqlash</button>
+      <button class="fcancel" onclick="renderAcadCats()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('acf-title').focus();
+}
+
+function saveAcadCat(secId,catId){
+  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
+  const title=document.getElementById('acf-title').value.trim();
+  const intro=document.getElementById('acf-intro').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  if(!sec.cats)sec.cats=[];
+  if(catId){const c=sec.cats.find(x=>x.id===catId);if(c){c.title=title;c.intro=intro;}}
+  else sec.cats.push({id:'ac'+Date.now(),title,intro,items:[]});
+  acadSave();notify('Saqlandi ✓');renderAcadCats();
+}
+
+function delAcadCat(secId,catId){
+  if(!confirm('O\'chirasizmi?'))return;
+  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
+  sec.cats=sec.cats.filter(c=>c.id!==catId);
+  acadSave();notify("O'chirildi ✓");renderAcadCats();
+}
+
+function showAcadItemForm(secId,catId,itemId,inDetail){
+  const sec=acadDb.sections.find(s=>s.id===secId);
+  const cat=sec?.cats.find(c=>c.id===catId);
+  const item=itemId?cat?.items.find(i=>i.id===itemId):null;
+  const containerId=inDetail?'acad-detail-form':'acad-items-form';
+  document.getElementById(containerId).innerHTML=`<div class="form-box fade">
+    <div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div>
+    <div class="frow"><label class="flbl" style="color:#dc2626">⚠️ Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida buzilishi haqida...">${esc(item?.violation||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#007aff">🔍 Harakat</label><textarea class="fi" id="afi-action" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Nima qilish kerak...">${esc(item?.action||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#16a34a">✅ Qaror</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va jazo...">${esc(item?.decision||'')}</textarea></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button>
+      <button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('afi-title').focus();
+}
+
+function saveAcadItem(secId,catId,itemId,inDetail){
+  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
+  const cat=sec.cats.find(c=>c.id===catId);if(!cat)return;
+  const title=document.getElementById('afi-title').value.trim();
+  const violation=document.getElementById('afi-violation').value.trim();
+  const action=document.getElementById('afi-action').value.trim();
+  const decision=document.getElementById('afi-decision').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  if(!cat.items)cat.items=[];
+  if(itemId){const it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.violation=violation;it.action=action;it.decision=decision;}}
+  else cat.items.push({id:'ai'+Date.now(),title,violation,action,decision});
+  acadSave();notify('Saqlandi ✓');
+  if(inDetail) renderAcadDetail(); else renderAcadItems();
+}
+
+function delAcadItem(secId,catId,itemId){
+  if(!confirm('O\'chirasizmi?'))return;
+  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
+  const cat=sec.cats.find(c=>c.id===catId);if(!cat)return;
+  cat.items=cat.items.filter(i=>i.id!==itemId);
+  acadSave();notify("O'chirildi ✓");renderAcadItems();
+}
+
+// Academy sections on home
+function showAcadSecForm(id){
+  const sec=id?acadDb.sections.find(s=>s.id===id):null;
+  document.getElementById('section-form').innerHTML=`<div class="form-box fade">
+    <div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button>
+      <button class="fcancel" onclick="renderSections()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('asf-title').focus();
+}
+function saveAcadSection(id){
+  const title=document.getElementById('asf-title').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  if(!acadDb.sections)acadDb.sections=[];
+  if(id){const s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}
+  else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});
+  acadSave();notify('Saqlandi ✓');renderSections();
+}
+function editAcadSection(id){showAcadSecForm(id)}
+function delAcadSection(id){
+  if(!confirm('O\'chirasizmi?'))return;
+  acadDb.sections=acadDb.sections.filter(s=>s.id!==id);
+  acadSave();notify("O'chirildi ✓");renderSections();
+}
+
 load().then(()=>{renderSections();updateBc();});
+acadLoad().catch(()=>{});
 </script>
 </body>
 </html>
