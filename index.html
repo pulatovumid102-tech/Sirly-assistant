@@ -405,7 +405,7 @@ function renderCats(){
       <div style="display:flex;align-items:center;flex:1;min-width:0">
         ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
         <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="section-name">${esc(c.title)}</div>
+        <div style="min-width:0"><div class="section-name">${esc(c.title)}</div>${c.desc?`<div style="font-size:11px;color:var(--hint);margin-top:2px">${esc(c.desc)}</div>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isAdmin?`<div class="action-btns">
@@ -433,6 +433,7 @@ function showCatForm(id){
   const cat=id?sec?.cats.find(c=>c.id===id):null;
   document.getElementById('cat-form').innerHTML=`<div class="form-box fade">
     <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="cf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div>
+    <div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="cf-desc" value="${esc(cat?.desc||'')}" placeholder="Qisqacha tavsif..."></div>
     <div class="fbtns">
       <button class="fsave" onclick="saveCat('${id||''}')">Saqlash</button>
       <button class="fcancel" onclick="renderCats()">Bekor</button>
@@ -444,8 +445,9 @@ function saveCat(id){
   const sec=db.sections.find(s=>s.id===curSection);if(!sec)return;
   const title=document.getElementById('cf-title').value.trim();
   if(!title){notify('Nom kiriting!');return;}
-  if(id){const c=sec.cats.find(x=>x.id===id);if(c)c.title=title;}
-  else sec.cats.push({id:'c'+Date.now(),title,flows:[]});
+  const desc=document.getElementById('cf-desc')?.value.trim()||'';
+  if(id){const c=sec.cats.find(x=>x.id===id);if(c){c.title=title;c.desc=desc;}}
+  else sec.cats.push({id:'c'+Date.now(),title,desc,flows:[]});
   save();notify('Saqlandi ✓');renderCats();
 }
 function editCat(id){showCatForm(id)}
@@ -469,7 +471,7 @@ function renderFlows(){
       <div style="display:flex;align-items:center;flex:1;min-width:0">
         ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
         <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="section-name">${esc(f.title)}</div>
+        <div style="min-width:0"><div class="section-name">${esc(f.title)}</div>${f.desc?`<div style="font-size:11px;color:var(--hint);margin-top:2px">${esc(f.desc)}</div>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isAdmin?`<div class="action-btns">
@@ -497,6 +499,7 @@ function showFlowForm(id){
   const flow=id?cat?.flows.find(f=>f.id===id):null;
   document.getElementById('flow-form').innerHTML=`<div class="form-box fade">
     <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="ff-title" value="${esc(flow?.title||'')}" placeholder="Jarayon nomi..."></div>
+    <div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="ff-desc" value="${esc(flow?.desc||'')}" placeholder="Qisqacha tavsif..."></div>
     <div class="fbtns">
       <button class="fsave" onclick="saveFlowItem('${id||''}')">Saqlash</button>
       <button class="fcancel" onclick="renderFlows()">Bekor</button>
@@ -508,8 +511,9 @@ function saveFlowItem(id){
   const cat=getCat();if(!cat)return;
   const title=document.getElementById('ff-title').value.trim();
   if(!title){notify('Nom kiriting!');return;}
-  if(id){const f=cat.flows.find(x=>x.id===id);if(f)f.title=title;}
-  else cat.flows.push({id:'f'+Date.now(),title,nodes:[]});
+  const fdesc=document.getElementById('ff-desc')?.value.trim()||'';
+  if(id){const f=cat.flows.find(x=>x.id===id);if(f){f.title=title;f.desc=fdesc;}}
+  else cat.flows.push({id:'f'+Date.now(),title,desc:fdesc,nodes:[]});
   save();notify('Saqlandi ✓');renderFlows();
 }
 function editFlowItem(id){showFlowForm(id)}
