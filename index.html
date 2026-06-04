@@ -117,8 +117,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 .acad-content b{font-weight:700}
 .acad-section-block{background:var(--bg2);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .acad-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding:3px 8px;border-radius:6px;display:inline-block}
+.acad-label-standard{background:rgba(99,102,241,.1);color:#6366f1}
 .acad-label-violation{background:rgba(220,38,38,.1);color:#dc2626}
-.acad-label-action{background:rgba(0,122,255,.1);color:#007aff}
 .acad-label-decision{background:rgba(34,197,94,.1);color:#16a34a}
 .acad-add-btn{width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border);border-radius:10px;font-size:13px;color:var(--hint);cursor:pointer;font-family:inherit;margin-top:6px}
 .acad-form{background:var(--bg2);border-radius:12px;padding:14px;margin-top:8px}
@@ -909,25 +909,25 @@ function renderAcadDetail(){
   const item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;
   document.getElementById('acad-item-title').textContent=item.title;
   let h='';
+  if(item.standard){
+    h+=`<div class="acad-section-block">
+      <div class="acad-section-label acad-label-standard">📋 Standart</div>
+      <div class="acad-content">${formatAcadText(item.standard)}</div>
+    </div>`;
+  }
   if(item.violation){
     h+=`<div class="acad-section-block">
       <div class="acad-section-label acad-label-violation">⚠️ Qoidabuzarlik</div>
       <div class="acad-content">${formatAcadText(item.violation)}</div>
     </div>`;
   }
-  if(item.action){
-    h+=`<div class="acad-section-block">
-      <div class="acad-section-label acad-label-action">🔍 Harakat</div>
-      <div class="acad-content">${formatAcadText(item.action)}</div>
-    </div>`;
-  }
   if(item.decision){
     h+=`<div class="acad-section-block">
-      <div class="acad-section-label acad-label-decision">✅ Qaror</div>
+      <div class="acad-section-label acad-label-decision">✅ Qaror va harakat</div>
       <div class="acad-content">${formatAcadText(item.decision)}</div>
     </div>`;
   }
-  if(!item.violation&&!item.action&&!item.decision&&item.content){
+  if(!item.standard&&!item.violation&&!item.decision&&item.content){
     h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;
   }
   if(isAdmin){
@@ -1005,9 +1005,9 @@ function showAcadItemForm(secId,catId,itemId,inDetail){
   const containerId=inDetail?'acad-detail-form':'acad-items-form';
   document.getElementById(containerId).innerHTML=`<div class="form-box fade">
     <div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div>
-    <div class="frow"><label class="flbl" style="color:#dc2626">⚠️ Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida buzilishi haqida...">${esc(item?.violation||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:#007aff">🔍 Harakat</label><textarea class="fi" id="afi-action" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Nima qilish kerak...">${esc(item?.action||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:#16a34a">✅ Qaror</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va jazo...">${esc(item?.decision||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#6366f1">📋 Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#dc2626">⚠️ Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#16a34a">✅ Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div>
     <div class="fbtns">
       <button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button>
       <button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button>
@@ -1020,13 +1020,13 @@ function saveAcadItem(secId,catId,itemId,inDetail){
   const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
   const cat=sec.cats.find(c=>c.id===catId);if(!cat)return;
   const title=document.getElementById('afi-title').value.trim();
+  const standard=document.getElementById('afi-standard').value.trim();
   const violation=document.getElementById('afi-violation').value.trim();
-  const action=document.getElementById('afi-action').value.trim();
   const decision=document.getElementById('afi-decision').value.trim();
   if(!title){notify('Nom kiriting!');return;}
   if(!cat.items)cat.items=[];
-  if(itemId){const it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.violation=violation;it.action=action;it.decision=decision;}}
-  else cat.items.push({id:'ai'+Date.now(),title,violation,action,decision});
+  if(itemId){const it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.standard=standard;it.violation=violation;it.decision=decision;}}
+  else cat.items.push({id:'ai'+Date.now(),title,standard,violation,decision});
   acadSave();notify('Saqlandi ✓');
   if(inDetail) renderAcadDetail(); else renderAcadItems();
 }
