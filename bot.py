@@ -17,7 +17,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8935324683:AAFvaRkMnEy89ikySowTSLYRtaFqu_TDpyc"
+TOKEN = "8616037861:AAEpNThIHz2x4KTpMZcTQjCoJa2Hcnf_I0Q"
 CHAT_ID = -1003914304171
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -843,12 +843,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ss_key = f"ss_{rest}"
         ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
 
+        # time_key va sender ni rest dan ajratamiz: "1800_sirlyinfo" -> "18:00", "sirlyinfo"
+        parts = rest.split("_", 1)
+        time_raw = parts[0]  # "1800"
+        sender_from_key = parts[1] if len(parts) > 1 else ""
+        time_key_restored = f"{time_raw[:2]}:{time_raw[2:]}"  # "18:00"
+
         # Delete all related messages from group
         to_delete = [query.message.message_id]
         if ss_info.get("photo_msg_id"):
             to_delete.append(ss_info["photo_msg_id"])
-        if ss_info.get("reminder_msg_id"):
-            to_delete.append(ss_info["reminder_msg_id"])
+
+        # reminder_msg_id ni ss_reminder_msg_ids dan olish
+        reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{time_key_restored}_{sender_from_key}")
+        if not reminder_mid:
+            for _u in SCREENSHOT_SCHEDULE.get(time_key_restored, []):
+                reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{time_key_restored}_{_u}")
+                if reminder_mid:
+                    break
+        if reminder_mid:
+            to_delete.append(reminder_mid)
 
         # Delete each message individually with explicit CHAT_ID
         async def delete_all():
@@ -2428,7 +2442,8 @@ SCREENSHOT_SCHEDULE = {
     "11:30": ["sirlyinfo"],
     "12:00": ["sirlyinfo"],
     "12:30": ["sirlyinfo"],
-    "12:50": ["sirlyinfo"],
+    "13:00": ["sirlyinfo"],
+    "13:30": ["sirlyinfo"],
     "14:00": ["sirlyinfo"],
     "14:30": ["sirlyinfo"],
     "15:00": ["sirlyinfo"],
@@ -2441,7 +2456,7 @@ SCREENSHOT_SCHEDULE = {
     "18:30": ["sirlyinfo"],
     "19:00": ["sirlyinfo"],
     "19:30": ["sirlyinfo"],
-    "19:50": ["sirlyinfo"],
+    "20:00": ["sirlyinfo"],
     "20:30": ["sirlyinfo"],
     "21:00": ["sirlyinfo"],
     "21:30": ["sirlyinfo"],
