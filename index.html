@@ -57,8 +57,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;backg
 .tree-col{display:flex;flex-direction:column}
 .node-row{display:flex;flex-direction:row;align-items:flex-start;margin-bottom:10px}
 .node-card{width:260px;flex-shrink:0;background:var(--bg2);border-radius:10px;padding:12px;position:relative}
-.node-num{position:absolute;top:-1px;left:-1px;width:24px;height:24px;background:rgba(0,0,0,0.05);border-radius:10px 0 6px 0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--hint)}
-.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:12px;padding-right:36px}
+.node-num{position:absolute;top:50%;left:-14px;transform:translateY(-50%);width:28px;height:28px;background:var(--bg2);border:1.5px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--tg-theme-text-color,#1a1a1a);box-shadow:0 1px 4px rgba(0,0,0,0.1)}
+.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:0;padding-right:36px}
 .node-msg{background:rgba(0,0,0,0.04);border-radius:6px;padding:8px 30px 8px 8px;font-size:11px;line-height:1.6;margin-top:8px;white-space:pre-wrap;position:relative;font-family:monospace}
 .copy-btn{position:absolute;top:5px;right:5px;width:20px;height:20px;border:1px solid var(--border);background:var(--bg2);border-radius:4px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:.7}
 .node-link{font-size:11px;color:var(--hint);margin-top:6px;word-break:break-all}
@@ -420,28 +420,31 @@ function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){
 function renderSections(){
   const g=document.getElementById('sections-grid');
   let h='';
-  // Regular sections
-  db.sections.forEach(s=>{
-    h+=`<div class="nav-card" onclick="openSection('${s.id}')" ${isAdmin?'draggable="true"':''}>
+  // Build unified list with type
+  const allCards=[
+    ...db.sections.map(s=>({...s,_type:'process'})),
+    ...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))
+  ];
+  // Apply saved order if exists
+  const savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');
+  let ordered=allCards;
+  if(savedOrder){
+    const map=Object.fromEntries(allCards.map(s=>[s.id,s]));
+    ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];
+  }
+  ordered.forEach(s=>{
+    const isAcad=s._type==='academy';
+    const onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;
+    const editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;
+    const delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;
+    h+=`<div class="nav-card" style="${isAcad?'background:linear-gradient(135deg,#f0f4ff,#e8f0fe)':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">
       ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
       ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
-        <button class="abtn" onclick="editSection('${s.id}')">✏</button>
-        <button class="abtn abtn-red" onclick="delSection('${s.id}')">✕</button>
+        <button class="abtn" onclick="${editFn}">✏</button>
+        <button class="abtn abtn-red" onclick="${delFn}">✕</button>
       </div>`:''}
-      <div class="nav-card-title" style="margin-top:${isAdmin?'14px':'0'}">${esc(s.title)}</div>
-      <div class="nav-card-arrow">→</div>
-    </div>`;
-  });
-  // Academy sections
-  (acadDb.sections||[]).forEach(s=>{
-    h+=`<div class="nav-card" style="background:linear-gradient(135deg,#f0f4ff,#e8f0fe)" onclick="openAcadSection('${s.id}')" ${isAdmin?'draggable="true"':''}>
-      ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-      ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
-        <button class="abtn" onclick="editAcadSection('${s.id}')">✏</button>
-        <button class="abtn abtn-red" onclick="delAcadSection('${s.id}')">✕</button>
-      </div>`:''}
-      <div style="position:absolute;top:8px;left:${isAdmin?'24':'8'}px;font-size:9px;font-weight:700;color:#4a6cf7;text-transform:uppercase;letter-spacing:.5px">Akademiya</div>
-      <div class="nav-card-title" style="margin-top:18px">${esc(s.title)}</div>
+      ${isAcad?`<div style="position:absolute;top:8px;left:${isAdmin?'24':'8'}px;font-size:9px;font-weight:700;color:#4a6cf7;text-transform:uppercase;letter-spacing:.5px">📖 Akademiya</div>`:''}
+      <div class="nav-card-title" style="margin-top:${isAcad||isAdmin?'18px':'0'}">${esc(s.title)}</div>
       <div class="nav-card-arrow">→</div>
     </div>`;
   });
@@ -450,8 +453,14 @@ function renderSections(){
   g.innerHTML=h;
   document.getElementById('section-form').innerHTML='';
   if(isAdmin){
-    initDrag(g,()=>[...db.sections,...(acadDb.sections||[])],arr=>{});
-    initTouchDrag(g,()=>db.sections,arr=>{db.sections=arr;renderSections();},'[draggable="true"]');
+    initDrag(g,()=>ordered,arr=>{
+      localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));
+      renderSections();
+    });
+    initTouchDrag(g,()=>ordered,arr=>{
+      localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));
+      renderSections();
+    },'[draggable="true"]');
   }
 }
 
@@ -647,7 +656,10 @@ function renderTree(){
   document.getElementById('flow-name-form').style.display='none';
   document.getElementById('root-form').innerHTML='';
   let h='<div class="tree-col">';
-  flow.nodes.forEach((n,i)=>h+=nodeHTML(n,String(i+1).padStart(2,'0')));
+  flow.nodes.forEach((n,i)=>{
+    if(i>0) h+='<div style="border-top:1.5px dashed var(--border);margin:4px 0 12px 0;width:260px"></div>';
+    h+=nodeHTML(n,String(i+1).padStart(2,'0'));
+  });
   h+='</div>';
   if(isAdmin) h+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;
   document.getElementById('tree-wrap').innerHTML=h;
@@ -667,7 +679,7 @@ function nodeHTML(n,num){
     ${ab}
     <div class="node-name">${esc(n.name)}</div>
     ${n.msg?`<div class="node-msg">${esc(n.msg)}<button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''}
-    ${n.link?`<div class="node-link">🔗 <a href="${esc(n.link)}" target="_blank">${esc(n.link)}</a></div>`:''}
+    ${n.link?`<div class="node-link"><a href="${esc(n.link)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,122,255,0.08);color:var(--acc);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">🔗 Link</a></div>`:''}
   </div>`;
   const hasC=n.children?.length>0;
   let ch='';
