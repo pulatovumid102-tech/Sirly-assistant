@@ -446,8 +446,8 @@ function renderSections(){
         <button class="abtn" onclick="${editFn}">✏</button>
         <button class="abtn abtn-red" onclick="${delFn}">✕</button>
       </div>`:''}
-      ${isAcad?`<div style="position:absolute;top:8px;left:${isAdmin?'24':'8'}px;font-size:9px;font-weight:700;color:#4a6cf7;text-transform:uppercase;letter-spacing:.5px">📖 Akademiya</div>`:''}
-      <div class="nav-card-title" style="margin-top:${isAcad||isAdmin?'18px':'0'}">${esc(s.title)}</div>
+
+      <div class="nav-card-title" style="margin-top:${isAdmin?'18px':'4px'}">${esc(s.title)}</div>
       <div class="nav-card-arrow">→</div>
     </div>`;
   });
