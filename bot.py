@@ -480,9 +480,13 @@ def build_zadacha_main_text(task):
     supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
     date_str = deadline.strftime("%d.%m")
     time_str = deadline.strftime("%H:%M")
-    exec_tags = " ".join(f"@{u}" for u in targets)
-    sup_tags = " ".join(f"@{u}" for u in supervisors)
-    all_tags = (exec_tags + " " + sup_tags).strip()
+    seen_tags = set()
+    tags_list = []
+    for u in list(targets) + list(supervisors):
+        if u not in seen_tags:
+            seen_tags.add(u)
+            tags_list.append(f"@{u}")
+    all_tags = " ".join(tags_list)
     return (
         f"📌 {creator} → {target_str}\n"
         f"🧑 Nazorat: {supervisor_names}\n"
@@ -530,30 +534,6 @@ def all_accepted(task):
 # REMINDER / CHECKLIST JOBS
 # =========================
 
-async def send_reminder(bot, cycle_id):
-    if state.get("reminder_stopped"):
-        return
-    active = get_active_agents()
-    if not active:
-        return
-    if state.get("reminder_log_message_id"):
-        try:
-            await bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_log_message_id"])
-        except:
-            pass
-    if state.get("reminder_message_id"):
-        try:
-            await bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
-        except:
-            pass
-    state["confirmations"] = {u: {"mijoz": False, "hamkor": False} for u in active}
-    state["reminder_message_id"] = None
-    state["reminder_sent_at"] = datetime.now(TIMEZONE)
-    state["reminder_log_message_id"] = None
-    state["reminder_log_lines"] = []
-    sent = await bot.send_message(chat_id=CHAT_ID, text=build_reminder_text(active), reply_markup=build_reminder_keyboard(active, state["confirmations"]))
-    state["reminder_message_id"] = sent.message_id
-
 async def send_checklist(bot, time_key):
     active = get_active_agents_for_time(time_key)
     if not active:
@@ -569,14 +549,6 @@ async def send_checklist(bot, time_key):
     state["checklist_log_lines"][time_key] = []
     sent = await bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]), parse_mode="HTML")
     state["checklist_message_ids"][time_key] = sent.message_id
-
-async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
-    cycle_id = context.job.data["cycle_id"]
-    if cycle_id != state["cycle_id"] or state["stopped"]:
-        return
-    await send_reminder(context.bot, cycle_id)
-    cancel_jobs_by_name(context.job_queue, "reminder")
-    context.job_queue.run_once(reminder_job, when=seconds_until_next_30(), name="reminder", data={"cycle_id": cycle_id})
 
 async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
     cycle_id = context.job.data["cycle_id"]
@@ -1232,7 +1204,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supervisors = task.get("supervisor", [])
         creator_username = task["creator_username"]
         sup_tags = " ".join(f"@{u}" for u in supervisors)
-        all_tags = f"@{creator_username} {sup_tags}".strip()
+        seen = set()
+        tags_list = []
+        for t in ([creator_username] + list(supervisors)):
+            if t not in seen:
+                seen.add(t)
+                tags_list.append(f"@{t}")
+        all_tags = " ".join(tags_list)
 
         created_at = task.get("created_at")
         accepted_at = task.get("accepted_at", {}).get(username)
@@ -1676,6 +1654,7 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             [InlineKeyboardButton("📞 Telefonni ozgartir", callback_data="edit_field_phone")],
             [InlineKeyboardButton("📅 Ish kunlarini ozgartir", callback_data="edit_field_days")],
             [InlineKeyboardButton("🕐 Ish vaqtini ozgartir", callback_data="edit_field_hours")],
+            [InlineKeyboardButton("🍽 Tushlik vaqtini ozgartir", callback_data="edit_field_lunch")],
             [InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")],
         ]
         sent = await context.bot.send_message(chat_id=user_id, text=f"👤 {d['name']} (@{username})\n📞 {d['phone']}\n📅 {days_str}\n\nNimani ozgartirmoqchisiz?", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -1700,6 +1679,13 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif data == "edit_field_hours":
         s["step"] = "start_hour"
         sent = await context.bot.send_message(chat_id=user_id, text="Yangi boshlash vaqtini kiriting (masalan: 10):")
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_lunch":
+        s["step"] = "lunch_start"
+        username = s.get("username", "")
+        lunch = AGENTS_DATA.get(username, {}).get("lunch", None)
+        current = f"{lunch[0]:02d}:00 - {lunch[1]:02d}:00" if lunch else "Belgilanmagan"
+        sent = await context.bot.send_message(chat_id=user_id, text=f"Hozirgi tushlik vaqti: {current}\n\nYangi tushlik boshlanish vaqtini kiriting (masalan: 13):")
         s["messages"].append(sent.message_id)
     elif data.startswith("editday__"):
         day_idx = int(data[9:])
@@ -1873,6 +1859,27 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                 msgs = s.get("messages", [])
                 editagent_state.pop(user_id, None)
                 sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
+                schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "lunch_start":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                s["lunch_start"] = h
+                s["step"] = "lunch_end"
+                sent = await context.bot.send_message(chat_id=user_id, text="Tushlik tugash vaqtini kiriting (masalan: 14):")
+                s["messages"].append(sent.message_id)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "lunch_end":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                username = s["username"]
+                AGENTS_DATA[username]["lunch"] = [s["lunch_start"], h]
+                save_agents(AGENTS_DATA)
+                msgs = s.get("messages", [])
+                editagent_state.pop(user_id, None)
+                sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Tushlik vaqti {s['lunch_start']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
                 schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
             except:
                 await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
@@ -2736,7 +2743,10 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     agents = [u for u in agents if is_working_at_time(u, tk_h)]
 
-    agents = [u for u in agents]
+    agents = [u for u in agents if not (
+        AGENTS_DATA.get(u, {}).get("lunch") and
+        AGENTS_DATA[u]["lunch"][0] <= tk_h < AGENTS_DATA[u]["lunch"][1]
+    )]
     if not agents:
         # Reschedule for next day same time
         h, m = map(int, time_key.split(":"))
@@ -2901,11 +2911,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚠️ ESLATMA\n"
         "━━━━━━━━━━━━━━\n\n"
         "Vazifa yaratish faqat\n"
-        "shaxsiy xabar orqali ishlaydi!\n\n"
-        "⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
+        "shaxsiy xabar orqali ishlaydi!"
     )
-    sent = await context.bot.send_message(chat_id=user.id, text=guide_text)
-    schedule_delete(context.bot, user.id, [sent.message_id], delay=60)
+    await context.bot.send_message(chat_id=user.id, text=guide_text)
 
 async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
@@ -2916,31 +2924,6 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
     await context.bot.send_message(chat_id=CHAT_ID, text="🛑 Bot toxtatildi.\nQayta ishga tushirish uchun /start bosing.")
-
-async def reminder_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-    state["reminder_stopped"] = False
-    await context.bot.send_message(chat_id=CHAT_ID, text=f"▶️ Reminder yoqildi.\n⏰ Keyingi eslatma: {get_next_reminder_time()}")
-
-async def reminder_stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-    state["reminder_stopped"] = True
-    if state.get("reminder_message_id"):
-        try:
-            await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
-        except:
-            pass
-        state["reminder_message_id"] = None
-    await context.bot.send_message(chat_id=CHAT_ID, text="⏸ Reminder toxtatildi.\nQayta yoqish uchun /reminder_start bosing.")
-
-async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-    active = get_active_agents() or set(get_agent_order())
-    state["confirmations"] = {u: {"mijoz": False, "hamkor": False} for u in active}
-    await context.bot.send_message(chat_id=CHAT_ID, text=build_reminder_text(active), reply_markup=build_reminder_keyboard(active, state["confirmations"]))
 
 async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
@@ -3028,8 +3011,6 @@ def main():
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
-    application.add_handler(CommandHandler("reminder_start", reminder_start_command))
-    application.add_handler(CommandHandler("reminder_stop", reminder_stop_command))
     application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("checklist", checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
