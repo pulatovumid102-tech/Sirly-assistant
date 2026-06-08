@@ -54,7 +54,6 @@ DEFAULT_AGENTS = {
         "work_days": [0, 1, 2, 3, 4, 5, 6],
         "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
     },
-
     "Muhammadhumoyun_Mudarris": {
         "name": "Muhammadhumoyun", "username": "Muhammadhumoyun_Mudarris", "phone": "+998 88 811 88 51",
         "work_days": [0, 1, 2, 3, 4, 5],
@@ -123,11 +122,12 @@ CHECKLIST_CONFIG = {
         "Olib ketilmagan statusini tekshiring va guruhga qisqacha hisobot yuboring: soni va nima bo'ldi suhbat paytida",
         "Muammoli mijozlar jadvalini ko'rib chiqing, jarayondagilarni yakunlanganlarga o'tkazing va guruhga @umidpulatov tag qilib qisqacha hisobot yuboring",
         "Bugalteriya jadvalini to'ldiring, shoshмang xato bo'lmasin",
-        "Bugalteriya sotuvlarini hamkorlar telegram guruhlariga yuboring",
         "Sotuv tablitsasini to'ldiring, xato qilmang, shoshмang",
-        "Umid akaga checklist bajarilganini screenshotini yuboring",
     ],
 }
+
+# Checklist faqat shu xodimga yuboriladi
+CHECKLIST_AGENTS = {"sirlyinfo"}
 
 CHECKLIST_TIMES = list(CHECKLIST_CONFIG.keys())
 
@@ -146,40 +146,17 @@ WEEKDAY_BUTTONS = [
 # =========================
 
 state = {
-    "confirmations": {}, "reminder_message_id": None, "reminder_sent_at": None,
-    "reminder_log_message_id": None, "reminder_log_lines": [],
     "checklist_confirmations": {}, "checklist_message_ids": {}, "checklist_log_message_ids": {}, "checklist_log_lines": {},
-    "cycle_id": 0, "stopped": False, "reminder_stopped": True,
+    "cycle_id": 0, "stopped": False,
 }
 
 # =========================
 # HELPERS
 # =========================
 
-def get_next_checklist_time(current_time_key):
-    times = CHECKLIST_TIMES
-    if current_time_key in times:
-        idx = times.index(current_time_key)
-        if idx + 1 < len(times):
-            return times[idx + 1]
-    return None
-
-def get_next_reminder_time():
-    now = datetime.now(TIMEZONE)
-    next_q_total = ((now.minute // 30) + 1) * 30
-    next_q_hour = (now.hour + next_q_total // 60) % 24
-    next_q_min = next_q_total % 60
-    return f"{next_q_hour:02d}:{next_q_min:02d}"
-
 def cancel_jobs_by_name(job_queue, name):
     for job in job_queue.get_jobs_by_name(name):
         job.schedule_removal()
-
-def seconds_until_next_30():
-    now = datetime.now(TIMEZONE)
-    elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
-    next_30 = ((now.minute // 30) + 1) * 30 * 60
-    return max(next_30 - elapsed, 1.0)
 
 def seconds_until_time(hour, minute):
     now = datetime.now(TIMEZONE)
@@ -281,11 +258,10 @@ def build_days_keyboard(selected_days, prefix="add"):
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
-# CHECKLIST / REMINDER BUILDERS
+# CHECKLIST BUILDERS
 # =========================
 
 def build_checklist_keyboard(time_key, active_agents, checklist_confs, verified_tasks=None):
-    """verified_tasks: set of task indices verified by admin"""
     if verified_tasks is None:
         verified_tasks = set()
     keyboard = []
@@ -295,8 +271,8 @@ def build_checklist_keyboard(time_key, active_agents, checklist_confs, verified_
             continue
         user_conf = checklist_confs.get(username, {})
         for i, task in enumerate(tasks):
-            done = user_conf.get(i, False)  # Ozodbek bosdi
-            verified = i in verified_tasks   # Admin tekshirdi
+            done = user_conf.get(i, False)
+            verified = i in verified_tasks
             row = [
                 InlineKeyboardButton(
                     f"{'✅' if done else '⬜'} {i+1} — Bajardim",
@@ -314,51 +290,17 @@ def build_checklist_text(time_key, active_agents):
     tasks = CHECKLIST_CONFIG.get(time_key, [])
     task_lines = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
+    now = datetime.now(TIMEZONE)
+    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}"
     return (
-        f"📋 CHECKLIST\n\n"
+        f"📋 CHECKLIST — {date_str}\n\n"
         f"{agent_block}\n\n"
         "━━━━━━━━━━━━━━\n"
-        f"📝 Vazifalar: <tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
+        f"📝 Vazifalar:\n<tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
         "━━━━━━━━━━━━━━\n\n"
-        "⚠️ O'qimasdan turib bosmang\n"
-        "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
+        "⚠️ Avval o'qing, keyin bosing!\n"
+        "Har bir vazifa bajarilgandan so'ng tugmani bosing"
     )
-
-def build_reminder_keyboard(active_agents, confirmations):
-    keyboard = []
-    for username in get_agent_order():
-        if username not in active_agents:
-            continue
-        name = AGENTS_DATA[username]["name"]
-        conf = confirmations.get(username, {"mijoz": False, "hamkor": False})
-        keyboard.append([InlineKeyboardButton(
-            f"{'✅' if conf['mijoz'] else '⬜'} {name} - Mijozlar tekshirildi",
-            callback_data=f"confirm_{username}_mijoz"
-        )])
-        keyboard.append([InlineKeyboardButton(
-            f"{'✅' if conf['hamkor'] else '⬜'} {name} - Hamkorlar tekshirildi",
-            callback_data=f"confirm_{username}_hamkor"
-        )])
-    return InlineKeyboardMarkup(keyboard)
-
-def build_reminder_text(active_agents):
-    agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
-    return (
-        f"{agent_block}\n\n"
-        "━━━━━━━━━━━━━━\n\n"
-        "💬 Mijozlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
-        "🤝 Hamkorlardan kelgan murojaatlar tekshirildimi? ☑️\n\n"
-        "━━━━━━━━━━━━━━\n\n"
-        "⚠️ O'qimasdan turib bosmang\n"
-        "Pastdagi tugmalarni bosish orqali vazifa bajarilganini tasdiqlang"
-    )
-
-def all_confirmed(active_agents, confirmations):
-    for username in active_agents:
-        conf = confirmations.get(username, {})
-        if not conf.get("mijoz") or not conf.get("hamkor"):
-            return False
-    return True
 
 def checklist_all_confirmed(time_key, active_agents, checklist_confs):
     tasks = CHECKLIST_CONFIG.get(time_key, [])
@@ -374,12 +316,10 @@ def checklist_all_confirmed(time_key, active_agents, checklist_confs):
 # =========================
 
 async def zadacha_cleanup_job(context: ContextTypes.DEFAULT_TYPE):
-    """Har 5 daqiqada eski zadacha state larni tozalash (10 daqiqa timeout)"""
     now_ts = datetime.now(TIMEZONE).timestamp()
     to_delete = []
     for uid, s in list(zadacha_state.items()):
         created = s.get("created_ts", now_ts)
-        # 10 daqiqadan eski bo'lsa o'chir
         if now_ts - created > 600:
             to_delete.append(uid)
     for uid in to_delete:
@@ -397,9 +337,7 @@ async def zadacha_cleanup_job(context: ContextTypes.DEFAULT_TYPE):
 zadacha_state = {}
 zadacha_tasks = {}
 zadacha_counter = [0]
-# task_id -> list of reminder message_ids sent to group
 zadacha_reminder_msgs = {}
-# task_id -> main group message_id (first xabar)
 zadacha_main_msg = {}
 TASKS_FILE = "zadacha_tasks.json"
 
@@ -531,11 +469,11 @@ def all_accepted(task):
     return exec_ok and sup_ok
 
 # =========================
-# REMINDER / CHECKLIST JOBS
+# CHECKLIST JOB
 # =========================
 
 async def send_checklist(bot, time_key):
-    active = get_active_agents_for_time(time_key)
+    active = CHECKLIST_AGENTS
     if not active:
         return
     for key in ["checklist_log_message_ids", "checklist_message_ids"]:
@@ -547,7 +485,12 @@ async def send_checklist(bot, time_key):
             state[key][time_key] = None
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
     state["checklist_log_lines"][time_key] = []
-    sent = await bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]), parse_mode="HTML")
+    sent = await bot.send_message(
+        chat_id=CHAT_ID,
+        text=build_checklist_text(time_key, active),
+        reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
+        parse_mode="HTML"
+    )
     state["checklist_message_ids"][time_key] = sent.message_id
 
 async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
@@ -557,14 +500,18 @@ async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
         return
     await send_checklist(context.bot, time_key)
     hour, minute = map(int, time_key.split(":"))
-    context.job_queue.run_once(checklist_job, when=seconds_until_time(hour, minute), name=f"checklist_{time_key}", data={"cycle_id": cycle_id, "time_key": time_key})
+    context.job_queue.run_once(
+        checklist_job,
+        when=seconds_until_time(hour, minute),
+        name=f"checklist_{time_key}",
+        data={"cycle_id": cycle_id, "time_key": time_key}
+    )
 
 # =========================
-# ZADACHA ACCEPT REMINDER JOB (har 5 daqiqa)
+# ZADACHA ACCEPT REMINDER JOB
 # =========================
 
 def is_agent_working_now(username):
-    """Hodim hozir ish vaqtidami?"""
     now = datetime.now(TIMEZONE)
     weekday = now.weekday()
     hour = now.hour
@@ -577,7 +524,6 @@ def is_agent_working_now(username):
     return wh[0] <= hour < wh[1]
 
 def seconds_until_agent_works(username):
-    """Hodim keyingi ish boshlanishigacha necha sekund?"""
     now = datetime.now(TIMEZONE)
     data = AGENTS_DATA.get(username, {})
     work_days = data.get("work_days", [])
@@ -590,17 +536,16 @@ def seconds_until_agent_works(username):
             sh, eh = wh[0], wh[1]
             if days_ahead == 0:
                 if now.hour >= sh and now.hour < eh:
-                    return 0  # hozir ish vaqti
+                    return 0
                 if now.hour >= eh:
-                    continue  # bugun tugadi
-                # Bugun boshlanmagan
+                    continue
                 work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
             else:
                 work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
             secs = (work_start - now).total_seconds()
             if secs > 0:
                 return secs
-    return 300  # fallback
+    return 300
 
 async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
@@ -621,7 +566,6 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     target_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in targets)
     sup_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
 
-    # Oldingi eslatma xabarlarini o'chir
     for mid in task.get("reminder_msg_ids", []):
         try:
             await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
@@ -629,8 +573,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             pass
     task["reminder_msg_ids"] = []
 
-    # Har bir ijrochi uchun alohida schedule
-    exec_next = 600  # 10 daqiqa
+    exec_next = 600
     for username in targets:
         if username in accepted_exec:
             continue
@@ -657,8 +600,7 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
         )
         task["reminder_msg_ids"].append(sent.message_id)
 
-    # Har bir nazoratchi uchun alohida schedule
-    sup_next = 600  # 10 daqiqa
+    sup_next = 600
     for username in supervisors:
         if username in accepted_sup:
             continue
@@ -688,7 +630,6 @@ async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     save_tasks()
 
-    # Keyingi schedule — eng tez keladigan vaqt
     next_schedule = min(exec_next, sup_next)
     context.job_queue.run_once(
         zadacha_accept_reminder_job,
@@ -714,10 +655,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.from_user.username != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
-        # Format: chk_verify_HHMM_username_tasknum
         rest = data[11:]
         parts = rest.split("_")
-        # time_raw is first part (4 digits), last part is task num, middle is username
         time_raw = parts[0]
         task_num = int(parts[-1])
         username = "_".join(parts[1:-1])
@@ -727,17 +666,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
 
-        # Mark as verified in state
         task_index = task_num - 1
         state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
         verified_set = state["checklist_verified"][time_key]
 
-        # Update checklist main message keyboard
         if time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
             msg_id = state["checklist_message_ids"].get(time_key)
             if msg_id:
-                # Try both CHAT_ID and private chat
                 for chat_id_try in [CHAT_ID, query.message.chat.id]:
                     try:
                         await context.bot.edit_message_reply_markup(
@@ -749,11 +685,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except:
                         pass
 
-        # Remove this item from pending
         vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
 
         if vs["pending_items"]:
-            # Update verify message with remaining items
             name = AGENTS_DATA.get(username, {}).get("name", username)
             nums_str = ", ".join(str(n) for n, _ in sorted(vs["pending_items"]))
             new_text = f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang"
@@ -772,7 +706,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         else:
-            # All verified — delete verify message
             try:
                 await query.message.delete()
             except:
@@ -803,30 +736,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
-        # Green button
         try:
             await query.message.edit_reply_markup(
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
             )
         except:
             pass
-        # Find stored msg ids
-        rest = data[11:]  # after "ss_confirm_"
+        rest = data[11:]
         ss_key = f"ss_{rest}"
         ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
 
-        # time_key va sender ni rest dan ajratamiz: "1800_sirlyinfo" -> "18:00", "sirlyinfo"
         parts = rest.split("_", 1)
-        time_raw = parts[0]  # "1800"
+        time_raw = parts[0]
         sender_from_key = parts[1] if len(parts) > 1 else ""
-        time_key_restored = f"{time_raw[:2]}:{time_raw[2:]}"  # "18:00"
+        time_key_restored = f"{time_raw[:2]}:{time_raw[2:]}"
 
-        # Delete all related messages from group
         to_delete = [query.message.message_id]
         if ss_info.get("photo_msg_id"):
             to_delete.append(ss_info["photo_msg_id"])
 
-        # reminder_msg_id ni ss_reminder_msg_ids dan olish
         reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{time_key_restored}_{sender_from_key}")
         if not reminder_mid:
             for _u in SCREENSHOT_SCHEDULE.get(time_key_restored, []):
@@ -836,7 +764,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if reminder_mid:
             to_delete.append(reminder_mid)
 
-        # Delete each message individually with explicit CHAT_ID
         async def delete_all():
             import asyncio
             await asyncio.sleep(5)
@@ -862,7 +789,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except:
             pass
-        # Fine xabari o'chmaydi — faqat tugma yashil bo'ladi
         return
 
     if data == "zadachi_group_cancel":
@@ -881,62 +807,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await cmd_msg.delete()
             except:
                 pass
-        return
-
-    now = datetime.now(TIMEZONE)
-    time_str = now.strftime("%H:%M")
-
-    # TEST CHECKLIST
-    if data.startswith("test_chk_"):
-        time_key = data[9:]
-        active = get_active_agents_for_time(time_key) or set(get_agent_order())
-        state["checklist_confirmations"][time_key] = {u: {} for u in active}
-        sent = await context.bot.send_message(chat_id=CHAT_ID, text=build_checklist_text(time_key, active), reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]), parse_mode="HTML")
-        state["checklist_message_ids"][time_key] = sent.message_id
-        return
-
-    # REMINDER
-    if data.startswith("confirm_"):
-        without_prefix = data[8:]
-        confirm_type = without_prefix.split("_")[-1]
-        username = without_prefix[:-(len(confirm_type) + 1)]
-        presser = query.from_user.username
-        if presser != username and presser != ADMIN_USERNAME:
-            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
-            return
-        active = set(state["confirmations"].keys()) or get_active_agents()
-        if username not in active:
-            return
-        if username not in state["confirmations"]:
-            state["confirmations"][username] = {"mijoz": False, "hamkor": False}
-        if state["confirmations"][username][confirm_type]:
-            return
-        state["confirmations"][username][confirm_type] = True
-        try:
-            await query.message.edit_reply_markup(reply_markup=build_reminder_keyboard(active, state["confirmations"]))
-        except:
-            pass
-        action_text = "Javob berilmagan mijoz qolmadi" if confirm_type == "mijoz" else "Javob berilmagan hamkor qolmadi"
-        state["reminder_log_lines"].append(f"{AGENTS_DATA[username]['name']} {time_str} | {action_text} ✅")
-        log_text = "\n".join(state["reminder_log_lines"]) + f"\n{NOTIFY_TAGS}"
-        if state["reminder_log_message_id"]:
-            try:
-                await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_log_message_id"])
-            except:
-                pass
-        if all_confirmed(active, state["confirmations"]):
-            log_text += f"\n\n🕐 Keyingi tekshiruv: {get_next_reminder_time()}"
-            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
-            state["reminder_log_message_id"] = sent.message_id
-            state["reminder_log_lines"] = []
-            if state["reminder_message_id"]:
-                try:
-                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=state["reminder_message_id"])
-                except:
-                    pass
-        else:
-            sent = await context.bot.send_message(chat_id=CHAT_ID, text=log_text)
-            state["reminder_log_message_id"] = sent.message_id
         return
 
     # CHECKLIST
@@ -973,7 +843,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = AGENTS_DATA[username]["name"]
         admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
 
-        # Verify logic
         vkey = f"{time_key}_{username}"
         if vkey not in checklist_verify_state:
             checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
@@ -1023,13 +892,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         task.setdefault("accepted_executors", set()).add(username)
         task.setdefault("accepted_at", {})[username] = datetime.now(TIMEZONE)
-        # Update main message keyboard
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
-        # Delete only if it's a reminder message, NOT the main message
         if query.message.message_id != task.get("main_msg_id"):
             try:
                 await query.message.delete()
@@ -1037,7 +904,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         if task.get("reminder_msg_ids"):
             task["reminder_msg_ids"] = [m for m in task["reminder_msg_ids"] if m != query.message.message_id]
-        # Check if all accepted
         if all_accepted(task):
             await _on_all_accepted(context.bot, tid, task)
         save_tasks()
@@ -1049,7 +915,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = rest.index("_")
         tid = int(rest[:idx])
         username = rest[idx + 1:]
-        # Allow the assigned supervisor OR admin
         if query.from_user.username != username and query.from_user.username != ADMIN_USERNAME:
             await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
@@ -1060,13 +925,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Siz allaqachon qabul qilgansiz.")
             return
         task.setdefault("accepted_supervisors", set()).add(username)
-        # Update main message keyboard
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
             except:
                 pass
-        # Delete only if it's a reminder message, NOT the main message
         if query.message.message_id != task.get("main_msg_id"):
             try:
                 await query.message.delete()
@@ -1096,8 +959,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = AGENTS_DATA.get(username, {}).get("name", username)
         supervisors = task.get("supervisor", [])
         sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ {name} vazifani bajardi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
-            parse_mode="HTML")
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"✅ {name} vazifani bajardi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
+            parse_mode="HTML"
+        )
         try:
             await query.message.delete()
         except:
@@ -1121,8 +987,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = AGENTS_DATA.get(username, {}).get("name", username)
         supervisors = task.get("supervisor", [])
         sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"❌ {name} vazifani bekor qildi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
-            parse_mode="HTML")
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"❌ {name} vazifani bekor qildi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
+            parse_mode="HTML"
+        )
         try:
             await query.message.delete()
         except:
@@ -1152,8 +1021,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_reply_markup(reply_markup=None)
         except:
             pass
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"⏰ Deadline uzaytirildi.\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\nYangi deadline: 📅 {new_dl}\n@{task['creator_username']}",
-            parse_mode="HTML")
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"⏰ Deadline uzaytirildi.\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\nYangi deadline: 📅 {new_dl}\n@{task['creator_username']}",
+            parse_mode="HTML"
+        )
         return
 
     # ESIMDA
@@ -1179,7 +1051,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
-    # ZADACHI EDIT/DELETE
     # ZADACHI — BAJARDIM
     if data.startswith("ztask_done_"):
         rest = data[11:]
@@ -1199,11 +1070,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task.setdefault("done", set()).add(username)
         task.setdefault("done_at", {})[username] = now_done
 
-        # Build completion message
         name = AGENTS_DATA.get(username, {}).get("name", username)
         supervisors = task.get("supervisor", [])
         creator_username = task["creator_username"]
-        sup_tags = " ".join(f"@{u}" for u in supervisors)
         seen = set()
         tags_list = []
         for t in ([creator_username] + list(supervisors)):
@@ -1231,13 +1100,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{all_tags}"
         )
 
-        # Keyboard — creator confirms (grey until pressed)
         creator_name = task["creator"]
         keyboard = [[InlineKeyboardButton(f"⬜ Qabul qildim — {creator_name}", callback_data=f"ztask_doneack_{tid}_{creator_username}")]]
 
         await context.bot.send_message(chat_id=CHAT_ID, text=msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-        # Delete all task related messages from group
         if task.get("main_msg_id"):
             try:
                 await context.bot.delete_message(chat_id=CHAT_ID, message_id=task["main_msg_id"])
@@ -1253,14 +1120,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_tasks()
 
-        # Delete zadachi message
         try:
             await query.message.delete()
         except:
             pass
         return
 
-    # ZADACHI — DONE ACK (creator confirms)
+    # ZADACHI — DONE ACK
     if data.startswith("ztask_doneack_"):
         rest = data[14:]
         idx = rest.index("_")
@@ -1277,7 +1143,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         task.setdefault("done_confirmed", set()).add(username)
         creator_name = task["creator"]
-        # Update button to green
         try:
             await query.message.edit_reply_markup(
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ Qabul qildim — {creator_name}", callback_data="noop")]])
@@ -1301,7 +1166,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("👷 Ijrochini o'zgartir", callback_data=f"ztask_editfield_target_{tid}")],
             [InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")],
         ]
-        # Save zadachi message id to prevent auto-delete
         zadacha_state[f"edit_zadachi_{query.from_user.id}"] = {"zadachi_msg_id": query.message.message_id}
         edit_sent = await query.message.reply_text(
             f"📌 №{tid} | <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n\nNimani o'zgartirmoqchisiz?",
@@ -1393,7 +1257,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             remind_time = dt - timedelta(minutes=30)
             if remind_time > now3:
                 context.job_queue.run_once(zadacha_pre_deadline_job, when=(remind_time - now3).total_seconds(), name=f"zpre_{tid}", data={"task_id": tid})
-        # Send updated message to group
         if task.get("main_msg_id"):
             try:
                 await context.bot.edit_message_text(
@@ -1404,16 +1267,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except:
                 pass
-        # Delete reminder msgs
         for mid in task.get("reminder_msg_ids", []):
             try:
                 await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
             except:
                 pass
         task["reminder_msg_ids"] = []
-        # Schedule new accept reminders
         context.job_queue.run_once(zadacha_accept_reminder_job, when=300, name=f"zaccrem_{tid}", data={"task_id": tid})
-        # Clean up state messages
         user_id3 = query.from_user.id
         msgs3 = zadacha_state.pop(user_id3, {}).get("messages", [])
         for mid in msgs3:
@@ -1489,8 +1349,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
             [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
         ]
-        confirm_sent = await query.message.reply_text(f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n<tg-spoiler>{task['text'][:50]}</tg-spoiler>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-        # Store confirm msg id and zadachi msg id for later deletion
+        confirm_sent = await query.message.reply_text(
+            f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n<tg-spoiler>{task['text'][:50]}</tg-spoiler>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         zadacha_state[f"del_confirm_{tid}"] = {
             "confirm_msg_id": confirm_sent.message_id,
             "zadachi_msg_id": query.message.message_id,
@@ -1521,12 +1384,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         del zadacha_tasks[tid]
         save_tasks()
-        # Delete confirm message immediately
         try:
             await query.message.delete()
         except:
             pass
-        # Send success and delete it + zadachi message after 5 seconds
         sent_ok = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ №{tid} vazifa o'chirildi.")
         del_info = zadacha_state.pop(f"del_confirm_{tid}", {})
         zadachi_msg_id = del_info.get("zadachi_msg_id")
@@ -1537,8 +1398,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 async def _on_all_accepted(bot, tid, task):
-    """Ikkalasi qabul qilganda barcha eslatmalar o'chadi."""
-    cancel_jobs_by_name_global(tid)
     for mid in task.get("reminder_msg_ids", []):
         try:
             await bot.delete_message(chat_id=CHAT_ID, message_id=mid)
@@ -1546,9 +1405,6 @@ async def _on_all_accepted(bot, tid, task):
             pass
     task["reminder_msg_ids"] = []
     save_tasks()
-
-def cancel_jobs_by_name_global(tid):
-    pass  # Job queue not accessible here; handled in job scheduling
 
 # =========================
 # ADDAGENT / EDITAGENT / DELAGENT
@@ -1685,7 +1541,7 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         username = s.get("username", "")
         lunch = AGENTS_DATA.get(username, {}).get("lunch", None)
         current = f"{lunch[0]:02d}:00 - {lunch[1]:02d}:00" if lunch else "Belgilanmagan"
-        sent = await context.bot.send_message(chat_id=user_id, text=f"Hozirgi tushlik vaqti: {current}\n\nYangi tushlik boshlanish vaqtini kiriting (masalan: 13):")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"Hozirgi tushlik vaqti: {current}\n\nYangi tushlik boshlanish vaqtini kiriting (masalan: 13:00):")
         s["messages"].append(sent.message_id)
     elif data.startswith("editday__"):
         day_idx = int(data[9:])
@@ -1713,7 +1569,8 @@ async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         warn = await context.bot.send_message(chat_id=user_id, text="⚠️ Jarayon xabarlari ⏱ 5 soniyadan keyin o'chadi")
         sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
         del_list = msgs + [sent.message_id, warn.message_id]
-        if cmd_msg: del_list.append(cmd_msg)
+        if cmd_msg:
+            del_list.append(cmd_msg)
         schedule_delete(context.bot, user_id, del_list)
 
 async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1761,7 +1618,6 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     username = update.effective_user.username
     text = update.message.text.strip()
 
-    # ADDAGENT — only admin
     if user_id in addagent_state:
         if username != ADMIN_USERNAME:
             return
@@ -1809,7 +1665,6 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                 await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
         return
 
-    # EDITAGENT — only admin
     if user_id in editagent_state:
         if username != ADMIN_USERNAME:
             return
@@ -1852,9 +1707,9 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         elif step == "end_hour":
             try:
                 h = int(text.split(":")[0]) if ":" in text else int(text)
-                username = s["username"]
-                for d in AGENTS_DATA[username]["work_days"]:
-                    AGENTS_DATA[username]["work_hours"][str(d)] = [s["start_hour"], h]
+                username_edit = s["username"]
+                for d in AGENTS_DATA[username_edit]["work_days"]:
+                    AGENTS_DATA[username_edit]["work_hours"][str(d)] = [s["start_hour"], h]
                 save_agents(AGENTS_DATA)
                 msgs = s.get("messages", [])
                 editagent_state.pop(user_id, None)
@@ -1867,25 +1722,24 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                 h = int(text.split(":")[0]) if ":" in text else int(text)
                 s["lunch_start"] = h
                 s["step"] = "lunch_end"
-                sent = await context.bot.send_message(chat_id=user_id, text="Tushlik tugash vaqtini kiriting (masalan: 14):")
+                sent = await context.bot.send_message(chat_id=user_id, text="Tushlik tugash vaqtini kiriting (masalan: 14:00):")
                 s["messages"].append(sent.message_id)
             except:
                 await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
         elif step == "lunch_end":
             try:
                 h = int(text.split(":")[0]) if ":" in text else int(text)
-                username = s["username"]
-                AGENTS_DATA[username]["lunch"] = [s["lunch_start"], h]
+                username_edit = s["username"]
+                AGENTS_DATA[username_edit]["lunch"] = [s["lunch_start"], h]
                 save_agents(AGENTS_DATA)
                 msgs = s.get("messages", [])
                 editagent_state.pop(user_id, None)
-                sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Tushlik vaqti {s['lunch_start']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
-                schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+                sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Tushlik vaqti {s['lunch_start']:02d}:00 — {h:02d}:00 ga ozgartirildi.\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi")
+                schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id], delay=60)
             except:
                 await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
         return
 
-    # ZADACHA
     if user_id not in zadacha_state:
         return
     zs = zadacha_state[user_id]
@@ -1894,7 +1748,6 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     if step == "text":
         zs["text"] = update.message.text
         zs["step"] = "confirm"
-        # Track user's text message for later deletion
         zs["messages"].append(update.message.message_id)
         targets = zs.get("targets", [])
         supervisors = zs.get("supervisor", [])
@@ -1934,7 +1787,7 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
                     await context.bot.edit_message_text(
                         chat_id=CHAT_ID, message_id=task["main_msg_id"],
                         text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
-                    parse_mode="HTML",
+                        parse_mode="HTML",
                         reply_markup=build_zadacha_main_keyboard(tid, task)
                     )
                 except:
@@ -1961,9 +1814,7 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 # ZADACHA COMMAND + CALLBACKS
 # =========================
 
-
 def get_available_supervisors_for_deadline(targets, date_str, time_str):
-    """Deadline vaqtida ish vaqti bor hodimlarni qaytaradi (targetlardan tashqari)."""
     try:
         now = datetime.now(TIMEZONE)
         year = now.year
@@ -1990,7 +1841,6 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username
     chat_type = update.effective_chat.type
 
-    # Guruhda /zadacha — lichkaga yo'naltir
     if chat_type in ("group", "supergroup"):
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
@@ -2001,7 +1851,6 @@ async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     zadacha_state[user_id] = {"step": "executor", "messages": [], "creator_username": username}
-    # Track /zadacha command message for deletion
     if update.message:
         zadacha_state[user_id]["messages"].append(update.message.message_id)
     all_agents = list(AGENTS_DATA.keys())
@@ -2037,7 +1886,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("ze_"):
-        # Step 1: Ijrochi tanlandi -> Step 2: Deadline sana
         target = data[3:]
         targets = [target]
         zadacha_state[user_id]["targets"] = targets
@@ -2060,7 +1908,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data.startswith("zd_"):
-        # Step 2: Deadline sana tanlandi -> Step 3: Deadline vaqt
         date_str = data[3:]
         zadacha_state[user_id]["deadline_date"] = date_str
         targets = zadacha_state[user_id].get("targets", [])
@@ -2076,7 +1923,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data.startswith("ztime_"):
-        # Step 3: Vaqt tanlandi -> Step 4: Nazoratchi (deadline vaqtida ish vaqti borlar)
         time_str = data[6:]
         zadacha_state[user_id]["deadline_time"] = time_str
         zadacha_state[user_id]["step"] = "supervisor"
@@ -2084,16 +1930,14 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date_str = zadacha_state[user_id].get("deadline_date", "")
         available_sups = get_available_supervisors_for_deadline(targets, date_str, time_str)
         if not available_sups:
-            # Hech kim ish vaqtida bo'lmasa — barchani ko'rsat
             available_sups = [u for u in AGENTS_DATA.keys() if u not in targets]
         keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in available_sups]
         keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")])
         keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
-        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang (deadline vaqtida ish vaqti borlar):", reply_markup=InlineKeyboardMarkup(keyboard))
+        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
         zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data.startswith("zs_"):
-        # Step 4: Nazoratchi tanlandi -> Step 5: Matn
         supervisor = data[3:]
         targets = zadacha_state[user_id].get("targets", [])
         if len(targets) == 1 and supervisor == targets[0]:
@@ -2112,13 +1956,11 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         where = data[6:]
         all_agents = list(AGENTS_DATA.keys())
         if where == "start":
-            # Back to executor
             keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
             keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
             sent = await context.bot.send_message(chat_id=user_id, text="👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
             zadacha_state[user_id]["messages"].append(sent.message_id)
         elif where == "date":
-            # Back to date selection
             targets = zadacha_state[user_id].get("targets", [])
             now2 = datetime.now(TIMEZONE)
             available_dates = get_available_dates_for_targets(targets)
@@ -2137,7 +1979,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(chat_id=user_id, text="📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
             zadacha_state[user_id]["messages"].append(sent.message_id)
         elif where == "supervisor":
-            # Back to supervisor (show available for deadline)
             targets = zadacha_state[user_id].get("targets", [])
             date_str2 = zadacha_state[user_id].get("deadline_date", "")
             time_str3 = zadacha_state[user_id].get("deadline_time", "")
@@ -2150,8 +1991,11 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
             zadacha_state[user_id]["messages"].append(sent.message_id)
         elif where in ("target", "text"):
-            # Back to text input
-            sent = await context.bot.send_message(chat_id=user_id, text="✏️ Vazifa matnini yozing:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]]))
+            sent = await context.bot.send_message(
+                chat_id=user_id,
+                text="✏️ Vazifa matnini yozing:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]])
+            )
             zadacha_state[user_id]["messages"].append(sent.message_id)
 
     elif data == "zconfirm_yes":
@@ -2192,7 +2036,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "done_confirmed": set(),
         }
 
-        # Send main message to group
         main_sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=build_zadacha_main_text(zadacha_tasks[tid]),
@@ -2201,14 +2044,12 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         zadacha_tasks[tid]["main_msg_id"] = main_sent.message_id
 
-        # Schedule jobs
         remind_time = dt - timedelta(minutes=30)
         if remind_time > now:
             context.job_queue.run_once(zadacha_pre_deadline_job, when=(remind_time - now).total_seconds(), name=f"zpre_{tid}", data={"task_id": tid})
         if dt > now:
             context.job_queue.run_once(zadacha_deadline_job, when=(dt - now).total_seconds(), name=f"zdue_{tid}", data={"task_id": tid})
 
-        # Accept reminder — ish vaqtini tekshirib schedule qilish
         all_users = targets + supervisors
         earliest = 300
         for u in all_users:
@@ -2222,7 +2063,6 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_tasks()
 
-        # Notify creator
         target_str = zadacha_target_str(targets)
         sent_ok = await context.bot.send_message(
             chat_id=user_id,
@@ -2234,10 +2074,9 @@ async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━━━━\n"
                 f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
                 f"⚠️ Bu xabar ⏱ 10 soniyadan keyin o'chadi, vazifa guruhda qoladi"
-            )
-        ,
-            parse_mode="HTML")
-        # Warn then delete all process messages after 10s
+            ),
+            parse_mode="HTML"
+        )
         warn_sent = await context.bot.send_message(
             chat_id=user_id,
             text="⚠️ Jarayon xabarlari ⏱ 10 soniyadan keyin o'chadi"
@@ -2258,7 +2097,6 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     requester = update.effective_user.username
     chat_type = update.effective_chat.type
 
-    # Guruhda /zadachi — lichkaga yo'naltir
     if chat_type in ("group", "supergroup"):
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
@@ -2269,9 +2107,7 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         requester_id = update.effective_user.id
-        # Store requester for cancel button check
         zadacha_state[f"zadachi_group_{sent.message_id}"] = requester_id
-        # Auto-delete both after 60s
         async def auto_del():
             await asyncio.sleep(60)
             try:
@@ -2301,10 +2137,8 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             show_targets = task["targets"]
         else:
             show_targets = [u for u in task["targets"] if u == requester]
-            # also show if creator
             if not show_targets and requester == task["creator_username"]:
                 show_targets = task["targets"]
-            # also show if supervisor
             supervisors_list = task.get("supervisor", [])
             if not show_targets and requester in supervisors_list:
                 show_targets = task["targets"]
@@ -2349,7 +2183,6 @@ async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboards) if keyboards else None,
         parse_mode="HTML"
     )
-    # Delete original /zadachi command message too
     try:
         await update.message.delete()
     except:
@@ -2380,9 +2213,9 @@ async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n<tg-spoiler>{task['text']}</tg-spoiler>\nDeadline: 📅 {deadline_str}{sup_line}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        ,
-            parse_mode="HTML")
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
 
 async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
     tid = context.job.data["task_id"]
@@ -2407,10 +2240,9 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CHAT_ID,
             text=f"📌 {name}, deadline tugadi.\n━━━━━━━━━━━━━━\n<tg-spoiler>{task['text']}</tg-spoiler>\nDeadline: 📅 {deadline_str}\n\n@{username} @{task['creator_username']}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        ,
-            parse_mode="HTML")
-
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
 
 # =========================
 # DAVOMAT TIZIMI
@@ -2419,30 +2251,21 @@ async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
 import random
 import string
 
-ATTENDANCE_AGENTS = {
-
-
-}
+ATTENDANCE_AGENTS = {}
 
 def get_attendance_code_time(username):
-    """Bugungi ish boshlanish vaqtiga qarab kod yuborish vaqtini qaytaradi (10 daqiqa oldin)"""
     now = datetime.now(TIMEZONE)
     weekday = now.weekday()
     schedule = get_agent_work_schedule(username)
     if weekday not in schedule:
         return None, None
     start_h, _ = schedule[weekday]
-    code_h = start_h
-    code_m = 50  # 10 daqiqa oldin (soat boshlanishidan 10 daqiqa oldin)
-    if code_m >= 60:
-        code_h += 1
-        code_m -= 60
-    code_h -= 1  # 10 daqiqa oldin deganda: 10:00 -> 09:50
+    code_h = start_h - 1
+    code_m = 50
     deadline_h = start_h
     deadline_m = 10
     return f"{code_h:02d}:{code_m:02d}", f"{deadline_h:02d}:{deadline_m:02d}"
 
-# Screenshot jadval
 SCREENSHOT_SCHEDULE = {
     "10:30": ["sirlyinfo"],
     "11:00": ["sirlyinfo"],
@@ -2473,13 +2296,12 @@ SCREENSHOT_SCHEDULE = {
     "23:30": ["sirlyinfo"],
 }
 
-# State
 attendance_state = {
-    "daily_codes": {},        # username -> code
-    "arrived": set(),         # arrived today
-    "arrived_date": "",       # DD.MM.YYYY
-    "screenshot_msg_ids": {}, # time_key -> {username -> msg_id}
-    "screenshot_done": {},    # time_key -> set of usernames
+    "daily_codes": {},
+    "arrived": set(),
+    "arrived_date": "",
+    "screenshot_msg_ids": {},
+    "screenshot_done": {},
     "screenshot_date": "",
 }
 
@@ -2497,44 +2319,22 @@ def reset_attendance_if_new_day():
         attendance_state["screenshot_done"] = {}
         attendance_state["screenshot_date"] = today
 
-# =========================
-# DAVOMAT JOBS
-# =========================
-
 async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
     username = context.job.data["username"]
     reset_attendance_if_new_day()
-
     if username in attendance_state["arrived"]:
-        # Reschedule for next day
-        # Schedule for next day
-        context.job_queue.run_once(
-            send_attendance_code_job,
-            when=seconds_until_time(5, 0),
-            name=f"att_code_{username}",
-            data={"username": username}
-        )
+        context.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
         return
-
     code_time, deadline = get_attendance_code_time(username)
     if not code_time:
-        # Not a work day, reschedule for tomorrow
         now2 = datetime.now(TIMEZONE)
         tomorrow = now2 + timedelta(days=1)
-        context.job_queue.run_once(
-            send_attendance_code_job,
-            when=(tomorrow.replace(hour=9, minute=0, second=0) - now2).total_seconds(),
-            name=f"att_code_{username}",
-            data={"username": username}
-        )
+        context.job_queue.run_once(send_attendance_code_job, when=(tomorrow.replace(hour=9, minute=0, second=0) - now2).total_seconds(), name=f"att_code_{username}", data={"username": username})
         return
-
     agent = ATTENDANCE_AGENTS[username]
     code = generate_code()
     attendance_state["daily_codes"][username] = code
-
     now = datetime.now(TIMEZONE)
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
@@ -2550,39 +2350,22 @@ async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
             f"ℹ️ Kod har kuni yangilanadi"
         )
     )
-
-    # Schedule fine check
     deadline_h, deadline_m = map(int, deadline.split(":"))
     target = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
     if target > now:
         secs = (target - now).total_seconds()
-        context.job_queue.run_once(
-            check_attendance_job,
-            when=secs,
-            name=f"att_check_{username}",
-            data={"username": username}
-        )
-    
-    # Reschedule for next day - recalculate tomorrow's code time
-    context.job_queue.run_once(
-        send_attendance_code_job,
-        when=seconds_until_time(5, 0),  # Check at 05:00 next day
-        name=f"att_code_{username}",
-        data={"username": username}
-    )
+        context.job_queue.run_once(check_attendance_job, when=secs, name=f"att_check_{username}", data={"username": username})
+    context.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
 
 async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
     username = context.job.data["username"]
     reset_attendance_if_new_day()
-
     if username in attendance_state["arrived"]:
         return
-
     agent = ATTENDANCE_AGENTS[username]
     now = datetime.now(TIMEZONE)
     date_str = now.strftime("%d.%m")
     time_str = now.strftime("%H:%M")
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
@@ -2600,18 +2383,14 @@ async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != CHAT_ID:
         return
-
     sender = update.effective_user.username
     if not sender:
         return
-
     now = datetime.now(TIMEZONE)
     date_str = now.strftime("%d.%m")
     time_str = now.strftime("%H:%M")
-
     reset_attendance_if_new_day()
 
-    # Davomat tekshirish — faqat deadline vaqtidan oldin
     if sender in ATTENDANCE_AGENTS and sender not in attendance_state["arrived"]:
         agent = ATTENDANCE_AGENTS[sender]
         _, deadline_str = get_attendance_code_time(sender)
@@ -2619,30 +2398,20 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             deadline_str = "10:10"
         deadline_h, deadline_m = map(int, deadline_str.split(":"))
         deadline_dt = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
-
-        # Faqat deadline vaqtidan oldin kelgan rasm arrival sifatida qabul qilinadi
         if now <= deadline_dt:
             attendance_state["arrived"].add(sender)
-            # Cancel fine check job
             cancel_jobs_by_name(context.job_queue, f"att_check_{sender}")
-
             keyboard = [[InlineKeyboardButton(
                 f"⬜ Tasdiqlandi — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
                 callback_data=f"att_confirm_{sender}"
             )]]
-
             await context.bot.send_message(
                 chat_id=CHAT_ID,
-                text=(
-                    f"✅ {agent['name']} ishga keldi!\n"
-                    f"📅 {date_str} | 🕐 {time_str}\n\n"
-                    f"@{ADMIN_USERNAME}"
-                ),
+                text=(f"✅ {agent['name']} ishga keldi!\n📅 {date_str} | 🕐 {time_str}\n\n@{ADMIN_USERNAME}"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
 
-    # Screenshot tekshirish — oxirgi 10 daqiqa ichidagi vaqt
     current_time_key = None
     best_diff = None
     for tk in SCREENSHOT_SCHEDULE:
@@ -2650,29 +2419,19 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tk_h, tk_m = map(int, tk.split(":"))
             tk_dt = now.replace(hour=tk_h, minute=tk_m, second=0, microsecond=0)
             diff = (now - tk_dt).total_seconds()
-            if 0 <= diff <= 600:  # 10 daqiqa ichida
+            if 0 <= diff <= 600:
                 if best_diff is None or diff < best_diff:
                     best_diff = diff
                     current_time_key = tk
 
     if current_time_key:
-        # Check if sender is working today and is in schedule
-        now_wd = datetime.now(TIMEZONE).weekday()
-        sender_working = now_wd in AGENTS_DATA.get(sender, {}).get("work_days", list(range(7)))
-        sender_in_schedule = sender in SCREENSHOT_SCHEDULE.get(current_time_key, [])
-        done = attendance_state["screenshot_done"].get(current_time_key, set())
-
-        # Allowed senders: anyone in the screenshot schedule for this slot
         allowed_senders = set(SCREENSHOT_SCHEDULE.get(current_time_key, []))
         if sender not in allowed_senders:
-            # Boshqa akkountdan keldi
             names = ", ".join(f"@{u}" for u in allowed_senders)
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"⚠️ Screenshot faqat quyidagi profillardan qabul qilinadi: {names}"
-            )
+            await context.bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Screenshot faqat quyidagi profillardan qabul qilinadi: {names}")
             return
 
+        done = attendance_state["screenshot_done"].get(current_time_key, set())
         if sender not in done:
             agent = ATTENDANCE_AGENTS.get(sender, {})
             name = agent.get("name") or AGENTS_DATA.get(sender, {}).get("name", sender)
@@ -2690,20 +2449,15 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            # Mark all agents for this time slot as done (one screenshot is enough)
             agents_for_slot = SCREENSHOT_SCHEDULE.get(current_time_key, [sender])
             for _u in agents_for_slot:
                 attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(_u)
-            # Cancel fine jobs for all agents in slot
             for _u in agents_for_slot:
                 cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{_u}")
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}")
-            # Save msg ids for deletion: confirm msg, photo msg, reminder msg
             ss_key = f"ss_{current_time_key.replace(':', '')}_{sender}"
-            # Get reminder msg id - could be stored under any agent in the slot
             reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}")
             if not reminder_mid:
-                # Try other agents in the slot
                 for _u in SCREENSHOT_SCHEDULE.get(current_time_key, []):
                     reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{_u}")
                     if reminder_mid:
@@ -2714,7 +2468,6 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "reminder_msg_id": reminder_mid,
                 "chat_id": update.effective_chat.id,
             }
-            # Cancel fine job
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
 
 # =========================
@@ -2726,10 +2479,8 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     agents = context.job.data["agents"]
     reset_attendance_if_new_day()
 
-    # Filter agents who are working right now (check work_days AND work_hours)
     now_check = datetime.now(TIMEZONE)
     now_wd = now_check.weekday()
-    now_h = now_check.hour
     tk_h = int(time_key.split(":")[0])
 
     def is_working_at_time(username, hour):
@@ -2742,37 +2493,23 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
         return wh[0] <= hour < wh[1]
 
     agents = [u for u in agents if is_working_at_time(u, tk_h)]
-
     agents = [u for u in agents if not (
         AGENTS_DATA.get(u, {}).get("lunch") and
         AGENTS_DATA[u]["lunch"][0] <= tk_h < AGENTS_DATA[u]["lunch"][1]
     )]
     if not agents:
-        # Reschedule for next day same time
         h, m = map(int, time_key.split(":"))
-        context.job_queue.run_once(
-            screenshot_reminder_job,
-            when=seconds_until_time(h, m),
-            name=f"ss_reminder_{time_key}",
-            data={"time_key": time_key, "agents": context.job.data["agents"]}
-        )
+        context.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": context.job.data["agents"]})
         return
 
     now = datetime.now(TIMEZONE)
-    date_str = now.strftime("%d.%m")
-
     done = attendance_state["screenshot_done"].get(time_key, set())
-    # Filter agents who haven't submitted yet
     pending_agents = [u for u in agents if u not in done]
     if not pending_agents:
         return
 
-    # If multiple agents - send one combined message
     if len(pending_agents) > 1:
-        names_tags = " | ".join(
-            f"{ATTENDANCE_AGENTS.get(u, {}).get('name', u)} @{u}"
-            for u in pending_agents
-        )
+        names_tags = " | ".join(f"{ATTENDANCE_AGENTS.get(u, {}).get('name', u)} @{u}" for u in pending_agents)
         reminder_sent = await context.bot.send_message(
             chat_id=CHAT_ID,
             text=(
@@ -2785,16 +2522,9 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
                 f"⚠️ 10 daqiqa ichida yuborilmasa 20,000 so'm jarima"
             )
         )
-        # Save reminder msg id for all pending agents
         for u in pending_agents:
             attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{u}"] = reminder_sent.message_id
-        # Schedule fine after 10 minutes for all
-        context.job_queue.run_once(
-            screenshot_fine_job,
-            when=600,
-            name=f"ss_fine_{time_key.replace(':', '')}",
-            data={"time_key": time_key, "username": pending_agents[0], "all_agents": pending_agents}
-        )
+        context.job_queue.run_once(screenshot_fine_job, when=600, name=f"ss_fine_{time_key.replace(':', '')}", data={"time_key": time_key, "username": pending_agents[0], "all_agents": pending_agents})
     else:
         username = pending_agents[0]
         agent = ATTENDANCE_AGENTS.get(username, {})
@@ -2812,42 +2542,27 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
             )
         )
         attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{username}"] = reminder_sent.message_id
-        context.job_queue.run_once(
-            screenshot_fine_job,
-            when=600,
-            name=f"ss_fine_{time_key.replace(':', '')}_{username}",
-            data={"time_key": time_key, "username": username, "all_agents": [username]}
-        )
+        context.job_queue.run_once(screenshot_fine_job, when=600, name=f"ss_fine_{time_key.replace(':', '')}_{username}", data={"time_key": time_key, "username": username, "all_agents": [username]})
 
-    # Reschedule next day
     h, m = map(int, time_key.split(":"))
-    context.job_queue.run_once(
-        screenshot_reminder_job,
-        when=seconds_until_time(h, m),
-        name=f"ss_reminder_{time_key}",
-        data={"time_key": time_key, "agents": agents}
-    )
+    context.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": agents})
 
 async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
     time_key = context.job.data["time_key"]
     username = context.job.data["username"]
     reset_attendance_if_new_day()
-
     done = attendance_state["screenshot_done"].get(time_key, set())
     if username in done:
         return
-
     agent = ATTENDANCE_AGENTS.get(username, {})
     name = agent.get("name", username)
     now = datetime.now(TIMEZONE)
     date_str = now.strftime("%d.%m")
     time_str = now.strftime("%H:%M")
-
     keyboard = [[InlineKeyboardButton(
         f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
         callback_data=f"ss_fine_confirm_{time_key.replace(':', '')}_{username}"
     )]]
-
     await context.bot.send_message(
         chat_id=CHAT_ID,
         text=(
@@ -2867,38 +2582,53 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_type = update.effective_chat.type
 
-    # Guruhda /start — lichkaga yozishni tavsiya et
+    # Guruhda /start — hech narsa qilma
     if chat_type in ("group", "supergroup"):
-        if user.username != ADMIN_USERNAME:
-            bot_info = await context.bot.get_me()
-            bot_username = bot_info.username
-            name = user.first_name or user.username or "Salom"
-            sent = await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"👋 {name}! Bot bilan ishlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi"
-            )
-            schedule_delete(context.bot, CHAT_ID, [sent.message_id], delay=60)
-            return
-        # Admin guruhda /start bosdi
-        active = get_active_agents()
-        active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
-        await context.bot.send_message(chat_id=CHAT_ID, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv hodimlar:\n{active_text}")
-        return
-
-    # Shaxsiy xabarda /start — qo'llanma
-    if user.username == ADMIN_USERNAME:
-        active = get_active_agents()
-        active_text = "\n".join(f"🟢 {AGENTS_DATA[u]['name']}" for u in get_agent_order() if u in active) or "Hozir hech kim ish vaqtida emas"
-        await context.bot.send_message(chat_id=user.id, text=f"✅ Bot ishga tushdi\n\n👨🏻‍💻 Aktiv hodimlar:\n{active_text}")
         return
 
     name = user.first_name or user.username or "Salom"
+
+    # Admin qo'llanmasi
+    if user.username == ADMIN_USERNAME:
+        guide_text = (
+            f"👋 Salom, {name}!\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "🤖 BOT BOSHQARUVI\n"
+            "━━━━━━━━━━━━━━\n"
+            "/start — Qo'llanmani ko'rish\n"
+            "/umidstop — Botni to'xtatish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "👥 HODIMLAR\n"
+            "━━━━━━━━━━━━━━\n"
+            "/addagent — Hodim qo'shish\n"
+            "/editagent — Hodimni tahrirlash\n"
+            "/delagent — Hodimni o'chirish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "📋 CHECKLIST\n"
+            "━━━━━━━━━━━━━━\n"
+            "/checklist — Checklistni qo'lda yuborish\n"
+            "/test_checklist — Test rejimida yuborish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "📌 VAZIFALAR\n"
+            "━━━━━━━━━━━━━━\n"
+            "/zadacha — Yangi vazifa yaratish\n"
+            "/zadachi — Barcha vazifalarni ko'rish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "ℹ️ ESLATMA\n"
+            "━━━━━━━━━━━━━━\n"
+            "• Checklist har kuni 10:15 da avtomatik yuboriladi\n"
+            "• Screenshot har 30 daqiqada so'raladi\n"
+            "• Deadline o'tsa — bot avtomatik xabar yuboradi"
+        )
+        await context.bot.send_message(chat_id=user.id, text=guide_text)
+        return
+
+    # Xodimlar qo'llanmasi
     guide_text = (
         f"👋 Salom, {name}!\n\n"
-        "📱 Bot bilan ishlash qo'llanmasi:\n\n"
         "━━━━━━━━━━━━━━\n"
         "📌 VAZIFALAR\n"
-        "━━━━━━━━━━━━━━\n\n"
+        "━━━━━━━━━━━━━━\n"
         "/zadacha — Yangi vazifa yaratish\n"
         "• Ijrochi tanlaysiz\n"
         "• Nazoratchi tanlaysiz\n"
@@ -2909,7 +2639,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Bajardim tugmasi\n\n"
         "━━━━━━━━━━━━━━\n"
         "⚠️ ESLATMA\n"
-        "━━━━━━━━━━━━━━\n\n"
+        "━━━━━━━━━━━━━━\n"
         "Vazifa yaratish faqat\n"
         "shaxsiy xabar orqali ishlaydi!"
     )
@@ -2920,7 +2650,6 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     state["stopped"] = True
     state["cycle_id"] += 1
-    cancel_jobs_by_name(context.job_queue, "reminder")
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
     await context.bot.send_message(chat_id=CHAT_ID, text="🛑 Bot toxtatildi.\nQayta ishga tushirish uchun /start bosing.")
@@ -2937,11 +2666,9 @@ async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_key = "10:15"
-    active = {"sirlyinfo"}
+    active = CHECKLIST_AGENTS
     target_chat = update.effective_chat.id
-    # Reset confirmations for fresh test
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
-    # Reset verify state
     vkey = f"{time_key}_sirlyinfo"
     checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
     sent = await context.bot.send_message(
@@ -2961,51 +2688,33 @@ def main():
     load_tasks()
     state["cycle_id"] += 1
 
-    # Zadacha cleanup job — har 5 daqiqada
+    # Zadacha cleanup job
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
 
-    # Davomat jobs - dynamic based on today's work hours
+    # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
+    for time_key in CHECKLIST_TIMES:
+        h, m = map(int, time_key.split(":"))
+        application.job_queue.run_once(
+            checklist_job,
+            when=seconds_until_time(h, m),
+            name=f"checklist_{time_key}",
+            data={"cycle_id": state["cycle_id"], "time_key": time_key}
+        )
+
+    # Davomat jobs
     for username in ATTENDANCE_AGENTS:
         code_time, _ = get_attendance_code_time(username)
         if code_time:
             h, m = map(int, code_time.split(":"))
-            now_check = datetime.now(TIMEZONE)
-            target = now_check.replace(hour=h, minute=m, second=0, microsecond=0)
-            if target <= now_check:
-                # Already passed today — schedule for tomorrow
-                application.job_queue.run_once(
-                    send_attendance_code_job,
-                    when=seconds_until_time(h, m),
-                    name=f"att_code_{username}",
-                    data={"username": username}
-                )
-            else:
-                application.job_queue.run_once(
-                    send_attendance_code_job,
-                    when=seconds_until_time(h, m),
-                    name=f"att_code_{username}",
-                    data={"username": username}
-                )
+            application.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(h, m), name=f"att_code_{username}", data={"username": username})
         else:
-            # Not a work day today, check tomorrow at 05:00
-            application.job_queue.run_once(
-                send_attendance_code_job,
-                when=seconds_until_time(5, 0),
-                name=f"att_code_{username}",
-                data={"username": username}
-            )
+            application.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
 
     # Screenshot reminder jobs
     for time_key, agents in SCREENSHOT_SCHEDULE.items():
         h, m = map(int, time_key.split(":"))
-        application.job_queue.run_once(
-            screenshot_reminder_job,
-            when=seconds_until_time(h, m),
-            name=f"ss_reminder_{time_key}",
-            data={"time_key": time_key, "agents": agents}
-        )
+        application.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": agents})
 
-    # Photo handler — rasm va fayl sifatida yuborilgan screenshotlarni ham qabul qilish
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
     application.add_handler(MessageHandler(filters.Document.IMAGE & filters.Chat(CHAT_ID), photo_handler))
 
