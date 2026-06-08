@@ -54,11 +54,6 @@ DEFAULT_AGENTS = {
         "work_days": [0, 1, 2, 3, 4, 5, 6],
         "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
     },
-    "Muhammadhumoyun_Mudarris": {
-        "name": "Muhammadhumoyun", "username": "Muhammadhumoyun_Mudarris", "phone": "+998 88 811 88 51",
-        "work_days": [0, 1, 2, 3, 4, 5],
-        "work_hours": {"0": [10, 20], "1": [10, 20], "2": [10, 20], "3": [10, 20], "4": [10, 20], "5": [10, 20]},
-    },
     "kh_nosirov": {
         "name": "Xojiakbar", "username": "kh_nosirov", "phone": "",
         "work_days": [0, 1, 2, 3, 4, 5, 6],
@@ -476,15 +471,10 @@ async def send_checklist(bot, time_key):
     active = CHECKLIST_AGENTS
     if not active:
         return
-    for key in ["checklist_log_message_ids", "checklist_message_ids"]:
-        if state[key].get(time_key):
-            try:
-                await bot.delete_message(chat_id=CHAT_ID, message_id=state[key][time_key])
-            except:
-                pass
-            state[key][time_key] = None
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
     state["checklist_log_lines"][time_key] = []
+    # checklist_verified ni ham tozalash
+    state.setdefault("checklist_verified", {})[time_key] = set()
     sent = await bot.send_message(
         chat_id=CHAT_ID,
         text=build_checklist_text(time_key, active),
