@@ -2669,17 +2669,24 @@ async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_key = "10:15"
     active = CHECKLIST_AGENTS
-    target_chat = update.effective_chat.id
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
-    vkey = f"{time_key}_sirlyinfo"
-    checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
+    state.setdefault("checklist_verified", {})[time_key] = set()
+    for u in active:
+        vkey = f"{time_key}_{u}"
+        checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
     sent = await context.bot.send_message(
-        chat_id=target_chat,
+        chat_id=CHAT_ID,
         text=build_checklist_text(time_key, active),
         reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
         parse_mode="HTML"
     )
     state["checklist_message_ids"][time_key] = sent.message_id
+    # Adminga tasdiqlash xabari
+    if update.effective_chat.id != CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="✅ Checklist guruhga yuborildi."
+        )
 
 # =========================
 # MAIN
