@@ -59,10 +59,31 @@ body::before{
 .home-sub{font-size:13px;color:var(--white-50);margin-top:5px;font-weight:500}
 
 /* ── PAGE HEADER ── */
-.page-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--white-10)}
-.back-btn{background:var(--white-10);border:none;font-size:13px;color:var(--white);cursor:pointer;font-family:inherit;font-weight:600;padding:6px 12px;border-radius:10px;display:flex;align-items:center;gap:4px;transition:background .15s}
+.page-topbar{
+  position:sticky;top:0;z-index:10;
+  background:var(--green-dark);
+  padding:10px 16px 0;
+  margin:-16px -16px 16px;
+}
+.page-topbar-row1{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:6px;
+}
+.page-header{display:flex;align-items:center;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--white-10);margin-bottom:16px}
+.back-btn{
+  background:var(--white-10);border:none;
+  font-size:12px;color:var(--white);
+  cursor:pointer;font-family:inherit;font-weight:600;
+  padding:6px 10px;border-radius:10px;
+  display:flex;align-items:center;gap:3px;
+  transition:background .15s;white-space:nowrap;flex-shrink:0;
+}
 .back-btn:active{background:var(--white-20)}
-.page-title{font-size:17px;font-weight:700;color:var(--white)}
+.page-title{
+  font-size:15px;font-weight:700;color:var(--white);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:1;min-width:0;
+}
 
 /* ── CARDS GRID (home) ── */
 .cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
@@ -336,10 +357,16 @@ body::before{
 .img-modal img{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
 
 /* ── BREADCRUMB ── */
-.breadcrumb{padding:10px 16px 0;font-size:12px;color:var(--white-50);display:flex;flex-wrap:wrap;gap:4px;align-items:center;position:relative;z-index:1}
-.bc-item{cursor:pointer;color:var(--lime);font-weight:600}
-.bc-sep{opacity:.4}
-.bc-cur{color:var(--white);font-weight:600}
+.breadcrumb{
+  font-size:11px;color:var(--white-50);
+  display:flex;flex-wrap:nowrap;gap:3px;align-items:center;
+  overflow:hidden;
+  position:relative;z-index:1;
+  margin-bottom:4px;
+}
+.bc-item{cursor:pointer;color:var(--lime);font-weight:600;white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis}
+.bc-sep{opacity:.4;flex-shrink:0}
+.bc-cur{color:var(--white-80);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
 
 /* ── FADE ── */
 .fade{animation:fadeIn .2s ease}
@@ -392,82 +419,82 @@ body::before{
 </div>
 
 <div class="page" id="p-section">
-  <div class="breadcrumb" id="bc-section"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-section"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-home')">← Orqaga</button>
       <span class="page-title" id="section-title"></span>
     </div>
-    <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
-    <div id="cats-list" class="section-list"></div>
-    <div id="cat-form"></div>
   </div>
+  <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
+  <div id="cats-list" class="section-list"></div>
+  <div id="cat-form"></div>
 </div>
 
 <div class="page" id="p-cat">
-  <div class="breadcrumb" id="bc-cat"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-cat"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-section')">← Orqaga</button>
       <span class="page-title" id="cat-title"></span>
     </div>
-    <div class="search-wrap"><input class="search-inp" id="search-flows" placeholder="🔍 Qidirish..." oninput="renderFlows()"></div>
-    <div id="flows-list" class="section-list"></div>
-    <div id="flow-form"></div>
   </div>
+  <div class="search-wrap"><input class="search-inp" id="search-flows" placeholder="🔍 Qidirish..." oninput="renderFlows()"></div>
+  <div id="flows-list" class="section-list"></div>
+  <div id="flow-form"></div>
 </div>
 
 <div class="page" id="p-flow">
-  <div class="breadcrumb" id="bc-flow"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-flow"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-cat')">← Orqaga</button>
       <span class="page-title" id="flow-title"></span>
-      <div id="flow-admin-btns" style="display:none;margin-left:auto;gap:4px">
+      <div id="flow-admin-btns" style="display:none;margin-left:auto;gap:4px;flex-shrink:0;display:none">
         <button class="abtn" onclick="editFlowName()">✏</button>
         <button class="abtn abtn-red" onclick="deleteFlow()">✕</button>
       </div>
     </div>
-    <div id="flow-name-form" style="display:none;margin-bottom:14px"></div>
-    <div class="tree-wrap" id="tree-wrap"></div>
-    <div id="root-form"></div>
   </div>
+  <div id="flow-name-form" style="display:none;margin-bottom:14px"></div>
+  <div class="tree-wrap" id="tree-wrap"></div>
+  <div id="root-form"></div>
 </div>
 
 <div class="page" id="p-acad-cats">
-  <div class="breadcrumb" id="bc-acad-cats"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-acad-cats"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-home')">← Orqaga</button>
       <span class="page-title" id="acad-sec-title"></span>
     </div>
-    <div id="acad-cats-list" class="section-list"></div>
-    <div id="acad-cats-form"></div>
   </div>
+  <div id="acad-cats-list" class="section-list"></div>
+  <div id="acad-cats-form"></div>
 </div>
 
 <div class="page" id="p-acad-items">
-  <div class="breadcrumb" id="bc-acad-items"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-acad-items"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-acad-cats')">← Orqaga</button>
       <span class="page-title" id="acad-cat-title"></span>
     </div>
-    <div id="acad-cat-intro-box"></div>
-    <div id="acad-items-list" class="section-list"></div>
-    <div id="acad-items-form"></div>
   </div>
+  <div id="acad-cat-intro-box"></div>
+  <div id="acad-items-list" class="section-list"></div>
+  <div id="acad-items-form"></div>
 </div>
 
 <div class="page" id="p-acad-detail">
-  <div class="breadcrumb" id="bc-acad-detail"></div>
-  <div style="padding:0 0 16px">
+  <div class="page-topbar">
+    <div class="breadcrumb" id="bc-acad-detail"></div>
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-acad-items')">← Orqaga</button>
       <span class="page-title" id="acad-item-title"></span>
     </div>
-    <div id="acad-detail-body"></div>
   </div>
+  <div id="acad-detail-body"></div>
 </div>
 
 <div class="modal-bg" id="login-modal">
@@ -487,8 +514,8 @@ body::before{
 <div class="img-modal" id="img-modal" onclick="closeImg()"><img id="img-src" src="" alt=""></div>
 <div class="notif" id="notif"></div>
 
-<div style="position:fixed;top:12px;right:12px;z-index:50">
-  <button id="admin-btn" onclick="handleAdmin()" style="border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:7px 14px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)">⚙ Admin</button>
+<div style="position:fixed;top:10px;right:12px;z-index:50">
+  <button id="admin-btn" onclick="handleAdmin()" style="border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)">⚙</button>
 </div>
 
 <div class="confirm-bg" id="confirm-modal">
@@ -600,14 +627,14 @@ function doLogin(){
   if(l===ADMIN_L&&p===ADMIN_P){
     isAdmin=true;closeModal();
     const btn=document.getElementById('admin-btn');
-    btn.textContent='⚙ Chiqish';btn.style.background='var(--lime)';btn.style.color='var(--green-dark)';btn.style.borderColor='transparent';
+    btn.textContent='⚙✓';btn.style.background='var(--lime)';btn.style.color='var(--green-dark)';btn.style.borderColor='transparent';
     notify('Admin ✓');render(navStack[navStack.length-1]);
   }else{document.getElementById('l-err').classList.add('show');document.getElementById('l-pass').value='';}
 }
 function logout(){
   isAdmin=false;
   const btn=document.getElementById('admin-btn');
-  btn.textContent='⚙ Admin';btn.style.background='var(--white-06)';btn.style.color='var(--white-80)';btn.style.borderColor='var(--white-10)';
+  btn.textContent='⚙';btn.style.background='var(--white-06)';btn.style.color='var(--white-80)';btn.style.borderColor='var(--white-10)';
   notify('Chiqildi');render(navStack[navStack.length-1]);
 }
 
