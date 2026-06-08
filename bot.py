@@ -670,6 +670,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
         verified_set = state["checklist_verified"][time_key]
 
+        # Checklist tugmalarini yangilash (o'chirmasdan)
         if time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
             msg_id = state["checklist_message_ids"].get(time_key)
@@ -688,9 +689,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
 
         if vs["pending_items"]:
+            # Qolgan vazifalar bor — verify xabarini yangilash
             name = AGENTS_DATA.get(username, {}).get("name", username)
             nums_str = ", ".join(str(n) for n, _ in sorted(vs["pending_items"]))
-            new_text = f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang"
+            new_text = (
+                f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang\n\n"
+                f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
+            )
             new_keyboard = [
                 [InlineKeyboardButton(
                     f"⬜ {n} ni Tekshirdim — {admin_name}",
@@ -706,10 +711,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         else:
+            # Barcha vazifalar tekshirildi — 10 soniyada o'chdir
+            name = AGENTS_DATA.get(username, {}).get("name", username)
             try:
-                await query.message.delete()
+                await query.message.edit_text(
+                    text=f"✅ {name} barcha vazifalarini tekshirdingiz!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
+                    reply_markup=None
+                )
             except:
                 pass
+            schedule_delete(context.bot, query.message.chat.id, [query.message.message_id], delay=10)
             vs["verify_msg_id"] = None
 
         return
@@ -852,7 +863,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vs["pending_items"].sort(key=lambda x: x[0])
 
         nums_str = ", ".join(str(num) for num, _ in vs["pending_items"])
-        verify_text = f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang"
+        verify_text = (
+            f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang\n\n"
+            f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
+        )
         verify_keyboard = [
             [InlineKeyboardButton(
                 f"⬜ {num} ni Tekshirdim — {admin_name}",
