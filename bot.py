@@ -644,13 +644,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("chk_verify_"):
         if query.from_user.username != ADMIN_USERNAME:
             return
-        rest = data[11:]
+        # Faqat yangi "_all" formatini qabul qil, eskisini ignore qil
+        if not data.endswith("_all"):
+            return
+        rest = data[11:]  # "1015_sirlyinfo_all"
         parts = rest.split("_")
         time_raw = parts[0]
-        username = "_".join(parts[1:-1])
+        username = parts[1]
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         vkey = f"{time_key}_{username}"
-        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
 
         vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
 
@@ -659,15 +661,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         verified_set = set(range(len(tasks)))
         state.setdefault("checklist_verified", {})[time_key] = verified_set
 
-        # Checklistdagi barcha Tekshirdim tugmalarini ✅ qilamiz
+        # Checklistdagi barcha Tekshirdim tugmalarini ✅ qilamiz — O'CHIRMAYMIZ
         msg_id = state["checklist_message_ids"].get(time_key)
-        if msg_id and time_key in state["checklist_confirmations"]:
-            active2 = CHECKLIST_AGENTS
+        if msg_id:
             try:
                 await context.bot.edit_message_reply_markup(
                     chat_id=CHAT_ID,
                     message_id=msg_id,
-                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
+                    reply_markup=build_checklist_keyboard(time_key, CHECKLIST_AGENTS, state["checklist_confirmations"].get(time_key, {}), verified_set)
                 )
             except:
                 pass
@@ -676,7 +677,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         verify_msg_id = query.message.message_id
         try:
             await query.message.edit_text(
-                text=f"✅ Tekshirildi!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
+                text="✅ Tekshirildi!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
                 reply_markup=None
             )
         except:
@@ -685,7 +686,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async def delete_verify_only():
             await asyncio.sleep(10)
             try:
-                await context.bot.delete_message(chat_id=query.message.chat.id, message_id=verify_msg_id)
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=verify_msg_id)
             except:
                 pass
         asyncio.create_task(delete_verify_only())
