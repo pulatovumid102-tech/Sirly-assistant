@@ -670,21 +670,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
         verified_set = state["checklist_verified"][time_key]
 
-        # Checklist tugmalarini yangilash (o'chirmasdan)
+        # Checklist tugmalarini yangilash (o'chirmasdan) — faqat CHAT_ID ga
         if time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
             msg_id = state["checklist_message_ids"].get(time_key)
             if msg_id:
-                for chat_id_try in [CHAT_ID, query.message.chat.id]:
-                    try:
-                        await context.bot.edit_message_reply_markup(
-                            chat_id=chat_id_try,
-                            message_id=msg_id,
-                            reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
-                        )
-                        break
-                    except:
-                        pass
+                try:
+                    await context.bot.edit_message_reply_markup(
+                        chat_id=CHAT_ID,
+                        message_id=msg_id,
+                        reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
+                    )
+                except:
+                    pass
 
         vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
 
