@@ -789,7 +789,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # CHECKLIST
-    if data.startswith("chk_"):
+    if data.startswith("chk_") and not data.startswith("chk_verify_"):
         without_prefix = data[4:]
         first_underscore = without_prefix.index("_")
         time_raw = without_prefix[:first_underscore]
@@ -2587,8 +2587,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━\n"
             "📋 CHECKLIST\n"
             "━━━━━━━━━━━━━━\n"
-            "/checklist — Checklistni qo'lda yuborish\n"
-            "/test_checklist — Test rejimida yuborish\n\n"
+            "/checklist — Checklistni qo'lda yuborish\n\n"
             "━━━━━━━━━━━━━━\n"
             "📌 VAZIFALAR\n"
             "━━━━━━━━━━━━━━\n"
