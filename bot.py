@@ -640,28 +640,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "noop":
         return
 
-    # CHECKLIST VERIFY
-    if data.startswith("chk_verify_"):
+    # CHECKLIST VERIFY — checklistdagi Tekshirdim tugmasi
+    if data.startswith("chk_verify_") and not data.endswith("_all"):
         if query.from_user.username != ADMIN_USERNAME:
             return
-        # Faqat yangi "_all" formatini qabul qil, eskisini ignore qil
-        if not data.endswith("_all"):
-            return
-        rest = data[11:]  # "1015_sirlyinfo_all"
+        rest = data[11:]
         parts = rest.split("_")
         time_raw = parts[0]
-        username = parts[1]
+        task_num = int(parts[-1])
+        username = "_".join(parts[1:-1])
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         vkey = f"{time_key}_{username}"
 
-        vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
+        # Shu vazifani verified deb belgilaymiz
+        task_index = task_num - 1
+        state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
+        verified_set = state["checklist_verified"][time_key]
 
-        # Barcha vazifalarni verified deb belgilaymiz
-        tasks = CHECKLIST_CONFIG.get(time_key, [])
-        verified_set = set(range(len(tasks)))
-        state.setdefault("checklist_verified", {})[time_key] = verified_set
-
-        # Checklistdagi barcha Tekshirdim tugmalarini ✅ qilamiz — O'CHIRMAYMIZ
+        # Checklistni yangilaymiz
         msg_id = state["checklist_message_ids"].get(time_key)
         if msg_id:
             try:
@@ -673,24 +669,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
-        # Verify xabarini 10 soniyada o'chir
-        verify_msg_id = query.message.message_id
-        try:
-            await query.message.edit_text(
-                text="✅ Tekshirildi!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
-                reply_markup=None
-            )
-        except:
-            pass
+        # Barcha 4 ta tekshirildimi?
+        tasks = CHECKLIST_CONFIG.get(time_key, [])
+        all_verified = all(i in verified_set for i in range(len(tasks)))
 
-        async def delete_verify_only():
-            await asyncio.sleep(10)
-            try:
-                await context.bot.delete_message(chat_id=CHAT_ID, message_id=verify_msg_id)
-            except:
-                pass
-        asyncio.create_task(delete_verify_only())
-        vs["verify_msg_id"] = None
+        if all_verified:
+            # Verify xabarini o'chir
+            vs = checklist_verify_state.get(vkey, {})
+            verify_mid = vs.get("verify_msg_id")
+            if verify_mid:
+                async def delete_verify():
+                    await asyncio.sleep(1)
+                    try:
+                        await context.bot.delete_message(chat_id=CHAT_ID, message_id=verify_mid)
+                    except:
+                        pass
+                asyncio.create_task(delete_verify())
+                vs["verify_msg_id"] = None
+        return
+
+    # CHECKLIST VERIFY — eski _all format (ignore)
+    if data.startswith("chk_verify_") and data.endswith("_all"):
         return
 
     # DAVOMAT — Tasdiqlandi
@@ -841,17 +840,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             verify_text = (
                 f"✅ {name} barcha vazifalarni bajardi!\n"
-                f"@{ADMIN_USERNAME} tekshiring\n\n"
-                f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
+                f"@{ADMIN_USERNAME} checklistdan tekshiring"
             )
-            verify_keyboard = [[InlineKeyboardButton(
-                f"⬜ Tekshirdim — {admin_name}",
-                callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_all"
-            )]]
             sent_v = await context.bot.send_message(
                 chat_id=CHAT_ID,
-                text=verify_text,
-                reply_markup=InlineKeyboardMarkup(verify_keyboard)
+                text=verify_text
             )
             vs["verify_msg_id"] = sent_v.message_id
         return
