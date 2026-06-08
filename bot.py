@@ -286,7 +286,7 @@ def build_checklist_text(time_key, active_agents):
     task_lines = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
     agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
     now = datetime.now(TIMEZONE)
-    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}"
+    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}, {now.strftime('%H:%M')}"
     return (
         f"📋 CHECKLIST — {date_str}\n\n"
         f"{agent_block}\n\n"
