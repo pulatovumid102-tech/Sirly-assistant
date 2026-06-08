@@ -657,27 +657,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
 
         task_index = task_num - 1
+
+        # Faqat Ozodbek bajargan vazifalarni verified deb belgilaymiz
         state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
         verified_set = state["checklist_verified"][time_key]
 
-        # Checklist tugmalarini yangilash (o'chirmasdan) — faqat CHAT_ID ga
-        if time_key in state["checklist_confirmations"]:
+        # Faqat Ozodbek bajargan vazifalar uchun verified ko'rsatish
+        user_done = set(state["checklist_confirmations"].get(time_key, {}).get(username, {}).keys())
+        filtered_verified = verified_set & user_done
+
+        # Checklist tugmalarini yangilash — faqat CHAT_ID ga, hech qachon o'chirmasin
+        msg_id = state["checklist_message_ids"].get(time_key)
+        if msg_id and time_key in state["checklist_confirmations"]:
             active2 = set(state["checklist_confirmations"][time_key].keys())
-            msg_id = state["checklist_message_ids"].get(time_key)
-            if msg_id:
-                try:
-                    await context.bot.edit_message_reply_markup(
-                        chat_id=CHAT_ID,
-                        message_id=msg_id,
-                        reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
-                    )
-                except:
-                    pass
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=CHAT_ID,
+                    message_id=msg_id,
+                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], filtered_verified)
+                )
+            except:
+                pass
 
         vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
 
         if vs["pending_items"]:
-            # Qolgan vazifalar bor — verify xabarini yangilash
             name = AGENTS_DATA.get(username, {}).get("name", username)
             nums_str = ", ".join(str(n) for n, _ in sorted(vs["pending_items"]))
             new_text = (
@@ -699,16 +703,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         else:
-            # Barcha vazifalar tekshirildi — 10 soniyada o'chdir
+            # Barcha tekshirildi — verify xabarini 10 soniyada o'chir, CHECKLIST EMAS
             name = AGENTS_DATA.get(username, {}).get("name", username)
+            verify_msg_id = query.message.message_id
             try:
                 await query.message.edit_text(
-                    text=f"✅ {name} barcha vazifalarini tekshirdingiz!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
+                    text=f"✅ {name} cheklistdagi vazifalarini tekshirdingiz!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
                     reply_markup=None
                 )
             except:
                 pass
-            schedule_delete(context.bot, query.message.chat.id, [query.message.message_id], delay=10)
+            # Faqat verify xabarini o'chir — CHAT_ID emas, query.message.chat.id ishlatilsa
+            # guruhda bo'lsa ham faqat shu verify xabar o'chadi
+            async def delete_verify_only():
+                await asyncio.sleep(10)
+                try:
+                    await context.bot.delete_message(chat_id=query.message.chat.id, message_id=verify_msg_id)
+                except:
+                    pass
+            asyncio.create_task(delete_verify_only())
             vs["verify_msg_id"] = None
 
         return
