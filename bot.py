@@ -643,12 +643,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # CHECKLIST VERIFY
     if data.startswith("chk_verify_"):
         if query.from_user.username != ADMIN_USERNAME:
-            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
             return
         rest = data[11:]
         parts = rest.split("_")
         time_raw = parts[0]
-        task_num = int(parts[-1])
         username = "_".join(parts[1:-1])
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         vkey = f"{time_key}_{username}"
@@ -656,74 +654,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         vs = checklist_verify_state.get(vkey, {"pending_items": [], "verify_msg_id": None})
 
-        task_index = task_num - 1
+        # Barcha vazifalarni verified deb belgilaymiz
+        tasks = CHECKLIST_CONFIG.get(time_key, [])
+        verified_set = set(range(len(tasks)))
+        state.setdefault("checklist_verified", {})[time_key] = verified_set
 
-        # Faqat Ozodbek bajargan vazifalarni verified deb belgilaymiz
-        state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
-        verified_set = state["checklist_verified"][time_key]
-
-        # Faqat Ozodbek bajargan vazifalar uchun verified ko'rsatish
-        user_done = set(state["checklist_confirmations"].get(time_key, {}).get(username, {}).keys())
-        filtered_verified = verified_set & user_done
-
-        # Checklist tugmalarini yangilash — faqat CHAT_ID ga, hech qachon o'chirmasin
+        # Checklistdagi barcha Tekshirdim tugmalarini ✅ qilamiz
         msg_id = state["checklist_message_ids"].get(time_key)
         if msg_id and time_key in state["checklist_confirmations"]:
-            active2 = set(state["checklist_confirmations"][time_key].keys())
+            active2 = CHECKLIST_AGENTS
             try:
                 await context.bot.edit_message_reply_markup(
                     chat_id=CHAT_ID,
                     message_id=msg_id,
-                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], filtered_verified)
+                    reply_markup=build_checklist_keyboard(time_key, active2, state["checklist_confirmations"][time_key], verified_set)
                 )
             except:
                 pass
 
-        vs["pending_items"] = [(n, t) for n, t in vs["pending_items"] if n != task_num]
-
-        if vs["pending_items"]:
-            name = AGENTS_DATA.get(username, {}).get("name", username)
-            nums_str = ", ".join(str(n) for n, _ in sorted(vs["pending_items"]))
-            new_text = (
-                f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang\n\n"
-                f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
+        # Verify xabarini 10 soniyada o'chir
+        verify_msg_id = query.message.message_id
+        try:
+            await query.message.edit_text(
+                text=f"✅ Tekshirildi!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
+                reply_markup=None
             )
-            new_keyboard = [
-                [InlineKeyboardButton(
-                    f"⬜ {n} ni Tekshirdim — {admin_name}",
-                    callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{n}"
-                )]
-                for n, _ in sorted(vs["pending_items"])
-            ]
-            try:
-                await query.message.edit_text(
-                    text=new_text,
-                    reply_markup=InlineKeyboardMarkup(new_keyboard)
-                )
-            except:
-                pass
-        else:
-            # Barcha tekshirildi — verify xabarini 10 soniyada o'chir, CHECKLIST EMAS
-            name = AGENTS_DATA.get(username, {}).get("name", username)
-            verify_msg_id = query.message.message_id
-            try:
-                await query.message.edit_text(
-                    text=f"✅ {name} cheklistdagi vazifalarini tekshirdingiz!\n\n⚠️ Bu xabar 10 soniyada o'chadi",
-                    reply_markup=None
-                )
-            except:
-                pass
-            # Faqat verify xabarini o'chir — CHAT_ID emas, query.message.chat.id ishlatilsa
-            # guruhda bo'lsa ham faqat shu verify xabar o'chadi
-            async def delete_verify_only():
-                await asyncio.sleep(10)
-                try:
-                    await context.bot.delete_message(chat_id=query.message.chat.id, message_id=verify_msg_id)
-                except:
-                    pass
-            asyncio.create_task(delete_verify_only())
-            vs["verify_msg_id"] = None
+        except:
+            pass
 
+        async def delete_verify_only():
+            await asyncio.sleep(10)
+            try:
+                await context.bot.delete_message(chat_id=query.message.chat.id, message_id=verify_msg_id)
+            except:
+                pass
+        asyncio.create_task(delete_verify_only())
+        vs["verify_msg_id"] = None
         return
 
     # DAVOMAT — Tasdiqlandi
@@ -832,62 +798,61 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_index = int(rest[last_underscore + 1:])
         time_key = f"{time_raw[:2]}:{time_raw[2:]}"
         presser = query.from_user.username
-        if presser != username and presser != ADMIN_USERNAME:
-            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+
+        # Faqat Ozodbek bosa ishlaydi, boshqalar — ignore
+        if presser != "sirlyinfo":
             return
-        if time_key in state["checklist_confirmations"] and state["checklist_confirmations"][time_key]:
-            active = set(state["checklist_confirmations"][time_key].keys())
-        else:
-            active = get_active_agents_for_time(time_key)
-        if username not in active:
-            return
+
         state["checklist_confirmations"].setdefault(time_key, {}).setdefault(username, {})
         user_conf = state["checklist_confirmations"][time_key][username]
         if user_conf.get(task_index, False):
             return
         user_conf[task_index] = True
+
+        active = CHECKLIST_AGENTS
+        verified_set = state.get("checklist_verified", {}).get(time_key, set())
         try:
-            await query.message.edit_reply_markup(reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]))
+            await query.message.edit_reply_markup(
+                reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key], verified_set)
+            )
         except:
             pass
+
+        # Barcha vazifalar bajarilganmi tekshir
         tasks = CHECKLIST_CONFIG.get(time_key, [])
-        task_text = tasks[task_index] if task_index < len(tasks) else str(task_index)
-        name = AGENTS_DATA[username]["name"]
-        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        all_done = all(user_conf.get(i, False) for i in range(len(tasks)))
 
-        vkey = f"{time_key}_{username}"
-        if vkey not in checklist_verify_state:
-            checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
-        vs = checklist_verify_state[vkey]
-        if task_index + 1 not in [item[0] for item in vs["pending_items"]]:
-            vs["pending_items"].append((task_index + 1, task_text))
-        vs["pending_items"].sort(key=lambda x: x[0])
+        if all_done:
+            # Faqat shu payt verify xabari yuboriladi
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+            vkey = f"{time_key}_{username}"
+            if vkey not in checklist_verify_state:
+                checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
+            vs = checklist_verify_state[vkey]
 
-        nums_str = ", ".join(str(num) for num, _ in vs["pending_items"])
-        verify_text = (
-            f"{name} cheklistdagi {nums_str} vazifalarini bajardim dedi @{ADMIN_USERNAME} tasdiqlang\n\n"
-            f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
-        )
-        verify_keyboard = [
-            [InlineKeyboardButton(
-                f"⬜ {num} ni Tekshirdim — {admin_name}",
-                callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{num}"
-            )]
-            for num, _ in vs["pending_items"]
-        ]
+            # Eski verify xabarini o'chir
+            if vs.get("verify_msg_id"):
+                try:
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=vs["verify_msg_id"])
+                except:
+                    pass
 
-        if vs["verify_msg_id"]:
-            try:
-                await context.bot.delete_message(chat_id=CHAT_ID, message_id=vs["verify_msg_id"])
-            except:
-                pass
-
-        sent_v = await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=verify_text,
-            reply_markup=InlineKeyboardMarkup(verify_keyboard)
-        )
-        vs["verify_msg_id"] = sent_v.message_id
+            verify_text = (
+                f"✅ {name} barcha vazifalarni bajardi!\n"
+                f"@{ADMIN_USERNAME} tekshiring\n\n"
+                f"⚠️ Bu xabar tekshirilgandan so'ng 10 soniyada o'chadi"
+            )
+            verify_keyboard = [[InlineKeyboardButton(
+                f"⬜ Tekshirdim — {admin_name}",
+                callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_all"
+            )]]
+            sent_v = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=verify_text,
+                reply_markup=InlineKeyboardMarkup(verify_keyboard)
+            )
+            vs["verify_msg_id"] = sent_v.message_id
         return
 
     # ZADACHA ACCEPT — EXECUTOR
@@ -2669,11 +2634,6 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
     await context.bot.send_message(chat_id=CHAT_ID, text="🛑 Bot toxtatildi.\nQayta ishga tushirish uchun /start bosing.")
 
-async def test_checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME:
-        return
-    await send_checklist_now(update, context)
-
 async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
         return
@@ -2682,11 +2642,21 @@ async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_key = "10:15"
     active = CHECKLIST_AGENTS
+
+    # Eski checklistni o'chir
+    old_msg_id = state["checklist_message_ids"].get(time_key)
+    if old_msg_id:
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_msg_id)
+        except:
+            pass
+
     state["checklist_confirmations"][time_key] = {u: {} for u in active}
     state.setdefault("checklist_verified", {})[time_key] = set()
     for u in active:
         vkey = f"{time_key}_{u}"
         checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
+
     sent = await context.bot.send_message(
         chat_id=CHAT_ID,
         text=build_checklist_text(time_key, active),
@@ -2694,7 +2664,7 @@ async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE)
         parse_mode="HTML"
     )
     state["checklist_message_ids"][time_key] = sent.message_id
-    # Adminga tasdiqlash xabari
+
     if update.effective_chat.id != CHAT_ID:
         await context.bot.send_message(
             chat_id=update.effective_user.id,
@@ -2742,7 +2712,6 @@ def main():
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
-    application.add_handler(CommandHandler("test_checklist", test_checklist_command))
     application.add_handler(CommandHandler("checklist", checklist_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
