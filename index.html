@@ -1134,9 +1134,9 @@ function renderAcadDetail(){
   const item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;
   document.getElementById('acad-item-title').textContent=item.title;
   let h='';
-  if(item.standard) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-standard">📋 Standart</div><div class="acad-content">${formatAcadText(item.standard)}</div></div>`;
-  if(item.violation) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-violation">⚠️ Qoidabuzarlik</div><div class="acad-content">${formatAcadText(item.violation)}</div></div>`;
-  if(item.decision) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-decision">✅ Qaror va harakat</div><div class="acad-content">${formatAcadText(item.decision)}</div></div>`;
+  if(item.standard) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-standard">Standart</div><div class="acad-content">${formatAcadText(item.standard)}</div></div>`;
+  if(item.violation) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-violation">Qoidabuzarlik</div><div class="acad-content">${formatAcadText(item.violation)}</div></div>`;
+  if(item.decision) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-decision">Qaror va harakat</div><div class="acad-content">${formatAcadText(item.decision)}</div></div>`;
   if(!item.standard&&!item.violation&&!item.decision&&item.content) h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;
   if(isAdmin) h+=`<div style="margin-top:16px"><button class="fsave" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}',true)">✏ Tahrirlash</button></div><div id="acad-detail-form" style="margin-top:8px"></div>`;
   document.getElementById('acad-detail-body').innerHTML=h;
@@ -1193,9 +1193,9 @@ function showAcadItemForm(secId,catId,itemId,inDetail){
   const containerId=inDetail?'acad-detail-form':'acad-items-form';
   document.getElementById(containerId).innerHTML=`<div class="form-box fade">
     <div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div>
-    <div class="frow"><label class="flbl" style="color:#a5b4fc">📋 Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:#ff9090">⚠️ Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:var(--lime)">✅ Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#a5b4fc">Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:#ff9090">Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div>
+    <div class="frow"><label class="flbl" style="color:var(--lime)">Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div>
     <div class="fbtns">
       <button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button>
       <button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button>
