@@ -11,29 +11,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
 
-/* ===== TANLOV VA LOGIN ===== */
-#select-screen {
-  min-height: 100vh; background: #f5f5f5;
-  display: flex; align-items: center; justify-content: center; padding: 24px;
-}
-.select-box { width: 100%; max-width: 340px; }
-.select-title { text-align: center; font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
-.select-sub { text-align: center; font-size: 14px; color: #888; margin-bottom: 32px; }
-.app-card { border-radius: 16px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 2px solid transparent; transition: all 0.2s; margin-bottom: 12px; }
-.app-card:active { transform: scale(0.98); }
-.app-card.uma { background: #e8f5e0; border-color: #558237; }
-.app-card.sirly { background: #e3f2e8; border-color: #1a6b42; }
-.app-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
-.app-card.uma .app-card-icon { background: #1e5927; }
-.app-card.sirly .app-card-icon { background: #0d4a2e; }
-.app-card-info { flex: 1; }
-.app-card-name { font-size: 17px; font-weight: 700; }
-.app-card.uma .app-card-name { color: #1e5927; }
-.app-card.sirly .app-card-name { color: #0d4a2e; }
-.app-card-desc { font-size: 13px; margin-top: 2px; }
-.app-card.uma .app-card-desc { color: #558237; }
-.app-card.sirly .app-card-desc { color: #1a6b42; }
-.app-card-arrow { font-size: 20px; color: #aaa; }
+/* ===== LOGIN ===== */
 #login-screen {
   min-height: 100vh; display: none;
   align-items: center; justify-content: center; padding: 24px;
@@ -205,20 +183,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 <body>
 
 <!-- TANLOV -->
-<div id="select-screen" style="display:none!important">
-  <div class="select-box">
-    <div class="select-title">Sirly</div>
-    <div class="select-sub">Biznes jarayonlar tizimi</div>
-    <div class="app-card sirly" id="sel-sirly">
-      <div class="app-card-icon">📋</div>
-      <div class="app-card-info">
-        <div class="app-card-name">Sirly</div>
-        <div class="app-card-desc">Biznes jarayonlar</div>
-      </div>
-      <div class="app-card-arrow">›</div>
-    </div>
-  </div>
-</div>
 
 <!-- LOGIN -->
 <div id="login-screen">
@@ -233,7 +197,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
     <button id="login-btn" class="login-btn">Kirish</button>
     <button id="register-btn" style="width:100%;padding:12px;border:1px solid currentColor;border-radius:10px;font-size:14px;cursor:pointer;margin-top:8px;font-family:inherit;background:transparent;">Ro'yxatdan o'tish</button>
-    <button id="login-back" class="login-back">← Orqaga</button>
   </div>
 </div>
 
@@ -362,14 +325,12 @@ async function umaApiSave(uid, payload){
 }
 
 // Tanlov
-document.getElementById('sel-sirly').addEventListener('click', function(){ showLogin('sirly'); });
 
 function showLogin(app){
   CURRENT_APP = 'sirly';
   var ls = document.getElementById('login-screen');
   ls.className = 'sirly-theme';
   ls.style.display = 'flex';
-  document.getElementById('select-screen').style.display = 'none';
   document.getElementById('login-error').style.display = 'none';
   document.getElementById('login-input').value = '';
   document.getElementById('parol-input').value = '';
@@ -378,10 +339,6 @@ function showLogin(app){
   document.getElementById('login-sub').textContent = 'Biznes jarayonlar';
   setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
 }
-document.getElementById('login-back').addEventListener('click', function(){
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('select-screen').style.display = 'flex';
-});
 document.getElementById('login-btn').addEventListener('click', doAppLogin);
 document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doAppLogin(); });
 
@@ -468,13 +425,11 @@ document.getElementById('reg-submit').addEventListener('click', async function()
 // Pending back
 document.getElementById('pending-back').addEventListener('click', function(){
   document.getElementById('pending-screen').style.display = 'none';
-  document.getElementById('select-screen').style.display = 'flex';
 });
 
 // Admin logout
 document.getElementById('admin-logout').addEventListener('click', function(){
   document.getElementById('admin-screen').style.display = 'none';
-  document.getElementById('select-screen').style.display = 'flex';
 });
 
 // Admin tabs
@@ -694,7 +649,6 @@ function startApp(app, role){
 }
 
 // Auto show sirly login
-document.getElementById('select-screen').style.display = 'none';
 showLogin('sirly');
 
 // Saqlangan loginni tekshir
@@ -708,8 +662,7 @@ showLogin('sirly');
       CURRENT_APP = u.app;
       USER_ID = u.app + '_' + u.login;
       STORAGE_KEY = 'umatizim_data_' + USER_ID;
-      document.getElementById('select-screen').style.display = 'none';
-      startApp(u.app, u.role || 'guest');
+          startApp(u.app, u.role || 'guest');
     }
   }catch(e){ localStorage.removeItem('app_login'); }
 })();
@@ -774,6 +727,9 @@ function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;
 function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
 function editAcadSection(id){showAcadSecForm(id)}
 function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
+function initDrag(listEl,getItems,setItems){var items=listEl.querySelectorAll('[draggable="true"]');items.forEach((el,i)=>{el.addEventListener('dragstart',e=>{dragSrcIndex=i;dragContext={getItems,setItems};e.dataTransfer.effectAllowed='move';setTimeout(()=>el.classList.add('dragging'),0);});el.addEventListener('dragend',()=>{el.classList.remove('dragging');listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));});el.addEventListener('dragover',e=>{e.preventDefault();listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));el.classList.add('drag-over');});el.addEventListener('drop',e=>{e.preventDefault();if(dragSrcIndex===null||dragSrcIndex===i)return;var arr=dragContext.getItems();var moved=arr.splice(dragSrcIndex,1)[0];arr.splice(i,0,moved);dragContext.setItems(arr);save();dragSrcIndex=null;dragContext=null;});});}
+function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){var ti=null,clone=null,startY=0;var items=()=>listEl.querySelectorAll(selector);listEl.addEventListener('touchstart',e=>{var handle=e.target.closest('.drag-handle,.nav-card-drag');if(!handle)return;var item=handle.closest(selector);var all=[...items()];ti=all.indexOf(item);startY=e.touches[0].clientY;clone=item.cloneNode(true);var rect=item.getBoundingClientRect();clone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);top:${rect.top}px;left:${rect.left}px`;document.body.appendChild(clone);item.style.opacity='0.4';},{passive:true});listEl.addEventListener('touchmove',e=>{if(ti===null||!clone)return;e.preventDefault();var y=e.touches[0].clientY;var dy=y-startY;var rect=[...items()][ti].getBoundingClientRect();clone.style.top=(rect.top+dy)+'px';[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();el.classList.toggle('drag-over',i!==ti&&y>r.top&&y<r.bottom);});},{passive:false});listEl.addEventListener('touchend',e=>{if(ti===null)return;if(clone){clone.remove();clone=null;}[...items()].forEach(x=>{x.classList.remove('drag-over');x.style.opacity='';});var y=e.changedTouches[0].clientY;var target=ti;[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();if(y>r.top&&y<r.bottom&&i!==ti)target=i;});if(target!==ti){var arr=getItems();var moved=arr.splice(ti,1)[0];arr.splice(target,0,moved);setItems(arr);save();}ti=null;},{passive:true});}
+
 function renderSections(){
   var g=document.getElementById('sections-grid');var h='';
   var allCards=[...db.sections.map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
