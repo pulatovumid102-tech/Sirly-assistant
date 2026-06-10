@@ -320,7 +320,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 
 <div class="img-modal" id="img-modal" onclick="closeImg()"><img id="img-src" src="" alt=""></div>
 <div class="notif" id="notif"></div>
-<div style="position:fixed;top:10px;right:12px;z-index:50"><button id="admin-btn" onclick="doLogoutAll()" style="border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)">⚙</button></div>
+
 <div class="confirm-bg" id="confirm-modal"><div class="confirm-box"><div class="confirm-msg" id="confirm-msg">O'chirasizmi?</div><div class="confirm-btns"><button class="confirm-yes" id="confirm-yes">O'chirish</button><button class="confirm-no" onclick="closeConfirm()">Bekor</button></div></div></div>
 </div>
 
@@ -775,6 +775,20 @@ function updateBc(){
   var sec=db.sections.find(s=>s.id===curSection);var cat=sec?.cats.find(c=>c.id===curCat);var flow=cat?.flows.find(f=>f.id===curFlow);
   var map={'p-home':'Bosh sahifa','p-section':sec?.title||'','p-cat':cat?.title||'','p-flow':flow?.title||''};
   navStack.forEach((p,i)=>{if(p.startsWith('p-acad'))return;var el=document.getElementById('bc-'+p.replace('p-',''));if(!el)return;var html='';navStack.slice(0,i+1).forEach((pp,ii)=>{if(pp.startsWith('p-acad'))return;if(ii<i)html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]||''}</span><span class="bc-sep">›</span>`;else html+=`<span class="bc-cur">${map[pp]||''}</span>`;});el.innerHTML=html;});
+}
+function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div><div class="fbtns"><button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('asf-title').focus();}
+function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
+function editAcadSection(id){showAcadSecForm(id)}
+function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
+function renderSections(){
+  var g=document.getElementById('sections-grid');var h='';
+  var allCards=[...db.sections.map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
+  var savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');var ordered=allCards;
+  if(savedOrder){var map=Object.fromEntries(allCards.map(s=>[s.id,s]));ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];}
+  ordered.forEach(s=>{var isAcad=s._type==='academy';var onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;var editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;var delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''} ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="${editFn}">✏</button><button class="abtn abtn-red" onclick="${delFn}">✕</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div><div class="nav-card-arrow">→</div></div>`;});
+  if(isAdmin)h+=`<button class="add-btn" onclick="showSecForm()" style="grid-column:1/-1">＋ Jarayon bo'limi</button><button class="add-btn" onclick="showAcadSecForm()" style="grid-column:1/-1;margin-top:0">＋ Akademiya bo'limi</button>`;
+  g.innerHTML=h;document.getElementById('section-form').innerHTML='';
+  if(isAdmin){initDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();});initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');}
 }
 function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div><div class="fbtns"><button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('asf-title').focus();}
 function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
