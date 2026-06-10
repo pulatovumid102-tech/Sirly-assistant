@@ -540,6 +540,7 @@ function doAppLogin(){
   var users = CURRENT_APP === 'uma' ? UMA_USERS : SIRLY_USERS;
   if(users[login] && users[login] === parol){
     USER_ID = CURRENT_APP + '_' + login;
+    STORAGE_KEY = 'umatizim_data_' + USER_ID;
     localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol}));
     document.getElementById('login-screen').style.display = 'none';
     startApp(CURRENT_APP);
@@ -569,6 +570,7 @@ function startApp(app){
     if(users[u.login] && users[u.login] === u.parol){
       CURRENT_APP = u.app;
       USER_ID = u.app + '_' + u.login;
+      STORAGE_KEY = 'umatizim_data_' + USER_ID;
       document.getElementById('select-screen').style.display = 'none';
       startApp(u.app);
     }
@@ -589,7 +591,7 @@ function doLogoutAll(){
 
 if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
 
-var STORAGE_KEY = 'umatizim_data_' + USER_ID;
+var STORAGE_KEY = 'umatizim_data_guest'; // will be updated on login
 var UZ_DAYS = ['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba'];
 var UZ_MONTHS = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek'];
 var MEAL_TIMES = [
