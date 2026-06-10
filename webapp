@@ -3,66 +3,1212 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Biznes jarayonlar</title>
+<title>Tizim</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#F7F6F3;--surface:#FFF;--surface2:#F0EEE9;--border:#E4E1D9;
-  --text:#1A1916;--muted:#7A7770;
-  --green:#1A6B3C;--green-bg:#E8F5EE;
-  --red:#8B1A1A;--red-bg:#FDF0F0;--red-border:#E8AAAA;
-  --radius:16px;--radius-sm:10px;--card-w:280px;
+/* ===== UMUMIY ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+/* ===== TANLOV VA LOGIN ===== */
+#select-screen {
+  min-height: 100vh; background: #f5f5f5;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
 }
+.select-box { width: 100%; max-width: 340px; }
+.select-title { text-align: center; font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
+.select-sub { text-align: center; font-size: 14px; color: #888; margin-bottom: 32px; }
+.app-card { border-radius: 16px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 2px solid transparent; transition: all 0.2s; margin-bottom: 12px; }
+.app-card:active { transform: scale(0.98); }
+.app-card.uma { background: #e8f5e0; border-color: #558237; }
+.app-card.sirly { background: #e3f2e8; border-color: #1a6b42; }
+.app-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+.app-card.uma .app-card-icon { background: #1e5927; }
+.app-card.sirly .app-card-icon { background: #0d4a2e; }
+.app-card-info { flex: 1; }
+.app-card-name { font-size: 17px; font-weight: 700; }
+.app-card.uma .app-card-name { color: #1e5927; }
+.app-card.sirly .app-card-name { color: #0d4a2e; }
+.app-card-desc { font-size: 13px; margin-top: 2px; }
+.app-card.uma .app-card-desc { color: #558237; }
+.app-card.sirly .app-card-desc { color: #1a6b42; }
+.app-card-arrow { font-size: 20px; color: #aaa; }
+#login-screen {
+  min-height: 100vh; display: none;
+  align-items: center; justify-content: center; padding: 24px;
+}
+#login-screen.uma-theme { background: #f0f3ee; }
+#login-screen.sirly-theme { background: #0d4a2e; }
+.login-box { width: 100%; max-width: 340px; }
+.login-logo { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 12px; }
+.uma-theme .login-logo { background: #1e5927; }
+.sirly-theme .login-logo { background: rgba(255,255,255,0.15); }
+.login-app-name { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.uma-theme .login-app-name { color: #1e5927; }
+.sirly-theme .login-app-name { color: #fff; }
+.login-sub { text-align: center; font-size: 13px; margin-bottom: 32px; }
+.uma-theme .login-sub { color: #7a9669; }
+.sirly-theme .login-sub { color: rgba(255,255,255,0.6); }
+.login-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
+.uma-theme .login-label { color: #7a9669; }
+.sirly-theme .login-label { color: rgba(255,255,255,0.7); }
+.login-input { width: 100%; border-radius: 10px; padding: 14px; font-size: 16px; outline: none; margin-bottom: 14px; border: 1px solid transparent; font-family: inherit; }
+.uma-theme .login-input { background: #fff; color: #1e2e1a; border-color: #e2e8de; }
+.sirly-theme .login-input { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+.sirly-theme .login-input::placeholder { color: rgba(255,255,255,0.4); }
+.login-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
+.uma-theme .login-btn { background: #558237; color: white; }
+.sirly-theme .login-btn { background: #a8e063; color: #0d4a2e; }
+.login-error { font-size: 13px; text-align: center; margin-bottom: 10px; display: none; }
+.uma-theme .login-error { color: #c0392b; }
+.sirly-theme .login-error { color: #ff9090; }
+.login-back { background: none; border: none; cursor: pointer; font-size: 13px; margin-top: 16px; display: block; width: 100%; text-align: center; font-family: inherit; }
+.uma-theme .login-back { color: #7a9669; }
+.sirly-theme .login-back { color: rgba(255,255,255,0.5); }
+
+/* ===== UMA-TIZIM ===== */
+#uma-app{ display: none; }#uma-app{
+  --bg:#f0f3ee;--bg2:#ffffff;--bg3:#e2e8de;--accent:#558237;--accent2:#a4b83f;--dark:#1e5927;
+  --light:#a9b7a3;--text:#1e2e1a;--text2:#558237;--text3:#7a9669;
+  --danger:#c0392b;--warn:#AA7B08;--radius:14px;--radius-sm:8px;--blue:#1a6fb5;--blue-bg:#eaf2fb;
+}body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding-bottom:40px;}#uma-app .header{background:var(--bg2);padding:16px 20px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}#uma-app .header-left{display:flex;align-items:center;gap:10px;}#uma-app .back-btn{width:32px;height:32px;background:var(--bg3);border:none;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}#uma-app .logo{width:36px;height:36px;background:var(--dark);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}#uma-app .header-title{font-size:17px;font-weight:600;color:var(--dark);}#uma-app .header-sub{font-size:12px;color:var(--text3);margin-top:1px;}#uma-app .btn-add{width:36px;height:36px;background:var(--accent);border:none;border-radius:10px;color:white;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;}#uma-app .btn-add.blue{background:var(--blue);}#uma-app .breadcrumb{padding:10px 16px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text3);overflow-x:auto;white-space:nowrap;background:var(--bg2);border-bottom:1px solid var(--bg3);}#uma-app .breadcrumb span{cursor:pointer;}#uma-app .breadcrumb span:hover{color:var(--accent);}#uma-app .main{padding:20px 16px;}#uma-app .page-title{font-size:13px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;font-weight:500;}#uma-app .card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:10px;transition:opacity 0.15s;}#uma-app .card:active{opacity:0.8;}#uma-app .card.danger{border-color:var(--danger);background:#fdf2f2;}#uma-app .card-icon{width:44px;height:44px;background:var(--bg3);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}#uma-app .card.danger .card-icon{background:#fdecea;}#uma-app .card-info{flex:1;}#uma-app .card-name{font-size:15px;font-weight:500;color:var(--text);}#uma-app .card-sub{font-size:12px;color:var(--text3);margin-top:2px;}#uma-app .card.danger .card-sub{color:var(--danger);}#uma-app .card-arrow{color:var(--light);font-size:20px;}#uma-app .day-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:10px;}#uma-app .day-card.warn-red{border-color:var(--danger);background:#fdf2f2;}#uma-app .day-date{width:44px;text-align:center;flex-shrink:0;}#uma-app .day-date-num{font-size:20px;font-weight:600;color:var(--dark);line-height:1;}#uma-app .day-date-month{font-size:11px;color:var(--text3);margin-top:2px;}#uma-app .day-divider{width:1px;height:36px;background:var(--bg3);flex-shrink:0;}#uma-app .day-info{flex:1;}#uma-app .day-name{font-size:15px;font-weight:500;color:var(--text);}#uma-app .day-meals{font-size:12px;color:var(--text3);margin-top:2px;}#uma-app .day-warn{font-size:11px;color:var(--danger);margin-top:2px;}#uma-app .today-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent);color:white;font-weight:500;flex-shrink:0;}#uma-app .past-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#fdecea;color:var(--danger);font-weight:500;flex-shrink:0;}#uma-app .meal-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;cursor:pointer;}#uma-app .meal-card.missing{border-color:var(--danger);background:#fdf2f2;}#uma-app .meal-card-header{display:flex;align-items:center;gap:10px;}#uma-app .meal-card-icon{font-size:22px;flex-shrink:0;}#uma-app .meal-card-info{flex:1;}#uma-app .meal-card-time{font-size:12px;color:var(--text3);font-weight:500;}#uma-app .meal-card-name{font-size:15px;font-weight:500;color:var(--text);margin-top:2px;}#uma-app .meal-card.missing .meal-card-name{color:var(--danger);}#uma-app .meal-card-arrow{color:var(--light);font-size:18px;}#uma-app .meal-card-items{font-size:12px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--bg3);}#uma-app .meal-card-missing{font-size:12px;color:var(--danger);margin-top:4px;font-weight:500;}#uma-app .zapas-item{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer;}#uma-app .zapas-icon{font-size:28px;flex-shrink:0;}#uma-app .zapas-info{flex:1;}#uma-app .zapas-name{font-size:15px;font-weight:500;color:var(--text);}#uma-app .zapas-raw{font-size:12px;color:var(--text3);margin-top:2px;}#uma-app .zapas-date{font-size:11px;color:var(--light);margin-top:2px;}#uma-app .zapas-right{text-align:right;flex-shrink:0;}#uma-app .zapas-days{font-size:20px;font-weight:600;}#uma-app .zapas-days-lbl{font-size:11px;color:var(--text3);}#uma-app .status-green{color:var(--accent);}#uma-app .status-warn{color:var(--warn);}#uma-app .status-red{color:var(--danger);}#uma-app .progress-bar{height:4px;background:var(--bg3);border-radius:2px;margin-top:8px;overflow:hidden;}#uma-app .progress-fill{height:100%;border-radius:2px;}#uma-app .xarid-item{background:#fdf2f2;border:1px solid #f0c0c0;border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;}#uma-app .xarid-icon{font-size:28px;flex-shrink:0;}#uma-app .xarid-info{flex:1;}#uma-app .xarid-name{font-size:15px;font-weight:500;color:var(--text);}#uma-app .xarid-amount{font-size:13px;color:var(--danger);margin-top:2px;}#uma-app .kitob-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;}#uma-app .kitob-card:active{opacity:0.8;}#uma-app .kitob-header{display:flex;align-items:flex-start;gap:12px;}#uma-app .kitob-emoji{font-size:30px;flex-shrink:0;}#uma-app .kitob-info{flex:1;}#uma-app .kitob-label{font-size:12px;color:var(--text3);}#uma-app .kitob-name{font-size:16px;font-weight:600;color:var(--text);margin-top:2px;}#uma-app .kitob-author{font-size:13px;color:var(--text3);margin-top:2px;}#uma-app .kitob-dates{font-size:12px;color:var(--text2);margin-top:4px;}#uma-app .kitob-progress{margin-top:12px;}#uma-app .kitob-progress-label{display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px;}#uma-app .kitob-progress-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;}#uma-app .kitob-progress-fill{height:100%;background:var(--blue);border-radius:3px;transition:width 0.3s;}#uma-app .kitob-done .kitob-progress-fill{background:var(--accent);}#uma-app .done-badge{font-size:11px;padding:2px 10px;border-radius:20px;background:#e8f5e0;color:var(--accent);font-weight:500;margin-top:8px;display:inline-block;}#uma-app .tarix-section{margin-top:16px;border-top:1px solid var(--bg3);padding-top:12px;}#uma-app .tarix-title{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}#uma-app .tarix-item{padding:10px 0;border-bottom:1px solid var(--bg3);}#uma-app .tarix-item:last-child{border-bottom:none;}#uma-app .tarix-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);margin-bottom:4px;}#uma-app .tarix-bet{font-size:13px;font-weight:500;color:var(--text);}#uma-app .kitob-actions{display:flex;gap:8px;margin-top:12px;}#uma-app .kitob-btn{flex:1;padding:10px;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);color:var(--text);font-size:13px;cursor:pointer;text-align:center;font-weight:500;}#uma-app .kitob-btn:active{background:var(--bg3);}#uma-app .kitob-btn.blue{background:var(--blue-bg);color:var(--blue);border-color:#b5d4f4;}#uma-app .kitob-btn.edit{color:var(--text3);font-size:12px;}#uma-app .ovqat-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;}#uma-app .ovqat-icon{width:44px;height:44px;background:var(--bg3);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}#uma-app .ovqat-info{flex:1;}#uma-app .ovqat-name{font-size:15px;font-weight:500;color:var(--text);}#uma-app .ovqat-items{font-size:12px;color:var(--text3);margin-top:2px;}#uma-app .btn-sm{width:30px;height:30px;border:1px solid var(--bg3);background:var(--bg3);border-radius:var(--radius-sm);color:var(--text3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}#uma-app .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:flex-end;justify-content:center;}#uma-app .modal-overlay.open{display:flex;}#uma-app .modal{background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;padding:20px 20px 40px;width:100%;max-width:500px;border-top:2px solid var(--accent2);max-height:85vh;overflow-y:auto;}#uma-app .modal-handle{width:36px;height:4px;background:var(--bg3);border-radius:2px;margin:0 auto 16px;}#uma-app .modal-title{font-size:17px;font-weight:600;color:var(--text);margin-bottom:16px;}#uma-app .search-input{width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:15px;outline:none;margin-bottom:12px;}#uma-app .search-input:focus{border-color:var(--accent);}#uma-app .form-group{margin-bottom:14px;}#uma-app .form-label{font-size:13px;color:var(--text3);margin-bottom:6px;display:block;font-weight:500;}#uma-app .form-input{width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;color:var(--text);font-size:15px;outline:none;}#uma-app .form-input:focus{border-color:var(--accent);}#uma-app .form-textarea{width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;color:var(--text);font-size:15px;outline:none;resize:none;min-height:80px;font-family:inherit;}#uma-app .form-textarea:focus{border-color:var(--accent);}#uma-app .amount-row{display:flex;align-items:center;gap:10px;}#uma-app .amount-input{flex:1;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;color:var(--text);font-size:20px;font-weight:600;outline:none;text-align:center;}#uma-app .amount-input:focus{border-color:var(--accent);}#uma-app .unit-lbl{font-size:15px;color:var(--text3);min-width:30px;}#uma-app .coef-info{font-size:13px;color:var(--text3);margin-top:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm);}#uma-app .modal-btns{display:flex;gap:10px;margin-top:16px;}#uma-app .btn-cancel{flex:1;padding:14px;background:var(--bg3);border:none;border-radius:var(--radius-sm);color:var(--text3);font-size:15px;cursor:pointer;}#uma-app .btn-save{flex:2;padding:14px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:white;font-size:15px;font-weight:600;cursor:pointer;}#uma-app .btn-save.blue{background:var(--blue);}#uma-app .btn-danger-full{flex:1;padding:14px;background:#fdecea;border:none;border-radius:var(--radius-sm);color:var(--danger);font-size:15px;font-weight:600;cursor:pointer;}#uma-app .product-list{display:flex;flex-direction:column;gap:8px;margin-bottom:4px;}#uma-app .product-btn{background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;width:100%;}#uma-app .product-btn.selected{border-color:var(--accent);background:#e8f0e0;}#uma-app .product-btn-icon{font-size:22px;}#uma-app .product-btn-name{font-size:14px;font-weight:500;color:var(--text);}#uma-app .product-btn-unit{font-size:12px;color:var(--text3);}#uma-app .amount-section{display:none;border-top:1px solid var(--bg3);margin-top:12px;padding-top:14px;}#uma-app .amount-section.show{display:block;}#uma-app .ing-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}#uma-app .ing-name{flex:1;font-size:14px;color:var(--text);}#uma-app .ing-amount{font-size:13px;color:var(--text3);background:var(--bg3);padding:3px 10px;border-radius:20px;}#uma-app .ing-del{width:24px;height:24px;border:none;background:none;color:var(--light);font-size:16px;cursor:pointer;}#uma-app .meal-option{background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius-sm);padding:14px;display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px;}#uma-app .meal-option.selected{border-color:var(--accent);background:#e8f0e0;}#uma-app .meal-option-icon{font-size:24px;}#uma-app .meal-option-name{font-size:15px;font-weight:500;color:var(--text);flex:1;}#uma-app .meal-option-items{font-size:12px;color:var(--text3);}#uma-app .confirm-box{background:#e8f0e0;border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:14px;color:var(--dark);text-align:center;border:1px solid var(--accent2);}#uma-app .empty-state{text-align:center;padding:60px 20px;color:var(--text3);}#uma-app .empty-icon{font-size:48px;margin-bottom:12px;}#uma-app .empty-text{font-size:15px;margin-bottom:6px;color:var(--text2);}#uma-app .empty-sub{font-size:13px;}#uma-app .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--dark);color:white;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;z-index:300;transition:transform 0.25s;pointer-events:none;}#uma-app .toast.show{transform:translateX(-50%) translateY(0);}#uma-app .izoh-full{font-size:15px;color:var(--text);line-height:1.6;padding:8px 0;}
+
+
+/* ===== SIRLY ===== */
+#sirly-app { display: none; }
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;padding-bottom:60px}
-
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:8px}
-.header-title{font-size:15px;font-weight:700}
-.admin-btn{border:1px solid var(--border);background:none;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted);font-family:'Manrope',sans-serif;transition:all .15s}
-.admin-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
-
-.breadcrumb{padding:12px 16px 0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex-wrap:wrap}
-.breadcrumb-item{cursor:pointer;transition:color .15s}.breadcrumb-item:hover{color:var(--text)}
-.breadcrumb-sep{opacity:.4}.breadcrumb-current{color:var(--text);font-weight:500}
-
-.main{padding:16px}
-.screen{display:none}.screen.active{display:block}
-.page-title{font-size:20px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
-.page-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
-
-.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-.nav-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .2s;position:relative;min-height:100px}
-.nav-card:active{transform:scale(0.98)}
-.nav-card-title{font-size:14px;font-weight:700;margin-bottom:4px}
-.nav-card-desc{font-size:12px;color:var(--muted);line-height:1.4}
-.nav-card-arrow{position:absolute;bottom:12px;right:12px;font-size:16px;opacity:.2}
-.nav-card-actions{position:absolute;top:8px;right:8px;display:flex;gap:3px;opacity:0;transition:opacity .15s}
+:root{
+  --green-dark:#0d4a2e;--green-mid:#1a6b42;--green-card:#16573a;--green-light:#1e7a4a;
+  --lime:#a8e063;--lime-dark:#7ec832;--white:#ffffff;--white-80:rgba(255,255,255,0.80);
+  --white-50:rgba(255,255,255,0.50);--white-20:rgba(255,255,255,0.20);--white-10:rgba(255,255,255,0.10);
+  --white-06:rgba(255,255,255,0.06);--acc:var(--lime);--acc-text:#0d4a2e;--hint:var(--white-50);
+  --bg2:var(--green-card);--border:var(--white-10);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;background:var(--green-dark);color:var(--white);font-size:14px;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:24px 24px;pointer-events:none;z-index:0;}
+.page{display:none;padding:16px;position:relative;z-index:1}
+.page.active{display:block}
+.home-header{padding:28px 0 20px}
+.home-title{font-size:26px;font-weight:800;letter-spacing:-0.6px;line-height:1.2;color:var(--white)}
+.home-title span{color:var(--lime)}
+.home-sub{font-size:13px;color:var(--white-50);margin-top:5px;font-weight:500}
+.logout-btn{position:fixed;top:10px;right:52px;z-index:50;border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)}
+.page-topbar{position:sticky;top:0;z-index:10;background:var(--green-dark);padding:10px 16px 0;margin:-16px -16px 16px;}
+.page-header{display:flex;align-items:center;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--white-10);margin-bottom:16px}
+.back-btn{background:var(--white-10);border:none;font-size:12px;color:var(--white);cursor:pointer;font-family:inherit;font-weight:600;padding:6px 10px;border-radius:10px;display:flex;align-items:center;gap:3px;transition:background .15s;white-space:nowrap;flex-shrink:0;}
+.back-btn:active{background:var(--white-20)}
+.page-title{font-size:15px;font-weight:700;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.nav-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:18px;padding:18px 16px 38px;cursor:pointer;position:relative;min-height:90px;transition:transform .15s,background .15s;overflow:hidden;}
+.nav-card::after{content:'';position:absolute;bottom:-20px;right:-20px;width:70px;height:70px;background:var(--lime);opacity:.06;border-radius:50%;}
+.nav-card:active{transform:scale(.97);background:var(--green-light)}
+.nav-card.dragging{opacity:.4}
+.nav-card.drag-over{outline:2px dashed var(--lime)}
+.nav-card-title{font-size:14px;font-weight:700;color:var(--white);line-height:1.4;margin-top:4px}
+.nav-card-arrow{position:absolute;bottom:14px;right:16px;font-size:18px;color:var(--lime);font-weight:700}
+.nav-card-drag{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;opacity:.35}
+.nav-card-drag span{display:block;width:13px;height:2px;background:var(--white);border-radius:2px}
+.nav-card-actions{position:absolute;top:7px;right:7px;display:flex;gap:3px;opacity:0;transition:opacity .15s}
 .nav-card:hover .nav-card-actions{opacity:1}
-
-.add-card-btn{background:none;border:1.5px dashed var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);font-family:'Manrope',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;min-height:100px;width:100%}
-.add-card-btn:active{background:var(--surface)}
-
-.section-list-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px}
-.search-input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Manrope',sans-serif;background:var(--surface);color:var(--text);width:160px}
-.search-input:focus{outline:none;border-color:var(--text)}
+.nav-card.acad-card{background:linear-gradient(135deg,#1a3d55,#0e2e40)}
+.add-btn{width:100%;padding:13px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:14px;font-size:13px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:6px;transition:background .15s;}
+.add-btn:active{background:var(--white-10)}
+.add-item-btn{width:100%;padding:11px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:12px;font-size:13px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:8px;transition:background .15s;}
+.add-item-btn:active{background:var(--white-10)}
+.search-wrap{margin-bottom:14px}
+.search-inp{width:100%;padding:10px 14px;border:1px solid var(--white-10);border-radius:12px;font-size:13px;font-family:inherit;background:var(--white-06);color:var(--white);outline:none;transition:border-color .15s;}
+.search-inp::placeholder{color:var(--white-50)}
+.search-inp:focus{border-color:var(--lime)}
 .section-list{display:flex;flex-direction:column;gap:8px}
-.section-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all .15s}
-.section-item:active{background:var(--surface2)}
-.section-item-left{display:flex;align-items:center;gap:12px}
-.section-num{width:28px;height:28px;border-radius:7px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0}
-.section-name{font-size:14px;font-weight:600}
-.section-chevron{color:var(--muted);font-size:16px}
-.section-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
-.section-item:hover .section-actions{opacity:1}
-.no-results{text-align:center;padding:24px;color:var(--muted);font-size:13px}
-.add-flow-btn{margin-top:10px;width:100%;padding:12px 16px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Manrope',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
-.add-flow-btn:active{background:var(--surface)}
+.section-item{background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:13px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .15s;}
+.section-item:active{background:var(--green-light)}
+.section-item.dragging{opacity:.4}
+.section-item.drag-over{border:2px dashed var(--lime)}
+.section-num{width:30px;height:30px;border-radius:9px;background:var(--white-10);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--lime);flex-shrink:0;margin-right:12px;}
+.section-name{font-size:14px;font-weight:600;color:var(--white)}
+.chevron{color:var(--white-50);font-size:18px;font-weight:300}
+.drag-handle{display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;margin-right:8px;opacity:.3}
+.drag-handle span{display:block;width:14px;height:2px;background:var(--white);border-radius:2px}
+.drag-handle:active{cursor:grabbing}
+.form-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:16px;padding:16px;margin-top:10px}
+.fi{width:100%;padding:10px 12px;border:1px solid var(--white-10);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white-06);color:var(--white);outline:none;margin-top:5px;transition:border-color .15s;}
+.fi:focus{border-color:var(--lime)}
+.fi::placeholder{color:var(--white-50)}
+.flbl{font-size:11px;font-weight:700;color:var(--white-50);text-transform:uppercase;letter-spacing:.6px}
+.frow{margin-bottom:12px}
+.fbtns{display:flex;gap:8px;margin-top:14px}
+.fsave{background:var(--lime);color:var(--green-dark);border:none;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;}
+.fsave:active{background:var(--lime-dark)}
+.fcancel{background:var(--white-10);border:none;padding:10px 16px;border-radius:10px;font-size:13px;cursor:pointer;color:var(--white-80);font-family:inherit;}
+.action-btns{display:flex;gap:4px;align-items:center}
+.abtn{border:1px solid var(--white-10);background:var(--white-06);border-radius:7px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--white-50);transition:background .15s;}
+.abtn:active{background:var(--white-20)}
+.abtn-red{border-color:rgba(255,100,100,.25);color:#ff7070}
+.tree-wrap{overflow-x:auto;padding-bottom:16px}
+.tree-col{display:flex;flex-direction:column}
+.node-row{display:flex;flex-direction:row;align-items:flex-start;margin-bottom:10px}
+.node-card{width:260px;flex-shrink:0;background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:14px;position:relative;}
+.node-num{position:absolute;top:10px;left:10px;width:26px;height:26px;background:var(--lime);color:var(--green-dark);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;}
+.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:32px;padding-right:36px;color:var(--white)}
+.node-msg{background:var(--white-06);border-radius:8px;padding:8px 30px 8px 10px;font-size:11px;line-height:1.6;margin-top:8px;white-space:pre-wrap;position:relative;font-family:monospace;color:var(--white-80);border:1px solid var(--white-10);}
+.copy-btn{width:20px;height:20px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:5px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:.7;color:var(--white);}
+.node-link{font-size:11px;margin-top:8px;word-break:break-all}
+.node-link a{display:inline-flex;align-items:center;gap:5px;background:var(--lime);color:var(--green-dark);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;}
+.node-corner{position:absolute;top:6px;right:6px;display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.node-card:hover .node-corner{opacity:1}
+.corner-btn{width:22px;height:22px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:6px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--white-50);}
+.corner-btn.always{opacity:1!important}
+.connector{display:flex;flex-direction:row;align-items:stretch}
+.vbar-wrap{width:24px;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.vbar{width:1px;background:var(--white-20);flex:1}
+.children-col{display:flex;flex-direction:column}
+.child-row{display:flex;align-items:flex-start}
+.hbar{width:24px;height:1px;background:var(--white-20);flex-shrink:0;margin-top:22px}
+.add-child-btn{width:260px;padding:8px 12px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:10px;font-size:11px;color:var(--white-50);cursor:pointer;font-family:inherit;text-align:left;margin-bottom:8px;}
+.add-root-btn{padding:10px 16px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:12px;font-size:12px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:8px;display:flex;align-items:center;gap:6px;}
+.node-form{width:260px;background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:14px;margin-bottom:8px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:300px}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:4px;color:var(--white)}
+.modal-sub{font-size:12px;color:var(--white-50);margin-bottom:16px}
+.modal-err{font-size:11px;color:#ff7070;margin-top:6px;display:none}
+.modal-err.show{display:block}
+.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
+.confirm-bg.open{display:flex}
+.confirm-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:280px;text-align:center}
+.confirm-msg{font-size:15px;font-weight:600;color:var(--white);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:center}
+.confirm-yes{background:#e53935;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.confirm-no{background:var(--white-10);color:var(--white-80);border:none;padding:10px 20px;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit}
+.notif{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--lime);color:var(--green-dark);padding:10px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
+.notif.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;align-items:center;justify-content:center;cursor:zoom-out}
+.img-modal.open{display:flex}
+.img-modal img{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
+.breadcrumb{font-size:11px;color:var(--white-50);display:flex;flex-wrap:nowrap;gap:3px;align-items:center;overflow:hidden;position:relative;z-index:1;margin-bottom:4px;}
+.bc-item{cursor:pointer;color:var(--lime);font-weight:600;white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis}
+.bc-sep{opacity:.4;flex-shrink:0}
+.bc-cur{color:var(--white-80);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.fade{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.node-msg-collapsed{max-height:80px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 100%);mask-image:linear-gradient(to bottom,black 40%,transparent 100%)}
+.node-msg-btns{position:absolute;top:6px;right:6px;display:flex;gap:3px}
+.expand-btn{width:20px;height:20px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:5px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--white-50)}
+.acad-intro{background:rgba(168,224,99,.1);border-left:3px solid var(--lime);border-radius:0 12px 12px 0;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.7;color:var(--white-80);}
+.acad-section-block{background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
+.acad-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;padding:4px 10px;border-radius:8px;display:inline-block;}
+.acad-label-standard{background:rgba(99,102,241,.18);color:#a5b4fc}
+.acad-label-violation{background:rgba(255,112,112,.15);color:#ff9090}
+.acad-label-decision{background:rgba(168,224,99,.15);color:var(--lime)}
+.acad-content{font-size:13px;line-height:1.85;color:var(--white-80)}
+.acad-content ul{padding-left:18px;margin:6px 0}
+.acad-content li{margin-bottom:4px}
+.acad-content b{font-weight:700;color:var(--white)}
 
-.inline-form{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:8px}
-.inline-form-title{font-size:13px;font-weight:600;margin-bottom:10px}
-.form-row{margin-bottom:8px}
-.fi{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text)}
+</style>
+</head>
+<body>
+
+<!-- TANLOV -->
+<div id="select-screen">
+  <div class="select-box">
+    <div class="select-title">Ilovani tanlang</div>
+    <div class="select-sub">Qaysi tizimga kirasiz?</div>
+    <div class="app-card uma" id="sel-uma">
+      <div class="app-card-icon">🌿</div>
+      <div class="app-card-info">
+        <div class="app-card-name">Uma-tizim</div>
+        <div class="app-card-desc">Shaxsiy rivojlanish</div>
+      </div>
+      <div class="app-card-arrow">›</div>
+    </div>
+    <div class="app-card sirly" id="sel-sirly">
+      <div class="app-card-icon">📋</div>
+      <div class="app-card-info">
+        <div class="app-card-name">Sirly</div>
+        <div class="app-card-desc">Biznes jarayonlar</div>
+      </div>
+      <div class="app-card-arrow">›</div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo" id="login-logo">🌿</div>
+    <div class="login-app-name" id="login-app-name">Uma-tizim</div>
+    <div class="login-sub" id="login-sub">Shaxsiy rivojlanish</div>
+    <label class="login-label">Login</label>
+    <input id="login-input" type="text" class="login-input" placeholder="loginni kiriting" autocomplete="off" autocapitalize="none">
+    <label class="login-label">Parol</label>
+    <input id="parol-input" type="password" class="login-input" placeholder="parolni kiriting">
+    <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
+    <button id="login-btn" class="login-btn">Kirish</button>
+    <button id="register-btn" style="width:100%;padding:12px;border:1px solid currentColor;border-radius:10px;font-size:14px;cursor:pointer;margin-top:8px;font-family:inherit;background:transparent;">Ro'yxatdan o'tish</button>
+    <button id="login-back" class="login-back">← Orqaga</button>
+  </div>
+</div>
+
+<!-- RO'YXATDAN O'TISH -->
+<div id="register-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;">
+  <div class="login-box">
+    <div class="login-logo" id="reg-logo">🌿</div>
+    <div class="login-app-name" id="reg-app-name">Uma-tizim</div>
+    <div class="login-sub">Yangi hisob yaratish</div>
+    <label class="login-label">Ismingiz</label>
+    <input id="reg-ism" type="text" class="login-input" placeholder="Ism Familiya" autocomplete="off">
+    <label class="login-label">Login</label>
+    <input id="reg-login" type="text" class="login-input" placeholder="foydalanuvchi nomi" autocomplete="off" autocapitalize="none">
+    <label class="login-label">Parol</label>
+    <input id="reg-parol" type="password" class="login-input" placeholder="parol o'ylab toping">
+    <div id="reg-error" style="font-size:13px;text-align:center;margin-bottom:10px;display:none;color:#c0392b;"></div>
+    <button id="reg-submit" class="login-btn">Ariza yuborish</button>
+    <button id="reg-back" class="login-back">← Orqaga</button>
+  </div>
+</div>
+
+<!-- KUTISH -->
+<div id="pending-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;background:#f5f5f5;">
+  <div style="text-align:center;max-width:300px;">
+    <div style="font-size:64px;margin-bottom:16px;">⏳</div>
+    <div style="font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:8px;">Ariza yuborildi!</div>
+    <div style="font-size:14px;color:#888;line-height:1.6;margin-bottom:24px;">Arizangiz admin tomonidan ko'rib chiqilmoqda. Tasdiqlangandan so'ng kirish imkoniyatiga ega bo'lasiz.</div>
+    <button id="pending-back" style="background:#558237;color:white;border:none;padding:12px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Orqaga</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-screen" style="display:none;min-height:100vh;background:#f5f5f5;font-family:-apple-system,sans-serif;">
+  <div style="background:#1e5927;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;">
+    <div style="color:white;font-size:17px;font-weight:700;">👑 Admin Panel</div>
+    <button id="admin-logout" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">Chiqish</button>
+  </div>
+  <div style="padding:16px;">
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="admin-tab active" data-app="uma" style="flex:1;padding:10px;border:2px solid #558237;background:#e8f5e0;color:#1e5927;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;">🌿 Uma-tizim</button>
+      <button class="admin-tab" data-app="sirly" style="flex:1;padding:10px;border:2px solid #ccc;background:white;color:#555;border-radius:10px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;">📋 Sirly</button>
+    </div>
+    <div id="admin-list"></div>
+  </div>
+</div>
+
+<!-- UMA-TIZIM APP -->
+<div id="uma-app">
+<div id="app"></div>
+
+<div class="modal-overlay" id="modal-zadd"><div class="modal"><div class="modal-handle"></div><div class="modal-title">Mahsulot qo'shish</div><input class="search-input" id="zadd-search" placeholder="🔍 Qidirish..."><div class="product-list" id="zadd-list"></div><div class="amount-section" id="zadd-amount"><label class="form-label" id="zadd-label">Miqdor</label><div class="amount-row"><input class="amount-input" id="zadd-input" type="number" placeholder="0" min="0"><span class="unit-lbl" id="zadd-unit">g</span></div><div class="coef-info" id="zadd-coef" style="display:none"></div><div class="modal-btns"><button class="btn-cancel" id="zadd-cancel">Bekor</button><button class="btn-save" id="zadd-save">Qo'shish</button></div></div></div></div>
+<div class="modal-overlay" id="modal-zedit"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="zedit-title">Yangilash</div><label class="form-label" id="zedit-label">Miqdor</label><div class="amount-row"><input class="amount-input" id="zedit-input" type="number" placeholder="0" min="0"><span class="unit-lbl" id="zedit-unit">g</span></div><div class="coef-info" id="zedit-coef" style="display:none;margin-top:8px"></div><div class="modal-btns" style="margin-top:16px"><button class="btn-danger-full" id="zedit-del">O'chirish</button><button class="btn-cancel" id="zedit-cancel">Bekor</button><button class="btn-save" id="zedit-save">Saqlash</button></div></div></div>
+<div class="modal-overlay" id="modal-meal"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="meal-modal-title">Ovqat tanlash</div><div class="confirm-box" id="meal-confirm-box" style="display:none"></div><div id="meal-options"></div><div class="modal-btns"><button class="btn-cancel" id="meal-cancel">Bekor</button><button class="btn-save" id="meal-confirm-yes" style="display:none">Ha, o'zgartirish</button></div></div></div>
+<div class="modal-overlay" id="modal-ovqat"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="ovqat-modal-title">Yangi ovqat</div><div class="form-group"><label class="form-label">Nomi</label><input class="form-input" id="ovqat-name" type="text" maxlength="30"></div><div class="form-group"><label class="form-label">Belgi</label><div style="display:flex;gap:8px;flex-wrap:wrap;" id="ovqat-emoji-grid"></div></div><div class="form-group"><label class="form-label">Tarkibi</label><div id="ovqat-ings"></div><button class="product-btn" id="ovqat-add-ing" style="margin-top:8px"><span class="product-btn-icon">➕</span><span class="product-btn-name">Mahsulot qo'shish</span></button></div><div class="modal-btns"><button class="btn-danger-full" id="ovqat-del" style="display:none">O'chirish</button><button class="btn-cancel" id="ovqat-cancel">Bekor</button><button class="btn-save" id="ovqat-save">Saqlash</button></div></div></div>
+<div class="modal-overlay" id="modal-ing"><div class="modal"><div class="modal-handle"></div><div class="modal-title">Mahsulot tanlash</div><input class="search-input" id="ing-search" placeholder="🔍 Qidirish..."><div class="product-list" id="ing-list"></div><div class="amount-section" id="ing-amount"><label class="form-label" id="ing-label">Miqdor (xom)</label><div class="amount-row"><input class="amount-input" id="ing-input" type="number" placeholder="0" min="0"><span class="unit-lbl" id="ing-unit">g</span></div><div class="coef-info" id="ing-coef-info" style="display:none;margin-top:8px"></div><div class="modal-btns"><button class="btn-cancel" id="ing-cancel">Bekor</button><button class="btn-save" id="ing-save">Qo'shish</button></div></div></div></div>
+<div class="modal-overlay" id="modal-kitob"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="kitob-modal-title">Yangi kitob</div><div class="form-group"><label class="form-label">Kitob nomi</label><input class="form-input" id="kitob-nom" type="text" maxlength="60"></div><div class="form-group"><label class="form-label">Muallif</label><input class="form-input" id="kitob-muallif" type="text" maxlength="60"></div><div class="form-group"><label class="form-label">Jami sahifalar</label><input class="form-input" id="kitob-sahifa" type="number" min="1"></div><div class="form-group"><label class="form-label">Boshlangan sana</label><input class="form-input" id="kitob-boshsana" type="date"></div><div class="form-group"><label class="form-label">Taxminiy tugash sanasi</label><input class="form-input" id="kitob-tugsana" type="date"></div><div class="modal-btns"><button class="btn-danger-full" id="kitob-del" style="display:none">O'chirish</button><button class="btn-cancel" id="kitob-cancel">Bekor</button><button class="btn-save blue" id="kitob-save">Saqlash</button></div></div></div>
+<div class="modal-overlay" id="modal-oqidim"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="oqidim-title">O'qidim</div><div class="form-group"><label class="form-label" id="oqidim-label">Qaysi betgacha?</label><div class="amount-row"><input class="amount-input" id="oqidim-bet" type="number" min="1"><span class="unit-lbl">bet</span></div><div style="font-size:12px;color:var(--text3);margin-top:6px;" id="oqidim-hint"></div></div><div class="form-group"><label class="form-label">Izoh (ixtiyoriy)</label><textarea class="form-textarea" id="oqidim-izoh"></textarea></div><div class="modal-btns"><button class="btn-cancel" id="oqidim-cancel">Bekor</button><button class="btn-save blue" id="oqidim-save">Saqlash</button></div></div></div>
+<div class="modal-overlay" id="modal-taassurot"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="taassurot-title">🎉 Tabriklaymiz!</div><p style="font-size:14px;color:var(--text3);margin-bottom:16px;">Kitobni tugatdingiz!</p><div class="form-group"><label class="form-label">Taassurot</label><textarea class="form-textarea" id="taassurot-text"></textarea></div><div class="modal-btns"><button class="btn-cancel" id="taassurot-skip">O'tkazib yuborish</button><button class="btn-save" id="taassurot-save">Saqlash</button></div></div></div>
+<div class="modal-overlay" id="modal-izoh"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="izoh-title">Izoh</div><div class="izoh-full" id="izoh-text"></div><div class="modal-btns" style="margin-top:20px"><button class="btn-cancel" id="izoh-close">Yopish</button></div></div></div>
+<div class="modal-overlay" id="modal-izoh-edit"><div class="modal"><div class="modal-handle"></div><div class="modal-title" id="izoh-edit-title">Izohni tahrirlash</div><div class="form-group"><textarea class="form-textarea" id="izoh-edit-text"></textarea></div><div class="modal-btns"><button class="btn-cancel" id="izoh-edit-cancel">Bekor</button><button class="btn-save blue" id="izoh-edit-save">Saqlash</button></div></div></div>
+<div class="toast" id="toast"></div>
+</div>
+
+<!-- SIRLY APP -->
+<div id="sirly-app">
+<button class="logout-btn" id="logout-btn">⚙ Chiqish</button>
+
+<div class="page active" id="p-home">
+  <div class="home-header">
+    <div class="home-title">Kim nima ishni<br><span>qanday qiladi?</span></div>
+    <div class="home-sub">Bo'limni tanlang</div>
+  </div>
+  <div id="sections-grid" class="cards-grid"></div>
+  <div id="section-form"></div>
+</div>
+<div class="page" id="p-section">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-section"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-home')">← Orqaga</button><span class="page-title" id="section-title"></span></div></div>
+  <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
+  <div id="cats-list" class="section-list"></div><div id="cat-form"></div>
+</div>
+<div class="page" id="p-cat">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-cat"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-section')">← Orqaga</button><span class="page-title" id="cat-title"></span></div></div>
+  <div class="search-wrap"><input class="search-inp" id="search-flows" placeholder="🔍 Qidirish..." oninput="renderFlows()"></div>
+  <div id="flows-list" class="section-list"></div><div id="flow-form"></div>
+</div>
+<div class="page" id="p-flow">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-flow"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-cat')">← Orqaga</button><span class="page-title" id="flow-title"></span><div id="flow-admin-btns" style="display:none;margin-left:auto;gap:4px;flex-shrink:0"><button class="abtn" onclick="editFlowName()">✏</button><button class="abtn abtn-red" onclick="deleteFlow()">✕</button></div></div></div>
+  <div id="flow-name-form" style="display:none;margin-bottom:14px"></div>
+  <div class="tree-wrap" id="tree-wrap"></div><div id="root-form"></div>
+</div>
+<div class="page" id="p-acad-cats">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-cats"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-home')">← Orqaga</button><span class="page-title" id="acad-sec-title"></span></div></div>
+  <div id="acad-cats-list" class="section-list"></div><div id="acad-cats-form"></div>
+</div>
+<div class="page" id="p-acad-items">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-items"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-acad-cats')">← Orqaga</button><span class="page-title" id="acad-cat-title"></span></div></div>
+  <div id="acad-cat-intro-box"></div><div id="acad-items-list" class="section-list"></div><div id="acad-items-form"></div>
+</div>
+<div class="page" id="p-acad-detail">
+  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-detail"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-acad-items')">← Orqaga</button><span class="page-title" id="acad-item-title"></span></div></div>
+  <div id="acad-detail-body"></div>
+</div>
+<div class="modal-bg" id="login-modal">
+  <div class="modal-box"><div class="modal-title">Admin kirish</div><div class="modal-sub">Tahrirlash uchun kiring</div>
+  <div class="frow"><label class="flbl">Login</label><input class="fi" id="l-login" autocomplete="off"></div>
+  <div class="frow"><label class="flbl">Parol</label><input class="fi" id="l-pass" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+  <div class="modal-err" id="l-err">Login yoki parol noto'g'ri</div>
+  <div class="fbtns" style="margin-top:16px"><button class="fsave" onclick="doLogin()">Kirish</button><button class="fcancel" onclick="closeModal()">Bekor</button></div></div>
+</div>
+<div class="img-modal" id="img-modal" onclick="closeImg()"><img id="img-src" src="" alt=""></div>
+<div class="notif" id="notif"></div>
+<div style="position:fixed;top:10px;right:12px;z-index:50"><button id="admin-btn" onclick="handleAdmin()" style="border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)">⚙</button></div>
+<div class="confirm-bg" id="confirm-modal"><div class="confirm-box"><div class="confirm-msg" id="confirm-msg">O'chirasizmi?</div><div class="confirm-btns"><button class="confirm-yes" id="confirm-yes">O'chirish</button><button class="confirm-no" onclick="closeConfirm()">Bekor</button></div></div></div>
+</div>
+
+<script>
+// =================== GLOBAL ===================
+if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+
+var CURRENT_APP = null;
+var USER_ID = 'guest';
+var UMA_USERS = { 'umid': 'umid2025' };
+var SIRLY_USERS = { 'testlogin': 'test26' };
+var ADMIN_LOGIN = 'admin';
+var ADMIN_PAROL = 'admin2025';
+var CURRENT_ADMIN_TAB = 'uma';
+
+// Sirly Supabase (hamma narsa shu yerda)
+var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
+var SB_H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+
+// Uma API - Sirly Supabase ga to'g'ridan
+async function umaApiLoad(uid){
+  try{
+    var r = await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    var rows = await r.json();
+    return (rows && rows[0] && rows[0].data) ? rows[0].data : null;
+  }catch(e){ return null; }
+}
+async function umaApiSave(uid, payload){
+  try{
+    var h = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
+    var r = await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {headers:h});
+    var rows = await r.json();
+    if(rows && rows.length){
+      await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {method:'PATCH', headers:h, body:JSON.stringify({data:payload})});
+    } else {
+      await fetch(SB_URL+'/rest/v1/uma_data', {method:'POST', headers:h, body:JSON.stringify({id:uid, data:payload})});
+    }
+  }catch(e){ console.error('Uma save error:',e); }
+}
+
+// Tanlov
+document.getElementById('sel-uma').addEventListener('click', function(){ showLogin('uma'); });
+document.getElementById('sel-sirly').addEventListener('click', function(){ showLogin('sirly'); });
+
+function showLogin(app){
+  CURRENT_APP = app;
+  var ls = document.getElementById('login-screen');
+  ls.className = app + '-theme';
+  ls.style.display = 'flex';
+  document.getElementById('select-screen').style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-input').value = '';
+  document.getElementById('parol-input').value = '';
+  if(app === 'uma'){
+    document.getElementById('login-logo').textContent = '🌿';
+    document.getElementById('login-app-name').textContent = 'Uma-tizim';
+    document.getElementById('login-sub').textContent = 'Shaxsiy rivojlanish';
+  } else {
+    document.getElementById('login-logo').textContent = '📋';
+    document.getElementById('login-app-name').textContent = 'Sirly';
+    document.getElementById('login-sub').textContent = 'Biznes jarayonlar';
+  }
+  setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
+}
+document.getElementById('login-back').addEventListener('click', function(){
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'flex';
+});
+document.getElementById('login-btn').addEventListener('click', doAppLogin);
+document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doAppLogin(); });
+
+// Register button
+document.getElementById('register-btn').addEventListener('click', function(){
+  var ls = document.getElementById('login-screen');
+  var rs = document.getElementById('register-screen');
+  rs.className = ls.className;
+  rs.style.display = 'flex';
+  ls.style.display = 'none';
+  document.getElementById('reg-logo').textContent = document.getElementById('login-logo').textContent;
+  document.getElementById('reg-app-name').textContent = document.getElementById('login-app-name').textContent;
+  document.getElementById('reg-ism').value = '';
+  document.getElementById('reg-login').value = '';
+  document.getElementById('reg-parol').value = '';
+  document.getElementById('reg-error').style.display = 'none';
+});
+
+// Register back
+document.getElementById('reg-back').addEventListener('click', function(){
+  document.getElementById('register-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+});
+
+// Register submit
+document.getElementById('reg-submit').addEventListener('click', async function(){
+  var ism = document.getElementById('reg-ism').value.trim();
+  var login = document.getElementById('reg-login').value.trim().toLowerCase();
+  var parol = document.getElementById('reg-parol').value;
+  var errEl = document.getElementById('reg-error');
+  
+  if(!ism || !login || !parol){
+    errEl.textContent = "Barcha maydonlarni to'ldiring";
+    errEl.style.display = 'block';
+    return;
+  }
+  if(parol.length < 4){
+    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
+    errEl.style.display = 'block';
+    return;
+  }
+  
+  document.getElementById('reg-submit').textContent = 'Yuborilmoqda...';
+  document.getElementById('reg-submit').disabled = true;
+  
+  try{
+    // Login mavjudligini tekshir
+    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_APP+'&login=eq.'+login, {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    var existing = await check.json();
+    if(existing && existing.length > 0){
+      errEl.textContent = "Bu login allaqachon band";
+      errEl.style.display = 'block';
+      document.getElementById('reg-submit').textContent = 'Ariza yuborish';
+      document.getElementById('reg-submit').disabled = false;
+      return;
+    }
+    
+    // Ariza yuborish
+    var id = 'app_' + Date.now();
+    var r = await fetch(SB_URL+'/rest/v1/applications', {
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({id:id, app:CURRENT_APP, login:login, parol:parol, ism:ism, status:'pending'})
+    });
+    
+    if(r.ok || r.status === 201){
+      document.getElementById('register-screen').style.display = 'none';
+      var ps = document.getElementById('pending-screen');
+      ps.style.display = 'flex';
+    } else {
+      errEl.textContent = "Xatolik yuz berdi, qayta urinib ko'ring";
+      errEl.style.display = 'block';
+    }
+  }catch(e){
+    errEl.textContent = 'Xatolik: ' + e.message;
+    errEl.style.display = 'block';
+  }
+  document.getElementById('reg-submit').textContent = 'Ariza yuborish';
+  document.getElementById('reg-submit').disabled = false;
+});
+
+// Pending back
+document.getElementById('pending-back').addEventListener('click', function(){
+  document.getElementById('pending-screen').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'flex';
+});
+
+// Admin logout
+document.getElementById('admin-logout').addEventListener('click', function(){
+  document.getElementById('admin-screen').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'flex';
+});
+
+// Admin tabs
+document.querySelectorAll('.admin-tab').forEach(function(tab){
+  tab.addEventListener('click', function(){
+    CURRENT_ADMIN_TAB = this.getAttribute('data-app');
+    document.querySelectorAll('.admin-tab').forEach(function(t){
+      t.style.border = '2px solid #ccc';
+      t.style.background = 'white';
+      t.style.color = '#555';
+    });
+    this.style.border = '2px solid #558237';
+    this.style.background = '#e8f5e0';
+    this.style.color = '#1e5927';
+    loadAdminList();
+  });
+});
+
+// Admin functions
+async function showAdminPanel(){
+  document.getElementById('admin-screen').style.display = 'block';
+  CURRENT_ADMIN_TAB = 'uma';
+  loadAdminList();
+}
+
+async function loadAdminList(){
+  var listEl = document.getElementById('admin-list');
+  listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#888;">Yuklanmoqda...</div>';
+  
+  try{
+    var r = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&order=created_at.desc', {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    var rows = await r.json();
+    
+    if(!rows || !rows.length){
+      listEl.innerHTML = "<div style='text-align:center;padding:32px;color:#888;'>Arizalar yo'q</div>";
+      return;
+    }
+    
+    var pending = rows.filter(function(r){ return r.status==='pending'; });
+    var approved = rows.filter(function(r){ return r.status==='approved'; });
+    var rejected = rows.filter(function(r){ return r.status==='rejected'; });
+    
+    var h = '';
+    
+    if(pending.length){
+      h += '<div style="font-size:13px;font-weight:700;color:#AA7B08;text-transform:uppercase;margin-bottom:8px;">⏳ Kutmoqda ('+pending.length+')</div>';
+      pending.forEach(function(u){ h += adminCard(u); });
+    }
+    if(approved.length){
+      h += '<div style="font-size:13px;font-weight:700;color:#558237;text-transform:uppercase;margin:16px 0 8px;">✅ Tasdiqlangan ('+approved.length+')</div>';
+      approved.forEach(function(u){ h += adminCard(u); });
+    }
+    if(rejected.length){
+      h += '<div style="font-size:13px;font-weight:700;color:#c0392b;text-transform:uppercase;margin:16px 0 8px;">❌ Rad etilgan ('+rejected.length+')</div>';
+      rejected.forEach(function(u){ h += adminCard(u); });
+    }
+    
+    listEl.innerHTML = h;
+    
+    // Approve buttons
+    listEl.querySelectorAll('[data-approve]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var id = this.getAttribute('data-approve');
+        await updateStatus(id, 'approved');
+        loadAdminList();
+      });
+    });
+    // Reject buttons
+    listEl.querySelectorAll('[data-reject]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var id = this.getAttribute('data-reject');
+        await updateStatus(id, 'rejected');
+        loadAdminList();
+      });
+    });
+    // Delete buttons
+    listEl.querySelectorAll('[data-delete]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var id = this.getAttribute('data-delete');
+        if(!confirm("O'chirasizmi?")) return;
+        await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
+          method:'DELETE',
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+        });
+        loadAdminList();
+      });
+    });
+    
+  }catch(e){
+    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#c0392b;">Xatolik: '+e.message+'</div>';
+  }
+}
+
+function adminCard(u){
+  var date = u.created_at ? new Date(u.created_at).toLocaleDateString('uz') : '';
+  var btns = '';
+  if(u.status === 'pending'){
+    btns = '<button data-approve="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✅ Tasdiqlash</button>'+
+           '<button data-reject="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;">❌ Rad etish</button>';
+  } else {
+    btns = '<button data-delete="'+u.id+'" style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑 O\'chirish</button>';
+  }
+  return '<div style="background:white;border:1px solid #e2e8de;border-radius:12px;padding:14px;margin-bottom:10px;">'+
+    '<div style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:4px;">'+u.ism+'</div>'+
+    '<div style="font-size:13px;color:#888;margin-bottom:10px;">@'+u.login+' · '+date+'</div>'+
+    btns+'</div>';
+}
+
+async function updateStatus(id, status){
+  await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
+    method:'PATCH',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify({status:status})
+  });
+}
+
+async function doAppLogin(){
+  var login = document.getElementById('login-input').value.trim().toLowerCase();
+  var parol = document.getElementById('parol-input').value;
+  
+  // Admin tekshir
+  if(login === ADMIN_LOGIN && parol === ADMIN_PAROL){
+    document.getElementById('login-screen').style.display = 'none';
+    showAdminPanel();
+    return;
+  }
+  
+  // Hardcoded users tekshir
+  var users = CURRENT_APP === 'uma' ? UMA_USERS : SIRLY_USERS;
+  if(users[login] && users[login] === parol){
+    USER_ID = CURRENT_APP + '_' + login;
+    STORAGE_KEY = 'umatizim_data_' + USER_ID;
+    localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol}));
+    document.getElementById('login-screen').style.display = 'none';
+    startApp(CURRENT_APP);
+    return;
+  }
+  
+  // Supabase applications tekshir
+  document.getElementById('login-btn').textContent = 'Tekshirilmoqda...';
+  document.getElementById('login-btn').disabled = true;
+  try{
+    var r = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_APP+'&login=eq.'+login, {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    var rows = await r.json();
+    var user = rows && rows.find(function(u){ return u.parol === parol; });
+    if(user){
+      if(user.status === 'approved'){
+        USER_ID = CURRENT_APP + '_' + login;
+        STORAGE_KEY = 'umatizim_data_' + USER_ID;
+        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol}));
+        document.getElementById('login-screen').style.display = 'none';
+        startApp(CURRENT_APP);
+      } else if(user.status === 'pending'){
+        document.getElementById('login-error').textContent = '⏳ Arizangiz hali tasdiqlanmagan';
+        document.getElementById('login-error').style.display = 'block';
+      } else {
+        document.getElementById('login-error').textContent = '❌ Arizangiz rad etilgan';
+        document.getElementById('login-error').style.display = 'block';
+      }
+    } else {
+      document.getElementById('login-error').textContent = "Login yoki parol noto'g'ri";
+      document.getElementById('login-error').style.display = 'block';
+    }
+  }catch(e){
+    document.getElementById('login-error').textContent = 'Xatolik yuz berdi';
+    document.getElementById('login-error').style.display = 'block';
+  }
+  document.getElementById('login-btn').textContent = 'Kirish';
+  document.getElementById('login-btn').disabled = false;
+}
+
+function startApp(app){
+  if(app === 'uma'){
+    document.getElementById('uma-app').style.display = 'block';
+    umaStart();
+  } else {
+    document.getElementById('sirly-app').style.display = 'block';
+    sirlyStart();
+  }
+}
+
+// Saqlangan loginni tekshir
+(function(){
+  var saved = localStorage.getItem('app_login');
+  if(!saved) return;
+  try{
+    var u = JSON.parse(saved);
+    var users = u.app === 'uma' ? UMA_USERS : SIRLY_USERS;
+    if(users[u.login] && users[u.login] === u.parol){
+      CURRENT_APP = u.app;
+      USER_ID = u.app + '_' + u.login;
+      STORAGE_KEY = 'umatizim_data_' + USER_ID;
+      document.getElementById('select-screen').style.display = 'none';
+      startApp(u.app);
+    }
+  }catch(e){ localStorage.removeItem('app_login'); }
+})();
+
+function doLogoutAll(){
+  localStorage.removeItem('app_login');
+  _umaStarted = false;
+  document.getElementById('uma-app').style.display = 'none';
+  document.getElementById('sirly-app').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'flex';
+  USER_ID = 'guest'; CURRENT_APP = null;
+  window.scrollTo(0,0);
+}
+
+// =================== UMA-TIZIM ===================
+// API Sirly Supabase orqali (umaApiLoad/umaApiSave)
+
+if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+
+var STORAGE_KEY = 'umatizim_data_guest'; // will be updated on login
+var UZ_DAYS = ['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba'];
+var UZ_MONTHS = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek'];
+var MEAL_TIMES = [
+  {key:'nonushta',icon:'🌅',name:'Nonushta'},{key:'snack',icon:'🍎',name:'Oraliq ovqat'},
+  {key:'obed',icon:'☀️',name:'Tushlik'},{key:'ujin',icon:'🌙',name:'Kechki ovqat'},{key:'kechga',icon:'🌛',name:'Kechga'}
+];
+var DEFAULT_PRODUCTS = [
+  {id:'tovuq',name:'Tovuq',icon:'🥩',unit:'g',coef:0.72,coefLabel:'100g xom → 72g pishgan',dailyCooked:440},
+  {id:'tuxum',name:'Tuxum',icon:'🥚',unit:'ta',coef:1,coefLabel:null,dailyRaw:5},
+  {id:'tvorog',name:'Tvorog',icon:'🥛',unit:'ta',coef:1,coefLabel:null,dailyRaw:1},
+  {id:'guruch',name:'Guruch',icon:'🌾',unit:'g',coef:2.14,coefLabel:'100g xom → 214g pishgan',dailyCooked:500},
+  {id:'grechka',name:'Grechka',icon:'🌾',unit:'g',coef:2.5,coefLabel:'100g xom → 250g pishgan',dailyCooked:600},
+  {id:'brokoli',name:'Brokoli',icon:'🥦',unit:'ta',coef:1,coefLabel:null,dailyRaw:2},
+  {id:'olma',name:'Olma',icon:'🍎',unit:'ta',coef:1,coefLabel:null,dailyRaw:1},
+  {id:'banan',name:'Banan',icon:'🍌',unit:'ta',coef:1,coefLabel:null,dailyRaw:1},
+  {id:'ovsyanka',name:'Ovsyanka',icon:'🥣',unit:'g',coef:1,coefLabel:null,dailyRaw:100}
+];
+var DEFAULT_OVQATLAR = [
+  {id:'klassika',name:'Klassika',icon:'🍱',ingredients:[{productId:'tovuq',rawAmount:305,cookedAmount:220},{productId:'guruch',rawAmount:117,cookedAmount:250},{productId:'brokoli',rawAmount:1,cookedAmount:1}]},
+  {id:'tuxum_meal',name:'Tuxum',icon:'🍳',ingredients:[{productId:'tuxum',rawAmount:5,cookedAmount:5}]},
+  {id:'tvorog_meal',name:'Tvorog',icon:'🥛',ingredients:[{productId:'tvorog',rawAmount:1,cookedAmount:1}]},
+  {id:'olma_meal',name:'Olma',icon:'🍎',ingredients:[{productId:'olma',rawAmount:1,cookedAmount:1}]}
+];
+var DEFAULT_DAY_PLAN = {nonushta:'tuxum_meal',snack:'olma_meal',obed:'klassika',ujin:'klassika',kechga:'tvorog_meal'};
+var pageStack=['home'];
+var selectedDate=null,zapas=[],ovqatlar=[],dayPlans={},kitoblar=[];
+var selectedZapasProduct=null,editingZapasIdx=null;
+var editingMealTime=null,pendingMealChange=null;
+var editingOvqatId=null,tempIngredients=[],ingSelectedProduct=null;
+var editingKitobId=null,activeKitobId=null,finishingKitobId=null;
+var editingIzohKitob=null,editingIzohIdx=null,editingIzohIsFinal=false;
+var ovqatSelectedEmoji='🍲';
+var OVQAT_EMOJIS=['🍲','🥘','🍜','🥗','🍳','🥩','🍖','🫕','🥣','🍱','🫔','🥙'];
+
+async function sbSave(){
+  var payload={zapas:zapas,ovqatlar:ovqatlar,dayPlans:dayPlans,kitoblar:kitoblar};
+  await umaApiSave(USER_ID, payload);
+}
+async function sbLoad(){
+  try{
+    var d=await umaApiLoad(USER_ID);
+    if(d&&d.kitoblar!==undefined){
+      zapas=d.zapas||[];ovqatlar=d.ovqatlar||[];
+      if(!ovqatlar.length)ovqatlar=JSON.parse(JSON.stringify(DEFAULT_OVQATLAR));
+      dayPlans=d.dayPlans||{};kitoblar=d.kitoblar||[];
+      localStorage.setItem(STORAGE_KEY,JSON.stringify({zapas,ovqatlar,dayPlans,kitoblar}));
+      return true;
+    }
+    return false;
+  }catch(e){console.error('Load error:',e);return false;}
+}
+function loadData(){
+  try{var d=localStorage.getItem(STORAGE_KEY);if(d){var p=JSON.parse(d);zapas=p.zapas||[];ovqatlar=p.ovqatlar||[];dayPlans=p.dayPlans||{};kitoblar=p.kitoblar||[];}if(!ovqatlar.length)ovqatlar=JSON.parse(JSON.stringify(DEFAULT_OVQATLAR));}
+  catch(e){zapas=[];ovqatlar=JSON.parse(JSON.stringify(DEFAULT_OVQATLAR));dayPlans={};kitoblar=[];}
+}
+function saveData(){
+  var payload={zapas,ovqatlar,dayPlans,kitoblar};
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
+  sbSave().catch(function(e){});
+}
+function dateStr(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function fmtDate(d){return('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2);}
+function fmtDateStr(s){if(!s)return'';var p=s.split('-');return p[2]+'.'+p[1];}
+function todayDateStr(){return dateStr(new Date());}
+function getDayPlan(d){return dayPlans[dateStr(d)]||JSON.parse(JSON.stringify(DEFAULT_DAY_PLAN));}
+function getDays(){var days=[];var t=new Date();t.setHours(0,0,0,0);var y=new Date(t);y.setDate(t.getDate()-1);days.push(y);for(var i=0;i<7;i++){var d=new Date(t);d.setDate(t.getDate()+i);days.push(d);}return days;}
+function isToday(d){var t=new Date();t.setHours(0,0,0,0);return d.getTime()===t.getTime();}
+function isYesterday(d){var t=new Date();t.setHours(0,0,0,0);var y=new Date(t);y.setDate(t.getDate()-1);return d.getTime()===y.getTime();}
+function isPast(d){var t=new Date();t.setHours(0,0,0,0);return d.getTime()<t.getTime();}
+function getOvqat(id){if(!id)return null;return ovqatlar.find(function(o){return o.id===id;})||null;}
+function getProd(id){return DEFAULT_PRODUCTS.find(function(p){return p.id===id;})||null;}
+function getRawNeeded(ing){if(ing.rawAmount!==undefined)return ing.rawAmount;var prod=getProd(ing.productId);if(!prod)return ing.amount||0;return prod.coef!==1?ing.amount/prod.coef:ing.amount;}
+function getCookedAmount(ing){if(ing.cookedAmount!==undefined)return ing.cookedAmount;var prod=getProd(ing.productId);if(!prod)return ing.amount||0;return prod.coef!==1?Math.round(ing.rawAmount*prod.coef):ing.rawAmount;}
+function calcRemainingForDay(productId,dayIndex,allDays){var zapItem=zapas.find(function(z){return z.productId===productId;});if(!zapItem)return 0;var available=zapItem.rawAmount;var entryDate=zapItem.entryDate?new Date(zapItem.entryDate):null;if(entryDate)entryDate.setHours(0,0,0,0);for(var i=0;i<dayIndex;i++){var d=allDays[i];if(entryDate&&d<entryDate)continue;var plan=getDayPlan(d);MEAL_TIMES.forEach(function(mt){var ovqat=getOvqat(plan[mt.key]);if(!ovqat)return;ovqat.ingredients.forEach(function(ing){if(ing.productId===productId)available-=getRawNeeded(ing);});});}return available;}
+function dayHasMissing(d,dayIndex,allDays){if(isPast(d))return false;var plan=getDayPlan(d);for(var i=0;i<MEAL_TIMES.length;i++){var ovqat=getOvqat(plan[MEAL_TIMES[i].key]);if(!ovqat)continue;for(var j=0;j<ovqat.ingredients.length;j++){var ing=ovqat.ingredients[j];if(calcRemainingForDay(ing.productId,dayIndex,allDays)<getRawNeeded(ing))return true;}}return false;}
+function getMissingForMeal(ovqatId,dayIndex,allDays){var ovqat=getOvqat(ovqatId);if(!ovqat)return[];var missing=[];ovqat.ingredients.forEach(function(ing){if(calcRemainingForDay(ing.productId,dayIndex,allDays)<getRawNeeded(ing)){var prod=getProd(ing.productId);if(prod)missing.push(prod.name);}});return missing;}
+function findFirstMissingDay(){var allDays=getDays();var today=new Date();today.setHours(0,0,0,0);for(var i=0;i<allDays.length;i++){var d=allDays[i];if(d<=today)continue;if(dayHasMissing(d,i,allDays))return{day:d,dayName:UZ_DAYS[d.getDay()]};}return null;}
+function getXaridInfo(){var missing=findFirstMissingDay();if(!missing)return null;var today=new Date();today.setHours(0,0,0,0);var dayBefore=new Date(missing.day);dayBefore.setDate(missing.day.getDate()-1);return{day:missing.day,dayName:missing.dayName,isUrgent:dayBefore.getTime()===today.getTime(),dateLabel:fmtDate(missing.day)+' '+missing.dayName};}
+function getMissingProductsForXarid(){var allDays=getDays();var today=new Date();today.setHours(0,0,0,0);var missingProds={};for(var i=0;i<allDays.length;i++){var d=allDays[i];if(d<=today)continue;if(!dayHasMissing(d,i,allDays))continue;var plan=getDayPlan(d);MEAL_TIMES.forEach(function(mt){var ovqat=getOvqat(plan[mt.key]);if(!ovqat)return;ovqat.ingredients.forEach(function(ing){var rem=calcRemainingForDay(ing.productId,i,allDays);var needed=getRawNeeded(ing);if(rem<needed){var prod=getProd(ing.productId);if(!prod)return;if(!missingProds[ing.productId])missingProds[ing.productId]={prod:prod,needed:needed-Math.max(0,rem)};else missingProds[ing.productId].needed+=needed;}});});break;}return Object.values(missingProds);}
+function calcEffectiveRemaining(item){var prod=getProd(item.productId);if(!prod)return item.rawAmount;if(!item.entryDate)return item.rawAmount;var entry=new Date(item.entryDate);entry.setHours(0,0,0,0);var today=new Date();today.setHours(0,0,0,0);var remaining=item.rawAmount;var cur=new Date(entry);while(cur<today){var plan=getDayPlan(cur);MEAL_TIMES.forEach(function(mt){var ovqat=getOvqat(plan[mt.key]);if(!ovqat)return;ovqat.ingredients.forEach(function(ing){if(ing.productId===item.productId)remaining-=getRawNeeded(ing);});});cur.setDate(cur.getDate()+1);}return Math.max(0,Math.round(remaining*10)/10);}
+function calcDaysLeft(item){var prod=getProd(item.productId);if(!prod)return 0;var effective=calcEffectiveRemaining(item);var daily=prod.dailyRaw?prod.dailyRaw:prod.dailyCooked/prod.coef;return Math.round((effective/daily)*10)/10;}
+function statusClass(d){return d>=3?'status-green':d>=1?'status-warn':'status-red';}
+function statusColor(d){return d>=3?'#558237':d>=1?'#AA7B08':'#c0392b';}
+
+function render(){
+  var page=pageStack[pageStack.length-1];var app=document.getElementById('app');
+  if(page==='home')renderHome(app);
+  else if(page==='soglik')renderSoglik(app);
+  else if(page==='ovqatlanish')renderOvqatlanish(app);
+  else if(page==='ratsion')renderRatsion(app);
+  else if(page==='day')renderDay(app);
+  else if(page==='zaxira')renderZaxira(app);
+  else if(page==='ovqatlar')renderOvqatlar(app);
+  else if(page==='bilim')renderBilim(app);
+  else if(page==='kitob')renderKitobList(app);
+  else if(page==='dars')renderDars(app);
+  else if(page==='kitob-detail')renderKitobDetail(app);
+}
+function mkH(title,back,addId,addCls){
+  var left=back?'<button class="back-btn" id="btn-back">←</button><div><div class="header-title">'+title+'</div></div>':'<div class="logo">🌿</div><div><div class="header-title">'+title+'</div><div class="header-sub">Shaxsiy rivojlanish</div></div>';
+  var right=addId?'<button class="btn-add'+(addCls?' '+addCls:'')+'" id="'+addId+'">+</button>':'';
+  if(!back) right=(right||'')+'<button onclick="doLogout()" style="background:#e2e8de;border:none;border-radius:8px;padding:6px 10px;font-size:12px;color:#7a9669;cursor:pointer;">⚙ Chiqish</button>';
+  return'<div class="header"><div class="header-left">'+left+'</div><div style="display:flex;gap:6px;align-items:center;">'+right+'</div></div>';
+}
+function doLogout(){doLogoutAll();}
+function mkBc(){
+  var lb={home:'🏠',soglik:"💚 Sog'liq",ovqatlanish:'🥗',ratsion:'📋',zaxira:'📦',ovqatlar:'🍽️',bilim:'🧠',kitob:'📚',dars:'📖',day:'📅','kitob-detail':'📖'};
+  if(pageStack.length<=1)return'';
+  var h='<div class="breadcrumb">';
+  for(var i=0;i<pageStack.length-1;i++)h+='<span data-idx="'+i+'">'+(lb[pageStack[i]]||'')+'</span><span style="color:#a9b7a3"> › </span>';
+  h+='<span style="color:#558237">'+(lb[pageStack[pageStack.length-1]]||'')+'</span></div>';
+  return h;
+}
+function bc(){
+  document.querySelectorAll('[data-idx]').forEach(function(el){el.addEventListener('click',function(){pageStack=pageStack.slice(0,parseInt(this.getAttribute('data-idx'))+1);render();});});
+  var b=document.getElementById('btn-back');if(b)b.addEventListener('click',function(){pageStack.pop();render();});
+}
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
+
+function renderHome(app){
+  app.innerHTML=mkH('Uma-tizim',false,null)+
+    '<div class="main"><div class="page-title">Bo\'limlar</div>'+
+    '<div class="card" id="gs"><div class="card-icon">💚</div><div class="card-info"><div class="card-name">Sog\'liq</div><div class="card-sub">Sport va to\'g\'ri ovqatlanish</div></div><span class="card-arrow">›</span></div>'+
+    '<div class="card" id="gb"><div class="card-icon">🧠</div><div class="card-info"><div class="card-name">Bilim va rivojlanish</div><div class="card-sub">Kitob va darslar</div></div><span class="card-arrow">›</span></div></div>';
+  document.getElementById('gs').addEventListener('click',function(){pageStack.push('soglik');render();});
+  document.getElementById('gb').addEventListener('click',function(){pageStack.push('bilim');render();});
+}
+function renderSoglik(app){app.innerHTML=mkH("💚 Sog'liq",true,null)+mkBc()+'<div class="main"><div class="page-title">Bo\'limlar</div><div class="card" id="g1"><div class="card-icon">🏋️</div><div class="card-info"><div class="card-name">Sport</div><div class="card-sub">Tez kunda qo\'shiladi</div></div><span class="card-arrow">›</span></div><div class="card" id="g2"><div class="card-icon">🥗</div><div class="card-info"><div class="card-name">To\'g\'ri ovqatlanish</div><div class="card-sub">Ratsion, zaxira, xarid</div></div><span class="card-arrow">›</span></div></div>';bc();document.getElementById('g1').addEventListener('click',function(){showToast('Tez kunda qo\'shiladi');});document.getElementById('g2').addEventListener('click',function(){pageStack.push('ovqatlanish');render();});}
+function renderBilim(app){app.innerHTML=mkH('🧠 Bilim va rivojlanish',true,null)+mkBc()+'<div class="main"><div class="page-title">Bo\'limlar</div><div class="card" id="gk"><div class="card-icon">📚</div><div class="card-info"><div class="card-name">Kitob</div><div class="card-sub">O\'qilmoqda va o\'qib bo\'lingan</div></div><span class="card-arrow">›</span></div><div class="card" id="gd"><div class="card-icon">📖</div><div class="card-info"><div class="card-name">Dars</div><div class="card-sub">Tez kunda qo\'shiladi</div></div><span class="card-arrow">›</span></div></div>';bc();document.getElementById('gk').addEventListener('click',function(){pageStack.push('kitob');render();});document.getElementById('gd').addEventListener('click',function(){pageStack.push('dars');render();});}
+function renderDars(app){app.innerHTML=mkH('📖 Dars',true,null)+mkBc()+'<div class="main"><div class="empty-state"><div class="empty-icon">📖</div><div class="empty-text">Tez kunda qo\'shiladi</div></div></div>';bc();}
+function renderOvqatlanish(app){
+  var xarid=getXaridInfo();var zaxiraSub,zaxiraDanger=false;
+  if(xarid){if(xarid.isUrgent){zaxiraSub="⚠️ Do'konga borish: bugun!";zaxiraDanger=true;}else zaxiraSub="Do'konga borish: "+xarid.dateLabel;}
+  else zaxiraSub="Zaxira yetarli ✅";
+  app.innerHTML=mkH("🥗 Ovqatlanish",true,null)+mkBc()+'<div class="main"><div class="page-title">Bo\'limlar</div>'+
+    '<div class="card" id="gr"><div class="card-icon">📋</div><div class="card-info"><div class="card-name">Kunlik ratsion</div><div class="card-sub">7 kunlik ovqat rejasi</div></div><span class="card-arrow">›</span></div>'+
+    '<div class="card'+(zaxiraDanger?' danger':'')+'" id="gz"><div class="card-icon">📦</div><div class="card-info"><div class="card-name">Zaxira va Xarid rejasi</div><div class="card-sub">'+zaxiraSub+'</div></div><span class="card-arrow">›</span></div>'+
+    '<div class="card" id="go"><div class="card-icon">🍽️</div><div class="card-info"><div class="card-name">Ovqatlar</div><div class="card-sub">Retseptlar va tarkiblar</div></div><span class="card-arrow">›</span></div></div>';
+  bc();
+  document.getElementById('gr').addEventListener('click',function(){pageStack.push('ratsion');render();});
+  document.getElementById('gz').addEventListener('click',function(){pageStack.push('zaxira');render();});
+  document.getElementById('go').addEventListener('click',function(){pageStack.push('ovqatlar');render();});
+}
+function renderRatsion(app){
+  var allDays=getDays();var h=mkH('📋 Kunlik ratsion',true,null)+mkBc()+'<div class="main"><div class="page-title">Kunlar</div>';
+  for(var i=0;i<allDays.length;i++){var d=allDays[i];var tod=isToday(d);var yest=isYesterday(d);var past=isPast(d);var miss=dayHasMissing(d,i,allDays);var plan=getDayPlan(d);var mealNames=MEAL_TIMES.map(function(mt){var o=getOvqat(plan[mt.key]);return o?o.name:null;}).filter(Boolean);
+    h+='<div class="day-card'+(!past&&miss?' warn-red':'')+'" data-ts="'+d.getTime()+'">';
+    h+='<div class="day-date"><div class="day-date-num">'+d.getDate()+'</div><div class="day-date-month">'+UZ_MONTHS[d.getMonth()]+'</div></div>';
+    h+='<div class="day-divider"></div><div class="day-info"><div class="day-name">'+UZ_DAYS[d.getDay()]+'</div><div class="day-meals">'+mealNames.join(' / ')+'</div>';
+    if(!past&&miss)h+='<div class="day-warn">⚠️ Mahsulot yetmaydi</div>';
+    h+='</div>';
+    if(tod)h+='<span class="today-badge">Bugun</span>';else if(yest)h+='<span class="past-badge">Kecha</span>';
+    h+='<span class="card-arrow">›</span></div>';
+  }
+  h+='</div>';app.innerHTML=h;bc();
+  document.querySelectorAll('.day-card').forEach(function(c){c.addEventListener('click',function(){selectedDate=new Date(parseInt(this.getAttribute('data-ts')));pageStack.push('day');render();});});
+}
+function renderDay(app){
+  var d=selectedDate;var title=fmtDate(d)+' '+UZ_DAYS[d.getDay()];
+  var plan=getDayPlan(d);var allDays=getDays();var dayIndex=allDays.findIndex(function(dd){return dateStr(dd)===dateStr(d);});if(dayIndex<0)dayIndex=1;
+  var h=mkH(title,true,null)+mkBc()+'<div class="main" style="padding-top:16px">';
+  MEAL_TIMES.forEach(function(mt){
+    var ovqatId=plan[mt.key];var ovqat=getOvqat(ovqatId);var missing=ovqat?getMissingForMeal(ovqatId,dayIndex,allDays):[];var hasMissing=missing.length>0;
+    var itemsStr=ovqat?ovqat.ingredients.map(function(ing){var p=getProd(ing.productId);if(!p)return'';var cooked=getCookedAmount(ing);var raw=getRawNeeded(ing);if(p.coef!==1)return p.name+' '+cooked+p.unit+' <span style="opacity:0.55;font-size:11px">('+raw+'g xom)</span>';return p.name+' '+raw+p.unit;}).join(' · '):'—';
+    h+='<div class="meal-card'+(hasMissing?' missing':'')+'" data-time="'+mt.key+'">';
+    h+='<div class="meal-card-header"><div class="meal-card-icon">'+mt.icon+'</div><div class="meal-card-info"><div class="meal-card-time">'+mt.name+'</div><div class="meal-card-name">'+(ovqat?ovqat.icon+' '+ovqat.name:'Tanlanmagan')+'</div></div><span class="meal-card-arrow">›</span></div>';
+    if(ovqat)h+='<div class="meal-card-items">'+itemsStr+'</div>';
+    if(hasMissing)h+='<div class="meal-card-missing">⚠️ Yo\'q: '+missing.join(', ')+'</div>';
+    h+='</div>';
+  });
+  h+='</div>';app.innerHTML=h;bc();
+  document.querySelectorAll('.meal-card').forEach(function(card){card.addEventListener('click',function(){openMealSelect(dateStr(d),this.getAttribute('data-time'),plan[this.getAttribute('data-time')]);});});
+}
+function renderZaxira(app){
+  var xarid=getXaridInfo();var missingProds=getMissingProductsForXarid();
+  var h=mkH('📦 Zaxira va Xarid rejasi',true,'zadd-btn')+mkBc()+'<div class="main">';
+  if(xarid){var bc2=xarid.isUrgent?'#fdf2f2':'#f0f3ee';var bb=xarid.isUrgent?'var(--danger)':'var(--bg3)';var bt2=xarid.isUrgent?"⚠️ Do'konga borish: bugun!":"🛒 Do'konga borish: "+xarid.dateLabel;var btc=xarid.isUrgent?'var(--danger)':'var(--text2)';h+='<div style="background:'+bc2+';border:1px solid '+bb+';border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:14px;font-weight:500;color:'+btc+'">'+bt2+'</div>';}
+  if(missingProds.length){h+='<div class="page-title">Xarid ro\'yxati</div>';missingProds.forEach(function(item){h+='<div class="xarid-item"><div class="xarid-icon">'+item.prod.icon+'</div><div class="xarid-info"><div class="xarid-name">'+item.prod.name+'</div><div class="xarid-amount">Kerak: ~'+Math.ceil(item.needed)+item.prod.unit+'</div></div></div>';});}
+  h+='<div class="page-title" style="margin-top:'+(missingProds.length?'8px':'0')+'">Zaxira</div>';
+  if(!zapas.length)h+='<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Hali mahsulot yo\'q</div><div class="empty-sub">+ tugmasini bosing</div></div>';
+  else{zapas.forEach(function(item,i){var prod=getProd(item.productId);if(!prod)return;var effective=calcEffectiveRemaining(item);var days=calcDaysLeft(item);var sc=statusClass(days);var clr=statusColor(days);var pct=Math.min(100,Math.round((days/7)*100));var cooked=prod.coef!==1?' → '+Math.round(effective*prod.coef)+prod.unit+' pishgan':'';var dateLabel=item.entryDate?fmtDate(new Date(item.entryDate))+' da kiritilgan':'';h+='<div class="zapas-item" data-idx="'+i+'"><div class="zapas-icon">'+prod.icon+'</div><div class="zapas-info"><div class="zapas-name">'+prod.name+'</div><div class="zapas-raw">'+effective+prod.unit+' qoldi'+cooked+'</div>'+(dateLabel?'<div class="zapas-date">'+dateLabel+'</div>':'')+'<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:'+clr+'"></div></div></div><div class="zapas-right"><div class="zapas-days '+sc+'">'+days+'</div><div class="zapas-days-lbl">kun</div></div></div>';});}
+  h+='</div>';app.innerHTML=h;bc();
+  var ab=document.getElementById('zadd-btn');if(ab)ab.onclick=null;ab.addEventListener('click',openZaddModal);
+  document.querySelectorAll('.zapas-item').forEach(function(el){el.addEventListener('click',function(){openZeditModal(parseInt(this.getAttribute('data-idx')));});});
+}
+function renderOvqatlar(app){
+  var h=mkH("🍽️ Ovqatlar",true,'ovqat-add-btn')+mkBc()+'<div class="main"><div class="page-title">Retseptlar</div>';
+  ovqatlar.forEach(function(o){var ings=o.ingredients.map(function(ing){var p=getProd(ing.productId);if(!p)return'';var raw=getRawNeeded(ing);var cooked=getCookedAmount(ing);if(p.coef!==1)return p.name+' '+raw+'g xom ('+cooked+'g pishgan)';return p.name+' '+raw+p.unit;}).join(', ');h+='<div class="ovqat-card"><div class="ovqat-icon">'+o.icon+'</div><div class="ovqat-info"><div class="ovqat-name">'+o.name+'</div><div class="ovqat-items">'+ings+'</div></div><button class="btn-sm" data-oid="'+o.id+'">✏️</button></div>';});
+  h+='</div>';app.innerHTML=h;bc();
+  var ab=document.getElementById('ovqat-add-btn');if(ab)ab.onclick=null;ab.addEventListener('click',function(){openOvqatModal(null);});
+  document.querySelectorAll('[data-oid]').forEach(function(btn){btn.addEventListener('click',function(e){e.stopPropagation();openOvqatModal(this.getAttribute('data-oid'));});});
+}
+function renderKitobList(app){
+  var oqilmoqda=kitoblar.filter(function(k){return k.status==='oqilmoqda';});
+  var tugallangan=kitoblar.filter(function(k){return k.status==='tugallangan';});
+  var h=mkH('📚 Kitob',true,'kitob-add-btn','blue')+mkBc()+'<div class="main">';
+  h+='<div class="page-title">O\'qilmoqda ('+oqilmoqda.length+')</div>';
+  if(!oqilmoqda.length)h+='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">Hali kitob yo\'q</div>';
+  oqilmoqda.forEach(function(k){h+=kitobCardHTML(k);});
+  h+='<div class="page-title" style="margin-top:8px">O\'qib bo\'lindi ('+tugallangan.length+')</div>';
+  if(!tugallangan.length)h+='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">Hali yo\'q</div>';
+  tugallangan.forEach(function(k){h+=kitobCardHTML(k);});
+  h+='</div>';app.innerHTML=h;bc();
+  var ab=document.getElementById('kitob-add-btn');if(ab){ab.onclick=null;ab.addEventListener('click',function(){openKitobModal(null);});}
+  document.querySelectorAll('.kitob-card').forEach(function(c){c.addEventListener('click',function(){activeKitobId=this.getAttribute('data-kid');pageStack.push('kitob-detail');render();});});
+}
+function kitobCardHTML(k){
+  var pct=k.jamisahifa?Math.round((k.hozir/k.jamisahifa)*100):0;var done=k.status==='tugallangan';
+  var h='<div class="kitob-card'+(done?' kitob-done':'')+'" data-kid="'+k.id+'">';
+  h+='<div class="kitob-header"><div class="kitob-emoji">📖</div><div class="kitob-info">';
+  h+='<div class="kitob-label">'+(k.muallif||'')+'</div><div class="kitob-name">'+k.nom+'</div>';
+  h+='<div class="kitob-dates">';if(k.boshsana)h+='Boshlangan: '+fmtDateStr(k.boshsana);if(k.tugsana)h+=(k.boshsana?' · ':'')+'Taxminiy: '+fmtDateStr(k.tugsana);h+='</div></div></div>';
+  if(k.jamisahifa){h+='<div class="kitob-progress"><div class="kitob-progress-label"><span>'+k.hozir+' / '+k.jamisahifa+' sahifa</span><span>'+pct+'%</span></div><div class="kitob-progress-bar"><div class="kitob-progress-fill" style="width:'+pct+'%"></div></div></div>';}
+  if(done)h+='<span class="done-badge">✅ O\'qib bo\'lindi</span>';
+  h+='</div>';return h;
+}
+function renderKitobDetail(app){
+  var k=kitoblar.find(function(kb){return kb.id===activeKitobId;});if(!k){pageStack.pop();render();return;}
+  var pct=k.jamisahifa?Math.round((k.hozir/k.jamisahifa)*100):0;var done=k.status==='tugallangan';
+  var h=mkH(k.nom,true,null)+mkBc()+'<div class="main">';
+  h+='<div class="kitob-card'+(done?' kitob-done':'')+'" style="cursor:default">';
+  h+='<div class="kitob-header"><div class="kitob-emoji">📖</div><div class="kitob-info">';
+  h+='<div class="kitob-label">'+(k.muallif||'')+'</div><div class="kitob-name">'+k.nom+'</div>';
+  h+='<div class="kitob-dates">';if(k.boshsana)h+='Boshlangan: '+fmtDateStr(k.boshsana);if(k.tugsana)h+=(k.boshsana?' · ':'')+'Taxminiy: '+fmtDateStr(k.tugsana);if(done&&k.tugatilgan)h+=' · Tugatildi: '+fmtDateStr(k.tugatilgan);h+='</div></div></div>';
+  if(k.jamisahifa){h+='<div class="kitob-progress"><div class="kitob-progress-label"><span>'+k.hozir+' / '+k.jamisahifa+' sahifa</span><span>'+pct+'%</span></div><div class="kitob-progress-bar"><div class="kitob-progress-fill" style="width:'+pct+'%"></div></div></div>';}
+  if(done)h+='<span class="done-badge">✅ O\'qib bo\'lindi</span>';
+  h+='<div class="kitob-actions">';if(!done)h+='<button class="kitob-btn blue" id="btn-oqidim">📖 O\'qidim</button>';h+='<button class="kitob-btn edit" id="btn-kitob-edit">✏️ Tahrirlash</button></div>';
+  var allTarix=(k.tarix||[]).slice();if(k.tassurot)allTarix.push({sana:k.tugatilgan||todayDateStr(),izoh:k.tassurot,isFinal:true,avval:0,hozir:0,farq:0});
+  if(allTarix.length){
+    h+='<div class="tarix-section"><div class="tarix-title">O\'qish tarixi</div>';
+    var sortedT=allTarix.slice().reverse();
+    sortedT.forEach(function(t,i){var isFinal=t.isFinal;h+='<div class="tarix-item"><div class="tarix-meta"><span>📅 '+fmtDateStr(t.sana)+'</span>'+(isFinal?'<span style="font-size:11px;background:#e8f5e0;color:var(--accent);padding:1px 6px;border-radius:10px;margin-left:4px;">Yakuniy</span>':'')+'</div>';if(!isFinal)h+='<div class="tarix-bet">'+t.avval+' → '+t.hozir+' bet (+'+t.farq+' bet)</div>';h+='<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">';if(t.izoh)h+='<div style="flex:1;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+t.izoh+'</div>';else h+='<div style="flex:1;font-size:12px;color:var(--light);font-style:italic;">Izoh yo\'q</div>';if(t.izoh)h+='<button class="tarix-view-btn btn-sm" data-tidx="'+i+'">↓</button>';h+='<button class="tarix-edit-btn btn-sm" data-tidx="'+i+'">✏️</button></div></div>';});
+    h+='</div>';
+  }
+  h+='</div>';app.innerHTML=h;bc();
+  var bo=document.getElementById('btn-oqidim');if(bo)bo.addEventListener('click',function(){openOqidimModal(k);});
+  var be=document.getElementById('btn-kitob-edit');if(be)be.addEventListener('click',function(){openKitobModal(k.id);});
+  var allT2=(k.tarix||[]).slice();if(k.tassurot)allT2.push({sana:k.tugatilgan||todayDateStr(),izoh:k.tassurot,isFinal:true,avval:0,hozir:0,farq:0});
+  var sortedT2=allT2.slice().reverse();
+  document.querySelectorAll('.tarix-view-btn').forEach(function(btn){btn.addEventListener('click',function(e){e.stopPropagation();var t=sortedT2[parseInt(this.getAttribute('data-tidx'))];document.getElementById('izoh-title').textContent=t.isFinal?'Yakuniy':'Izoh';document.getElementById('izoh-text').textContent=t.izoh;document.getElementById('modal-izoh').classList.add('open');});});
+  document.querySelectorAll('.tarix-edit-btn').forEach(function(btn){btn.addEventListener('click',function(e){e.stopPropagation();var tidx=parseInt(this.getAttribute('data-tidx'));openIzohEdit(sortedT2[tidx],k,allT2.length-1-tidx);});});
+}
+
+// KITOB MODALS
+function openKitobModal(kid){editingKitobId=kid;if(kid){var k=kitoblar.find(function(kb){return kb.id===kid;});document.getElementById('kitob-modal-title').textContent='Tahrirlash';document.getElementById('kitob-nom').value=k.nom;document.getElementById('kitob-muallif').value=k.muallif||'';document.getElementById('kitob-sahifa').value=k.jamisahifa||'';document.getElementById('kitob-boshsana').value=k.boshsana||'';document.getElementById('kitob-tugsana').value=k.tugsana||'';document.getElementById('kitob-del').style.display='flex';}else{document.getElementById('kitob-modal-title').textContent='Yangi kitob';document.getElementById('kitob-nom').value='';document.getElementById('kitob-muallif').value='';document.getElementById('kitob-sahifa').value='';document.getElementById('kitob-boshsana').value=todayDateStr();document.getElementById('kitob-tugsana').value='';document.getElementById('kitob-del').style.display='none';}document.getElementById('modal-kitob').classList.add('open');setTimeout(function(){document.getElementById('kitob-nom').focus();},150);}
+
+// INIT
+loadData();
+render();
+sbLoad().then(function(ok){if(ok)render();}).catch(function(e){console.error('SB error:',e);});
+
+var _umaStarted = false;
+
+function openOqidimModal(k){activeKitobId=k.id;document.getElementById('oqidim-title').textContent='📖 '+k.nom;document.getElementById('oqidim-label').textContent='Qaysi betgacha o\'qidingiz? (hozir: '+k.hozir+')';document.getElementById('oqidim-hint').textContent='Jami: '+k.jamisahifa+' sahifa';document.getElementById('oqidim-bet').value='';document.getElementById('oqidim-izoh').value='';document.getElementById('modal-oqidim').classList.add('open');setTimeout(function(){document.getElementById('oqidim-bet').focus();},150);}
+document.getElementById('modal-oqidim').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('oqidim-cancel').addEventListener('click',function(){document.getElementById('modal-oqidim').classList.remove('open');});
+document.getElementById('oqidim-save').addEventListener('click',function(){var k=kitoblar.find(function(kb){return kb.id===activeKitobId;});if(!k)return;var yangi=parseInt(document.getElementById('oqidim-bet').value)||0;var max=k.jamisahifa||9999;if(yangi<=k.hozir){showToast('Avvalgi betdan katta son kiriting');return;}yangi=Math.min(yangi,max);var farq=yangi-k.hozir;var izoh=document.getElementById('oqidim-izoh').value.trim();if(!k.tarix)k.tarix=[];k.tarix.push({sana:todayDateStr(),avval:k.hozir,hozir:yangi,farq:farq,izoh:izoh});k.hozir=yangi;document.getElementById('modal-oqidim').classList.remove('open');saveData();if(k.jamisahifa&&k.hozir>=k.jamisahifa){setTimeout(function(){openFinishConfirm(k.id);},300);}else{render();showToast('+'+farq+' bet o\'qildi ✓');}});
+
+function openFinishConfirm(kid){finishingKitobId=kid;var k=kitoblar.find(function(kb){return kb.id===kid;});document.getElementById('taassurot-title').textContent='🎉 '+k.nom;document.getElementById('taassurot-text').value='';document.getElementById('modal-taassurot').classList.add('open');}
+document.getElementById('modal-taassurot').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+function finishKitob(tassurot){var k=kitoblar.find(function(kb){return kb.id===finishingKitobId;});if(!k)return;k.status='tugallangan';k.hozir=k.jamisahifa;k.tugatilgan=todayDateStr();if(tassurot)k.tassurot=tassurot;saveData();document.getElementById('modal-taassurot').classList.remove('open');render();showToast("O'qib bo'ldingiz! 🎉");}
+document.getElementById('taassurot-skip').addEventListener('click',function(){finishKitob('');});
+document.getElementById('taassurot-save').addEventListener('click',function(){finishKitob(document.getElementById('taassurot-text').value.trim());});
+
+document.getElementById('modal-izoh').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('izoh-close').addEventListener('click',function(){document.getElementById('modal-izoh').classList.remove('open');});
+
+function openIzohEdit(t,k,realIdx){editingIzohKitob=k;editingIzohIdx=realIdx;editingIzohIsFinal=!!t.isFinal;document.getElementById('izoh-edit-title').textContent=t.isFinal?'Yakuniy taassurot':'Izohni tahrirlash';document.getElementById('izoh-edit-text').value=t.izoh||'';document.getElementById('modal-izoh-edit').classList.add('open');setTimeout(function(){document.getElementById('izoh-edit-text').focus();},150);}
+document.getElementById('modal-izoh-edit').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('izoh-edit-cancel').addEventListener('click',function(){document.getElementById('modal-izoh-edit').classList.remove('open');});
+document.getElementById('izoh-edit-save').addEventListener('click',function(){var val=document.getElementById('izoh-edit-text').value.trim();var k=editingIzohKitob;if(editingIzohIsFinal){k.tassurot=val;}else{if(k.tarix&&k.tarix[editingIzohIdx]!==undefined)k.tarix[editingIzohIdx].izoh=val;}saveData();document.getElementById('modal-izoh-edit').classList.remove('open');render();showToast('Saqlandi ✓');});
+
+// ZAPAS
+function buildZaddList(){var q=document.getElementById('zadd-search').value.toLowerCase();var filtered=DEFAULT_PRODUCTS.filter(function(p){return p.name.toLowerCase().includes(q);});var h='';filtered.forEach(function(p){h+='<button class="product-btn'+(selectedZapasProduct&&selectedZapasProduct.id===p.id?' selected':'')+'" data-id="'+p.id+'"><span class="product-btn-icon">'+p.icon+'</span><span><div class="product-btn-name">'+p.name+'</div><div class="product-btn-unit">'+(p.coefLabel||p.unit)+'</div></span></button>';});if(!h)h='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">Topilmadi</div>';document.getElementById('zadd-list').innerHTML=h;document.querySelectorAll('#zadd-list .product-btn').forEach(function(btn){btn.addEventListener('click',function(){selectedZapasProduct=getProd(btn.getAttribute('data-id'));buildZaddList();document.getElementById('zadd-amount').classList.add('show');document.getElementById('zadd-label').textContent=selectedZapasProduct.name+' ('+selectedZapasProduct.unit+', xom)';document.getElementById('zadd-unit').textContent=selectedZapasProduct.unit;var ci=document.getElementById('zadd-coef');if(selectedZapasProduct.coefLabel){ci.style.display='block';ci.textContent='📌 '+selectedZapasProduct.coefLabel;}else ci.style.display='none';document.getElementById('zadd-input').value='';setTimeout(function(){document.getElementById('zadd-input').focus();document.getElementById('zadd-amount').scrollIntoView({behavior:'smooth',block:'end'});},100);});});}
+function openZaddModal(){selectedZapasProduct=null;document.getElementById('zadd-search').value='';document.getElementById('zadd-input').value='';document.getElementById('zadd-amount').classList.remove('show');buildZaddList();document.getElementById('modal-zadd').classList.add('open');}
+document.getElementById('modal-zadd').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('zadd-search').addEventListener('input',buildZaddList);
+document.getElementById('zadd-cancel').addEventListener('click',function(){document.getElementById('modal-zadd').classList.remove('open');});
+document.getElementById('zadd-save').addEventListener('click',function(){if(!selectedZapasProduct)return;var amt=parseFloat(document.getElementById('zadd-input').value);if(!amt||amt<=0){document.getElementById('zadd-input').focus();return;}var today=new Date();today.setHours(0,0,0,0);var ex=zapas.find(function(z){return z.productId===selectedZapasProduct.id;});if(ex){ex.rawAmount=Math.round((ex.rawAmount+amt)*10)/10;ex.entryDate=today.toISOString();}else zapas.push({productId:selectedZapasProduct.id,rawAmount:amt,entryDate:today.toISOString()});saveData();document.getElementById('modal-zadd').classList.remove('open');render();showToast(selectedZapasProduct.name+' qo\'shildi ✓');});
+function openZeditModal(idx){editingZapasIdx=idx;var item=zapas[idx];var prod=getProd(item.productId);document.getElementById('zedit-title').textContent=prod.icon+' '+prod.name;document.getElementById('zedit-label').textContent='Miqdor ('+prod.unit+', xom)';document.getElementById('zedit-unit').textContent=prod.unit;document.getElementById('zedit-input').value=item.rawAmount;var ci=document.getElementById('zedit-coef');if(prod.coefLabel){ci.style.display='block';ci.textContent='📌 '+prod.coefLabel;}else ci.style.display='none';document.getElementById('modal-zedit').classList.add('open');setTimeout(function(){document.getElementById('zedit-input').focus();document.getElementById('zedit-input').select();},150);}
+document.getElementById('modal-zedit').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('zedit-cancel').addEventListener('click',function(){document.getElementById('modal-zedit').classList.remove('open');});
+document.getElementById('zedit-save').addEventListener('click',function(){var amt=parseFloat(document.getElementById('zedit-input').value);if(!amt||amt<=0){document.getElementById('zedit-input').focus();return;}var today=new Date();today.setHours(0,0,0,0);zapas[editingZapasIdx].rawAmount=amt;zapas[editingZapasIdx].entryDate=today.toISOString();saveData();document.getElementById('modal-zedit').classList.remove('open');render();showToast('Yangilandi ✓');});
+document.getElementById('zedit-del').addEventListener('click',function(){var prod=getProd(zapas[editingZapasIdx].productId);if(!confirm(prod.name+' ni o\'chirishni tasdiqlaysizmi?'))return;zapas.splice(editingZapasIdx,1);saveData();document.getElementById('modal-zedit').classList.remove('open');render();showToast("O'chirildi");});
+
+// MEAL
+function openMealSelect(ds,timeKey,currentOvqatId){editingMealTime={dateStr:ds,timeKey:timeKey};pendingMealChange=null;var mt=MEAL_TIMES.find(function(m){return m.key===timeKey;});document.getElementById('meal-modal-title').textContent=mt.icon+' '+mt.name;document.getElementById('meal-confirm-box').style.display='none';document.getElementById('meal-confirm-yes').style.display='none';document.getElementById('meal-options').style.display='';var h='';ovqatlar.forEach(function(o){var ings=o.ingredients.map(function(ing){var p=getProd(ing.productId);return p?p.name+' '+getCookedAmount(ing)+p.unit:'';}).join(', ');h+='<div class="meal-option'+(currentOvqatId===o.id?' selected':'')+'" data-oid="'+o.id+'"><span class="meal-option-icon">'+o.icon+'</span><span><div class="meal-option-name">'+o.name+'</div><div class="meal-option-items">'+ings+'</div></span></div>';});document.getElementById('meal-options').innerHTML=h;document.getElementById('modal-meal').classList.add('open');document.querySelectorAll('.meal-option').forEach(function(el){el.addEventListener('click',function(){var oid=this.getAttribute('data-oid');if(oid===currentOvqatId){document.getElementById('modal-meal').classList.remove('open');return;}pendingMealChange=oid;var curO=getOvqat(currentOvqatId);var newO=getOvqat(oid);var cb=document.getElementById('meal-confirm-box');cb.style.display='block';cb.textContent=(curO?curO.name:'Tanlanmagan')+' → '+newO.name+". O'zgartirasizmi?";document.getElementById('meal-confirm-yes').style.display='flex';document.getElementById('meal-options').style.display='none';});});}
+document.getElementById('modal-meal').addEventListener('click',function(e){if(e.target===this){this.classList.remove('open');document.getElementById('meal-options').style.display='';}});
+document.getElementById('meal-cancel').addEventListener('click',function(){document.getElementById('modal-meal').classList.remove('open');document.getElementById('meal-options').style.display='';pendingMealChange=null;});
+document.getElementById('meal-confirm-yes').addEventListener('click',function(){if(!pendingMealChange||!editingMealTime)return;var ds=editingMealTime.dateStr;var tk=editingMealTime.timeKey;if(!dayPlans[ds])dayPlans[ds]=JSON.parse(JSON.stringify(DEFAULT_DAY_PLAN));dayPlans[ds][tk]=pendingMealChange;saveData();document.getElementById('modal-meal').classList.remove('open');document.getElementById('meal-options').style.display='';pendingMealChange=null;render();showToast('Saqlandi ✓');});
+
+// OVQAT
+function buildOvqatEmoji(){var h='';OVQAT_EMOJIS.forEach(function(e){h+='<button style="width:40px;height:40px;border:2px solid '+(e===ovqatSelectedEmoji?'var(--accent)':'transparent')+';background:'+(e===ovqatSelectedEmoji?'#e8f0e0':'var(--bg)')+';border-radius:8px;font-size:22px;cursor:pointer;" data-emoji="'+e+'">'+e+'</button>';});document.getElementById('ovqat-emoji-grid').innerHTML=h;document.querySelectorAll('#ovqat-emoji-grid button').forEach(function(btn){btn.addEventListener('click',function(){ovqatSelectedEmoji=this.getAttribute('data-emoji');buildOvqatEmoji();});});}
+function renderTempIngs(){var h='';tempIngredients.forEach(function(ing,i){var prod=getProd(ing.productId);if(!prod)return;var raw=getRawNeeded(ing);var cooked=getCookedAmount(ing);var label=prod.coef!==1?raw+'g xom → '+cooked+'g pishgan':raw+prod.unit;h+='<div class="ing-row"><span class="ing-name">'+prod.icon+' '+prod.name+'</span><span class="ing-amount">'+label+'</span><button class="ing-del" data-iidx="'+i+'">×</button></div>';});document.getElementById('ovqat-ings').innerHTML=h;document.querySelectorAll('.ing-del').forEach(function(btn){btn.addEventListener('click',function(){tempIngredients.splice(parseInt(this.getAttribute('data-iidx')),1);renderTempIngs();});});}
+function openOvqatModal(oid){editingOvqatId=oid;if(oid){var o=getOvqat(oid);document.getElementById('ovqat-modal-title').textContent='Tahrir';document.getElementById('ovqat-name').value=o.name;ovqatSelectedEmoji=o.icon;tempIngredients=JSON.parse(JSON.stringify(o.ingredients));document.getElementById('ovqat-del').style.display='flex';}else{document.getElementById('ovqat-modal-title').textContent='Yangi ovqat';document.getElementById('ovqat-name').value='';ovqatSelectedEmoji='🍲';tempIngredients=[];document.getElementById('ovqat-del').style.display='none';}buildOvqatEmoji();renderTempIngs();document.getElementById('modal-ovqat').classList.add('open');}
+document.getElementById('modal-ovqat').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('ovqat-cancel').addEventListener('click',function(){document.getElementById('modal-ovqat').classList.remove('open');});
+document.getElementById('ovqat-add-ing').addEventListener('click',openIngModal);
+document.getElementById('ovqat-save').addEventListener('click',function(){var name=document.getElementById('ovqat-name').value.trim();if(!name){document.getElementById('ovqat-name').focus();return;}if(editingOvqatId){var o=getOvqat(editingOvqatId);o.name=name;o.icon=ovqatSelectedEmoji;o.ingredients=JSON.parse(JSON.stringify(tempIngredients));}else{ovqatlar.push({id:'ovqat_'+Date.now(),name:name,icon:ovqatSelectedEmoji,ingredients:JSON.parse(JSON.stringify(tempIngredients))});}saveData();document.getElementById('modal-ovqat').classList.remove('open');render();showToast('Saqlandi ✓');});
+document.getElementById('ovqat-del').addEventListener('click',function(){if(!confirm("O'chirishni tasdiqlaysizmi?"))return;ovqatlar=ovqatlar.filter(function(o){return o.id!==editingOvqatId;});saveData();document.getElementById('modal-ovqat').classList.remove('open');render();showToast("O'chirildi");});
+function buildIngList(){var q=document.getElementById('ing-search').value.toLowerCase();var filtered=DEFAULT_PRODUCTS.filter(function(p){return p.name.toLowerCase().includes(q);});var h='';filtered.forEach(function(p){h+='<button class="product-btn'+(ingSelectedProduct&&ingSelectedProduct.id===p.id?' selected':'')+'" data-id="'+p.id+'"><span class="product-btn-icon">'+p.icon+'</span><span><div class="product-btn-name">'+p.name+'</div><div class="product-btn-unit">'+p.unit+(p.coefLabel?' · '+p.coefLabel:'')+'</div></span></button>';});document.getElementById('ing-list').innerHTML=h;document.querySelectorAll('#ing-list .product-btn').forEach(function(btn){btn.addEventListener('click',function(){ingSelectedProduct=getProd(btn.getAttribute('data-id'));buildIngList();document.getElementById('ing-amount').classList.add('show');document.getElementById('ing-label').textContent=ingSelectedProduct.name+' (xom, '+ingSelectedProduct.unit+')';document.getElementById('ing-unit').textContent=ingSelectedProduct.unit;var ci=document.getElementById('ing-coef-info');if(ingSelectedProduct.coefLabel){ci.style.display='block';ci.textContent='📌 '+ingSelectedProduct.coefLabel;}else ci.style.display='none';document.getElementById('ing-input').value='';setTimeout(function(){document.getElementById('ing-input').focus();document.getElementById('ing-amount').scrollIntoView({behavior:'smooth',block:'end'});},100);});});}
+function openIngModal(){ingSelectedProduct=null;document.getElementById('ing-search').value='';document.getElementById('ing-input').value='';document.getElementById('ing-amount').classList.remove('show');buildIngList();document.getElementById('modal-ing').classList.add('open');}
+document.getElementById('modal-ing').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('ing-search').addEventListener('input',buildIngList);
+document.getElementById('ing-cancel').addEventListener('click',function(){document.getElementById('modal-ing').classList.remove('open');});
+document.getElementById('ing-save').addEventListener('click',function(){if(!ingSelectedProduct)return;var rawAmt=parseFloat(document.getElementById('ing-input').value);if(!rawAmt||rawAmt<=0){document.getElementById('ing-input').focus();return;}var prod=ingSelectedProduct;var cookedAmt=prod.coef!==1?Math.round(rawAmt*prod.coef*10)/10:rawAmt;var ex=tempIngredients.find(function(i){return i.productId===prod.id;});if(ex){ex.rawAmount=rawAmt;ex.cookedAmount=cookedAmt;}else tempIngredients.push({productId:prod.id,rawAmount:rawAmt,cookedAmount:cookedAmt});document.getElementById('modal-ing').classList.remove('open');renderTempIngs();});
+
+function umaStart(){
+  if(_umaStarted) return;
+  _umaStarted = true;
+  // Modal event listeners
+document.getElementById('modal-kitob').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('kitob-cancel').addEventListener('click',function(){document.getElementById('modal-kitob').classList.remove('open');});
+document.getElementById('kitob-save').addEventListener('click',function(){var nom=document.getElementById('kitob-nom').value.trim();if(!nom){document.getElementById('kitob-nom').focus();return;}var data={nom:nom,muallif:document.getElementById('kitob-muallif').value.trim(),jamisahifa:parseInt(document.getElementById('kitob-sahifa').value)||0,boshsana:document.getElementById('kitob-boshsana').value,tugsana:document.getElementById('kitob-tugsana').value};if(editingKitobId){var k=kitoblar.find(function(kb){return kb.id===editingKitobId;});Object.assign(k,data);}else{data.id='kitob_'+Date.now();data.hozir=0;data.status='oqilmoqda';data.tarix=[];kitoblar.push(data);}saveData();document.getElementById('modal-kitob').classList.remove('open');render();showToast('Saqlandi ✓');});
+document.getElementById('kitob-del').addEventListener('click',function(){kitoblar=kitoblar.filter(function(k){return k.id!==editingKitobId;});saveData();document.getElementById('modal-kitob').classList.remove('open');while(pageStack.length>0&&pageStack[pageStack.length-1]==='kitob-detail')pageStack.pop();render();showToast("O'chirildi");});
+
+  loadData();
+  render();
+  sbLoad().then(function(ok){ 
+    if(ok){ loadData(); render(); }
+  }).catch(function(e){});
+}
+
+
+// =================== SIRLY ===================
+var acadDb={sections:[]};
+// Logout
+document.getElementById('logout-btn').addEventListener('click', function(){
+  doLogoutAll();
+});
+
+// Sirly Supabase
+// SB_URL, SB_KEY global da defined
+
+var confirmCallback=null;
+function askConfirm(msg,cb){confirmCallback=cb;document.getElementById('confirm-msg').textContent=msg;document.getElementById('confirm-modal').classList.add('open');document.getElementById('confirm-yes').onclick=()=>{closeConfirm();cb();};}
+function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
+
+var ADMIN_L='testlogin',ADMIN_P='test26';
+var isAdmin=false;
+var DB_KEY='biznes_db_v1';
+var db={sections:[]};
+var curSection=null,curCat=null,curFlow=null;
+var navStack=['p-home'];
+
+async function save(){
+  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:db})});}
+  catch(e){localStorage.setItem(DB_KEY,JSON.stringify(db));}
+}
+async function load(){
+  try{var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{headers:SB_H});var rows=await r.json();if(rows&&rows.length&&rows[0].data&&rows[0].data.sections)db=rows[0].data;else{var d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}}
+  catch(e){var d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
+}
+
+function goTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active','fade');if(navStack[navStack.length-1]!==p)navStack.push(p);sirlyRender(p);window.scrollTo(0,0);}
+function goBack(p){while(navStack[navStack.length-1]!==p&&navStack.length>1)navStack.pop();document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active');sirlyRender(p);window.scrollTo(0,0);}
+function sirlyRender(p){
+  if(p==='p-home')renderSections();
+  else if(p==='p-section')renderCats();
+  else if(p==='p-cat')renderFlows();
+  else if(p==='p-flow')renderTree();
+  else if(p==='p-acad-cats')renderAcadCats();
+  else if(p==='p-acad-items')renderAcadItems();
+  else if(p==='p-acad-detail')renderAcadDetail();
+  updateBc();
+}
+function updateBc(){
+  var sec=db.sections.find(s=>s.id===curSection);var cat=sec?.cats.find(c=>c.id===curCat);var flow=cat?.flows.find(f=>f.id===curFlow);
+  var map={'p-home':'Bosh sahifa','p-section':sec?.title||'','p-cat':cat?.title||'','p-flow':flow?.title||''};
+  navStack.forEach((p,i)=>{if(p.startsWith('p-acad'))return;var el=document.getElementById('bc-'+p.replace('p-',''));if(!el)return;var html='';navStack.slice(0,i+1).forEach((pp,ii)=>{if(pp.startsWith('p-acad'))return;if(ii<i)html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]||''}</span><span class="bc-sep">›</span>`;else html+=`<span class="bc-cur">${map[pp]||''}</span>`;});el.innerHTML=html;});
+}
+function handleAdmin(){isAdmin?logout():openModal()}
+function openModal(){document.getElementById('login-modal').classList.add('open');document.getElementById('l-login').value='';document.getElementById('l-pass').value='';document.getElementById('l-err').classList.remove('show');setTimeout(()=>document.getElementById('l-login').focus(),100);}
+function closeModal(){document.getElementById('login-modal').classList.remove('open')}
+function doLogin(){var l=document.getElementById('l-login').value.trim();var p=document.getElementById('l-pass').value;if(l===ADMIN_L&&p===ADMIN_P){isAdmin=true;closeModal();var btn=document.getElementById('admin-btn');btn.textContent='⚙✓';btn.style.background='var(--lime)';btn.style.color='var(--green-dark)';btn.style.borderColor='transparent';notify('Admin ✓');sirlyRender(navStack[navStack.length-1]);}else{document.getElementById('l-err').classList.add('show');document.getElementById('l-pass').value='';}}
+function logout(){isAdmin=false;var btn=document.getElementById('admin-btn');btn.textContent='⚙';btn.style.background='var(--white-06)';btn.style.color='var(--white-80)';btn.style.borderColor='var(--white-10)';notify('Chiqildi');sirlyRender(navStack[navStack.length-1]);}
+
+var dragSrcIndex=null,dragContext=null;
+function initDrag(listEl,getItems,setItems){var items=listEl.querySelectorAll('[draggable="true"]');items.forEach((el,i)=>{el.addEventListener('dragstart',e=>{dragSrcIndex=i;dragContext={getItems,setItems};e.dataTransfer.effectAllowed='move';setTimeout(()=>el.classList.add('dragging'),0);});el.addEventListener('dragend',()=>{el.classList.remove('dragging');listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));});el.addEventListener('dragover',e=>{e.preventDefault();listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));el.classList.add('drag-over');});el.addEventListener('drop',e=>{e.preventDefault();if(dragSrcIndex===null||dragSrcIndex===i)return;var arr=dragContext.getItems();var moved=arr.splice(dragSrcIndex,1)[0];arr.splice(i,0,moved);dragContext.setItems(arr);save();dragSrcIndex=null;dragContext=null;});});}
+function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){var ti=null,clone=null,startY=0;var items=()=>listEl.querySelectorAll(selector);listEl.addEventListener('touchstart',e=>{var handle=e.target.closest('.drag-handle,.nav-card-drag');if(!handle)return;var item=handle.closest(selector);var all=[...items()];ti=all.indexOf(item);startY=e.touches[0].clientY;clone=item.cloneNode(true);var rect=item.getBoundingClientRect();clone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);top:${rect.top}px;left:${rect.left}px`;document.body.appendChild(clone);item.style.opacity='0.4';},{passive:true});listEl.addEventListener('touchmove',e=>{if(ti===null||!clone)return;e.preventDefault();var y=e.touches[0].clientY;var dy=y-startY;var rect=[...items()][ti].getBoundingClientRect();clone.style.top=(rect.top+dy)+'px';[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();el.classList.toggle('drag-over',i!==ti&&y>r.top&&y<r.bottom);});},{passive:false});listEl.addEventListener('touchend',e=>{if(ti===null)return;if(clone){clone.remove();clone=null;}[...items()].forEach(x=>{x.classList.remove('drag-over');x.style.opacity='';});var y=e.changedTouches[0].clientY;var target=ti;[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();if(y>r.top&&y<r.bottom&&i!==ti)target=i;});if(target!==ti){var arr=getItems();var moved=arr.splice(ti,1)[0];arr.splice(target,0,moved);setItems(arr);save();}ti=null;},{passive:true});}
+
+function renderSections(){
+  var g=document.getElementById('sections-grid');var h='';
+  if(!db)db={sections:[]};var allCards=[...db.sections.map(s=>({...s,_type:'process'})),...((typeof acadDb !== 'undefined' && acadDb.sections)||[]).map(s=>({...s,_type:'academy'}))];
+  var savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');var ordered=allCards;
+  if(savedOrder){var map=Object.fromEntries(allCards.map(s=>[s.id,s]));ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];}
+  ordered.forEach(s=>{var isAcad=s._type==='academy';var onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;var editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;var delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''} ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="${editFn}">✏</button><button class="abtn abtn-red" onclick="${delFn}">✕</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div><div class="nav-card-arrow">→</div></div>`;});
+  if(isAdmin)h+=`<button class="add-btn" onclick="showSecForm()" style="grid-column:1/-1">＋ Jarayon bo'limi</button><button class="add-btn" onclick="showAcadSecForm()" style="grid-column:1/-1;margin-top:0">＋ Akademiya bo'limi</button>`;
+  g.innerHTML=h;document.getElementById('section-form').innerHTML='';
+  if(isAdmin){initDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();});initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');}
+}
+function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div><div class="fbtns"><button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('asf-title').focus();}
+function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
+function editAcadSection(id){showAcadSecForm(id)}
+function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
+function openSection(id){curSection=id;goTo('p-section')}
+function showSecForm(id){var sec=id?db.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div><div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('sf-title').focus();}
+function saveSection(id){var title=document.getElementById('sf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(id){var s=db.sections.find(x=>x.id===id);if(s)s.title=title;}else db.sections.push({id:'s'+Date.now(),title,cats:[]});save();notify('Saqlandi ✓');renderSections();}
+function editSection(id){showSecForm(id)}
+function delSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{db.sections=db.sections.filter(s=>s.id!==id);save();notify("O'chirildi ✓");renderSections();});}
+
+function renderCats(){var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;document.getElementById('section-title').textContent=sec.title;var q=(document.getElementById('search-cats')?.value||'').trim().toLowerCase();var filtered=q?sec.cats.filter(c=>c.title.toLowerCase().includes(q)):sec.cats;var h='';filtered.forEach((c,i)=>{h+=`<div class="section-item" onclick="openCat('${c.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div class="section-name">${esc(c.title)}</div>${c.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.desc)}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editCat('${c.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delCat('${c.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Kategoriyalar yo\'q'}</div>`;document.getElementById('cats-list').innerHTML=h;if(isAdmin){document.getElementById('cat-form').innerHTML=`<button class="add-item-btn" onclick="showCatForm()">＋ Kategoriya qo'shish</button>`;if(!q){var listEl=document.getElementById('cats-list');initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});}}else document.getElementById('cat-form').innerHTML='';}
+function openCat(id){curCat=id;goTo('p-cat')}
+function showCatForm(id){var sec=db.sections.find(s=>s.id===curSection);var cat=id?sec?.cats.find(c=>c.id===id):null;document.getElementById('cat-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="cf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div><div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="cf-desc" value="${esc(cat?.desc||'')}" placeholder="Qisqacha tavsif..."></div><div class="fbtns"><button class="fsave" onclick="saveCat('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderCats()">Bekor</button></div></div>`;document.getElementById('cf-title').focus();}
+function saveCat(id){var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;var title=document.getElementById('cf-title').value.trim();if(!title){notify('Nom kiriting!');return;}var desc=document.getElementById('cf-desc')?.value.trim()||'';if(id){var c=sec.cats.find(x=>x.id===id);if(c){c.title=title;c.desc=desc;}}else sec.cats.push({id:'c'+Date.now(),title,desc,flows:[]});save();notify('Saqlandi ✓');renderCats();}
+function editCat(id){showCatForm(id)}
+function delCat(id){askConfirm("Kategoriyani o'chirasizmi?",()=>{var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;sec.cats=sec.cats.filter(c=>c.id!==id);save();notify("O'chirildi ✓");renderCats();});}
+
+function getCat(){var sec=db.sections.find(s=>s.id===curSection);return sec?.cats.find(c=>c.id===curCat);}
+function renderFlows(){var cat=getCat();if(!cat)return;document.getElementById('cat-title').textContent=cat.title;var q=(document.getElementById('search-flows')?.value||'').trim().toLowerCase();var filtered=q?cat.flows.filter(f=>f.title.toLowerCase().includes(q)):cat.flows;var h='';filtered.forEach((f,i)=>{h+=`<div class="section-item" onclick="openFlow('${f.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div style="min-width:0"><div class="section-name">${esc(f.title)}</div>${f.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(f.desc)}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editFlowItem('${f.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delFlowItem('${f.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Jarayonlar yo\'q'}</div>`;document.getElementById('flows-list').innerHTML=h;if(isAdmin){document.getElementById('flow-form').innerHTML=`<button class="add-item-btn" onclick="showFlowForm()">＋ Jarayon qo'shish</button>`;if(!q){var listEl=document.getElementById('flows-list');initDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});initTouchDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});}}else document.getElementById('flow-form').innerHTML='';}
+function openFlow(id){curFlow=id;goTo('p-flow')}
+function showFlowForm(id){var cat=getCat();var flow=id?cat?.flows.find(f=>f.id===id):null;document.getElementById('flow-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="ff-title" value="${esc(flow?.title||'')}" placeholder="Jarayon nomi..."></div><div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="ff-desc" value="${esc(flow?.desc||'')}" placeholder="Qisqacha tavsif..."></div><div class="fbtns"><button class="fsave" onclick="saveFlowItem('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderFlows()">Bekor</button></div></div>`;document.getElementById('ff-title').focus();}
+function saveFlowItem(id){var cat=getCat();if(!cat)return;var title=document.getElementById('ff-title').value.trim();if(!title){notify('Nom kiriting!');return;}var fdesc=document.getElementById('ff-desc')?.value.trim()||'';if(id){var f=cat.flows.find(x=>x.id===id);if(f){f.title=title;f.desc=fdesc;}}else cat.flows.push({id:'f'+Date.now(),title,desc:fdesc,nodes:[]});save();notify('Saqlandi ✓');renderFlows();}
+function editFlowItem(id){showFlowForm(id)}
+function delFlowItem(id){askConfirm("Jarayonni o'chirasizmi?",()=>{var cat=getCat();if(!cat)return;cat.flows=cat.flows.filter(f=>f.id!==id);save();notify("O'chirildi ✓");renderFlows();});}
+
+function getFlow(){var cat=getCat();return cat?.flows.find(f=>f.id===curFlow);}
+function renderTree(){var flow=getFlow();if(!flow)return;document.getElementById('flow-title').textContent=flow.title;var fab=document.getElementById('flow-admin-btns');fab.style.display=isAdmin?'flex':'none';document.getElementById('flow-name-form').style.display='none';document.getElementById('root-form').innerHTML='';var h='<div class="tree-col">';flow.nodes.forEach((n,i)=>{if(i>0)h+='<div style="border-top:1.5px dashed var(--white-10);margin:4px 0 12px 0;width:100vw;position:relative;left:-16px"></div>';h+=nodeHTML(n,String(i+1).padStart(2,'00'));});h+='</div>';if(isAdmin)h+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;document.getElementById('tree-wrap').innerHTML=h;}
+function nodeHTML(n,num){var ab=isAdmin?`<div class="node-corner">${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''} ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}<button class="corner-btn" onclick="showNodeForm('${n.id}',null,true)">✏</button><button class="corner-btn" style="color:#ff7070" onclick="delNode('${n.id}')">✕</button></div>`:(n.link||n.img?`<div class="node-corner">${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''} ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}</div>`:'');var card=`<div class="node-card" id="nc-${n.id}"><div class="node-num">${num}</div>${ab}<div class="node-name">${esc(n.name)}</div>${n.msg?`<div class="node-msg node-msg-collapsed" id="nm-wrap-${n.id}">${esc(n.msg)}<div class="node-msg-btns"><button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><button class="expand-btn" id="nm-btn-${n.id}" onclick="toggleMsg('${n.id}')">▼</button></div><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''} ${n.link?`<div class="node-link"><a href="${esc(n.link)}" target="_blank">🔗 Link</a></div>`:''}</div>`;var hasC=n.children?.length>0;var ch='';if(hasC||isAdmin){ch+=`<div class="connector"><div class="vbar-wrap"><div class="vbar"></div></div><div class="children-col">`;n.children?.forEach((c,ci)=>{ch+=`<div class="child-row"><div class="hbar"></div>${nodeHTML(c,String(ci+1).padStart(2,'00'))}</div>`;});if(isAdmin)ch+=`<div style="display:flex;align-items:center"><div class="hbar"></div><button class="add-child-btn" onclick="showNodeForm('${n.id}',null)">＋ Variant</button></div><div id="cf-${n.id}"></div>`;ch+=`</div></div>`;}return `<div class="node-row" id="nr-${n.id}"><div style="display:flex;flex-direction:column">${card}<div id="ef-${n.id}"></div></div>${ch}</div>`;}
+function editFlowName(){var flow=getFlow();if(!flow)return;var f=document.getElementById('flow-name-form');f.style.display='block';f.innerHTML=`<div class="form-box fade"><div class="frow"><input class="fi" id="fn-title" value="${esc(flow.title)}"></div><div class="fbtns"><button class="fsave" onclick="saveFlowName()">Saqlash</button><button class="fcancel" onclick="document.getElementById('flow-name-form').style.display='none'">Bekor</button></div></div>`;document.getElementById('fn-title').focus();}
+function saveFlowName(){var flow=getFlow();if(!flow)return;var t=document.getElementById('fn-title').value.trim();if(!t)return;flow.title=t;save();document.getElementById('flow-title').textContent=t;document.getElementById('flow-name-form').style.display='none';notify('Saqlandi ✓');updateBc();}
+function deleteFlow(){askConfirm("Jarayonni o'chirasizmi?",()=>{var cat=getCat();if(!cat)return;cat.flows=cat.flows.filter(f=>f.id!==curFlow);curFlow=null;save();notify("O'chirildi ✓");goBack('p-cat');});}
+function showNodeForm(pid,_,edit){var isE=!!edit;var flow=getFlow();var node=isE?findNode(flow.nodes,pid):null;var fid=isE?`ef-${pid}`:(pid&&pid!=='null'?`cf-${pid}`:'root-form');var t=document.getElementById(fid);if(!t)return;t.innerHTML=`<div class="node-form fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="${fid}_n" value="${esc(node?.name||'')}"></div><div class="frow"><label class="flbl">Xabar matni</label><textarea class="fi" id="${fid}_m" style="min-height:60px;resize:vertical;font-size:11px">${esc(node?.msg||'')}</textarea></div><div class="frow"><label class="flbl">Link</label><input class="fi" id="${fid}_l" value="${esc(node?.link||'')}" placeholder="https://..."></div><div class="frow"><label class="flbl">Rasm</label><input type="file" accept="image/*" id="${fid}_i" style="font-size:11px;width:100%;color:var(--white-80)">${node?.img?'<div style="font-size:11px;color:var(--lime);margin-top:3px">✓ Rasm bor</div>':''}</div><div class="fbtns"><button class="fsave" onclick="${isE?`saveEditNode('${pid}','${fid}')`:`saveNewNode('${pid}','${fid}')`}">Saqlash</button><button class="fcancel" onclick="renderTree()">Bekor</button></div></div>`;document.getElementById(fid+'_n').focus();}
+function saveNewNode(pid,fid){var name=document.getElementById(fid+'_n').value.trim();var msg=document.getElementById(fid+'_m').value.trim();var link=document.getElementById(fid+'_l').value.trim();if(!name){notify('Nom kiriting!');return;}var imgF=document.getElementById(fid+'_i')?.files[0];var go=(img)=>{var n={id:'n'+Date.now(),name,msg,link,img:img||'',children:[]};var flow=getFlow();if(!pid||pid==='null')flow.nodes.push(n);else{var p=findNode(flow.nodes,pid);if(p)p.children.push(n);}save();notify('Saqlandi ✓');renderTree();};if(imgF){var r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');}
+function saveEditNode(nid,fid){var name=document.getElementById(fid+'_n').value.trim();var msg=document.getElementById(fid+'_m').value.trim();var link=document.getElementById(fid+'_l').value.trim();if(!name){notify('Nom kiriting!');return;}var imgF=document.getElementById(fid+'_i')?.files[0];var flow=getFlow();var n=findNode(flow.nodes,nid);if(!n)return;var go=(img)=>{n.name=name;n.msg=msg;n.link=link;if(img)n.img=img;save();notify('Saqlandi ✓');renderTree();};if(imgF){var r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');}
+function delNode(id){askConfirm("Harakatni o'chirasizmi?",()=>{var flow=getFlow();flow.nodes=rmNode(flow.nodes,id);save();notify("O'chirildi ✓");renderTree();});}
+function findNode(ns,id){for(var n of ns){if(n.id===id)return n;var f=findNode(n.children||[],id);if(f)return f;}return null;}
+function rmNode(ns,id){return ns.filter(n=>n.id!==id).map(n=>({...n,children:rmNode(n.children||[],id)}));}
+function openImg(nid){var flow=getFlow();var n=findNode(flow.nodes,nid);if(!n?.img)return;document.getElementById('img-src').src=n.img;document.getElementById('img-modal').classList.add('open');}
+function closeImg(){document.getElementById('img-modal').classList.remove('open');document.getElementById('img-src').src='';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function notify(m){var n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
+document.getElementById('login-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+var ACAD_KEY='academy_db_v1';
+var acadDb={sections:[]};
+var curAcadSec=null,curAcadCat=null,curAcadItem=null;
+
+async function acadSave(){try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:acadDb})});}catch(e){localStorage.setItem(ACAD_KEY,JSON.stringify(acadDb));}}
+async function acadLoad(){try{var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{headers:SB_H});var rows=await r.json();if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){acadDb=rows[0].data;}else{var d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'academy',data:acadDb})});}catch(e2){}}}catch(e){var d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);}renderSections();}
+
+function formatAcadText(t){if(!t)return '';var s=esc(t);s=s.split('**').map((p,i)=>i%2===1?'<b>'+p+'</b>':p).join('');var lines=s.split('\n');var out=[],inList=false;lines.forEach(line=>{if(line.startsWith('* ')){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+line.slice(2)+'</li>');}else{if(inList){out.push('</ul>');inList=false;}out.push(line?(line+'<br>'):'<br>');}});if(inList)out.push('</ul>');return out.join('');}
+function openAcadSection(id){curAcadSec=id;curAcadCat=null;curAcadItem=null;goTo('p-acad-cats');}
+function renderAcadCats(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;document.getElementById('acad-sec-title').textContent=sec.title;var h='';(sec.cats||[]).forEach((cat,i)=>{h+=`<div class="section-item" onclick="openAcadCat('${cat.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div style="min-width:0"><div class="section-name">${esc(cat.title)}</div>${cat.intro?`<div style="font-size:11px;color:var(--white-50);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat.intro.substring(0,60))}${cat.intro.length>60?'...':''}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();showAcadCatForm('${curAcadSec}','${cat.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delAcadCat('${curAcadSec}','${cat.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!sec.cats||!sec.cats.length)h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Kategoriyalar yo\'q</div>';document.getElementById('acad-cats-list').innerHTML=h;if(isAdmin){document.getElementById('acad-cats-form').innerHTML=`<button class="add-item-btn" onclick="showAcadCatForm('${curAcadSec}')">＋ Kategoriya qo'shish</button>`;var listEl=document.getElementById('acad-cats-list');initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});}else document.getElementById('acad-cats-form').innerHTML='';updateAcadBc();}
+function openAcadCat(id){curAcadCat=id;curAcadItem=null;goTo('p-acad-items');}
+function renderAcadItems(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;var cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;document.getElementById('acad-cat-title').textContent=cat.title;var introBox=document.getElementById('acad-cat-intro-box');introBox.innerHTML=cat.intro?`<div class="acad-intro">${formatAcadText(cat.intro)}</div>`:'';var h='';(cat.items||[]).forEach((item,i)=>{h+=`<div class="section-item" onclick="openAcadItem('${item.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div class="section-name">${esc(item.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delAcadItem('${curAcadSec}','${curAcadCat}','${item.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!cat.items||!cat.items.length)h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Mavzular yo\'q</div>';document.getElementById('acad-items-list').innerHTML=h;if(isAdmin){document.getElementById('acad-items-form').innerHTML=`<button class="add-item-btn" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}')">＋ Mavzu qo'shish</button>`;var listEl=document.getElementById('acad-items-list');initDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});initTouchDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});}else document.getElementById('acad-items-form').innerHTML='';updateAcadBc();}
+function openAcadItem(id){curAcadItem=id;goTo('p-acad-detail');}
+function renderAcadDetail(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;var cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;var item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;document.getElementById('acad-item-title').textContent=item.title;var h='';if(item.standard)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-standard">Standart</div><div class="acad-content">${formatAcadText(item.standard)}</div></div>`;if(item.violation)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-violation">Qoidabuzarlik</div><div class="acad-content">${formatAcadText(item.violation)}</div></div>`;if(item.decision)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-decision">Qaror va harakat</div><div class="acad-content">${formatAcadText(item.decision)}</div></div>`;if(!item.standard&&!item.violation&&!item.decision&&item.content)h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;if(isAdmin)h+=`<div style="margin-top:16px"><button class="fsave" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}',true)">✏ Tahrirlash</button></div><div id="acad-detail-form" style="margin-top:8px"></div>`;document.getElementById('acad-detail-body').innerHTML=h;updateAcadBc();}
+function updateAcadBc(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);var cat=sec?.cats?.find(c=>c.id===curAcadCat);var item=cat?.items?.find(i=>i.id===curAcadItem);var pages=['p-acad-cats','p-acad-items','p-acad-detail'];var titles={'p-home':'Bosh sahifa','p-acad-cats':sec?.title||'','p-acad-items':cat?.title||'','p-acad-detail':item?.title||''};pages.forEach(p=>{var el=document.getElementById('bc-'+p.replace('p-',''));if(!el)return;var stack=['p-home',...pages.slice(0,pages.indexOf(p)+1)];var html='';stack.forEach((pp,ii)=>{if(ii<stack.length-1)html+=`<span class="bc-item" onclick="goBack('${pp}')">${titles[pp]}</span><span class="bc-sep">›</span>`;else html+=`<span class="bc-cur">${titles[pp]}</span>`;});el.innerHTML=html;});}
+function showAcadCatForm(secId,catId){var sec=acadDb.sections.find(s=>s.id===secId);var cat=catId?sec?.cats.find(c=>c.id===catId):null;document.getElementById('acad-cats-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Kategoriya nomi</label><input class="fi" id="acf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div><div class="frow"><label class="flbl">Kirish matni</label><textarea class="fi" id="acf-intro" style="min-height:80px;resize:vertical" placeholder="Bu bo'limda nima o'rganiladi...">${esc(cat?.intro||'')}</textarea></div><div class="fbtns"><button class="fsave" onclick="saveAcadCat('${secId}','${catId||''}')">Saqlash</button><button class="fcancel" onclick="renderAcadCats()">Bekor</button></div></div>`;document.getElementById('acf-title').focus();}
+function saveAcadCat(secId,catId){var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var title=document.getElementById('acf-title').value.trim();var intro=document.getElementById('acf-intro').value.trim();if(!title){notify('Nom kiriting!');return;}if(!sec.cats)sec.cats=[];if(catId){var c=sec.cats.find(x=>x.id===catId);if(c){c.title=title;c.intro=intro;}}else sec.cats.push({id:'ac'+Date.now(),title,intro,items:[]});acadSave();notify('Saqlandi ✓');renderAcadCats();}
+function delAcadCat(secId,catId){askConfirm("Kategoriyani o'chirasizmi?",()=>{var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;sec.cats=sec.cats.filter(c=>c.id!==catId);acadSave();notify("O'chirildi ✓");renderAcadCats();});}
+function showAcadItemForm(secId,catId,itemId,inDetail){var sec=acadDb.sections.find(s=>s.id===secId);var cat=sec?.cats.find(c=>c.id===catId);var item=itemId?cat?.items.find(i=>i.id===itemId):null;var containerId=inDetail?'acad-detail-form':'acad-items-form';document.getElementById(containerId).innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div><div class="frow"><label class="flbl" style="color:#a5b4fc">Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div><div class="frow"><label class="flbl" style="color:#ff9090">Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div><div class="frow"><label class="flbl" style="color:var(--lime)">Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div><div class="fbtns"><button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button><button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button></div></div>`;document.getElementById('afi-title').focus();}
+function saveAcadItem(secId,catId,itemId,inDetail){var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var cat=sec.cats.find(c=>c.id===catId);if(!cat)return;var title=document.getElementById('afi-title').value.trim();var standard=document.getElementById('afi-standard').value.trim();var violation=document.getElementById('afi-violation').value.trim();var decision=document.getElementById('afi-decision').value.trim();if(!title){notify('Nom kiriting!');return;}if(!cat.items)cat.items=[];if(itemId){var it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.standard=standard;it.violation=violation;it.decision=decision;}}else cat.items.push({id:'ai'+Date.now(),title,standard,violation,decision});acadSave();notify('Saqlandi ✓');if(inDetail)renderAcadDetail();else renderAcadItems();}
+function delAcadItem(secId,catId,itemId){askConfirm("Mavzuni o'chirasizmi?",()=>{var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var cat=sec.cats.find(c=>c.id===catId);if(!cat)return;cat.items=cat.items.filter(i=>i.id!==itemId);acadSave();notify("O'chirildi ✓");renderAcadItems();});}
+function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=document.getElementById('nm-btn-'+id);if(!wrap)return;var collapsed=wrap.classList.contains('node-msg-collapsed');if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}}
+
+load().then(()=>{renderSections();updateBc();});
+acadLoad().catch(()=>{});
+
+function sirlyStart(){
+  load().then(function(){ renderSections(); updateBc(); });
+  acadLoad().catch(function(){});
+}
+</script>
+</body>
+</html>.fi{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text)}
 .fi:focus{outline:none;border-color:var(--text)}
 .form-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;display:block}
 .form-actions{display:flex;gap:6px;margin-top:10px}
