@@ -1,24 +1,14 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import httpx
 import os
-import json
-import threading
 
 app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ubakgpkcemlchpfejmke.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU")
-
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qtrniovpkrwimeohamkc.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_XwiSTQrkI0d1Wfj2nLqdLg_qPn48OEu")
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -26,54 +16,41 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-if not os.path.isdir("webapp"):
-    if os.path.exists("webapp"):
-        os.remove("webapp")
-    os.makedirs("webapp")
-
-app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
-
-@app.get("/")
-async def root():
-    return FileResponse("webapp/index.html")
-
-@app.get("/api/data")
-async def get_data():
+@app.get("/api/data/{user_id}")
+async def get_data(user_id: str):
     async with httpx.AsyncClient() as client:
-        r = await client.get(
-            f"{SUPABASE_URL}/rest/v1/biznes_data?id=eq.main",
-            headers=HEADERS
-        )
+        r = await client.get(f"{SUPABASE_URL}/rest/v1/uma_data?id=eq.{user_id}", headers=HEADERS)
         rows = r.json()
-        if rows:
-            return rows[0]["data"]
-        return {}
+        if rows and rows[0].get("data"):
+            return JSONResponse(rows[0]["data"])
+        return JSONResponse({})
 
-@app.post("/api/data")
-async def save_data(request: Request):
+@app.post("/api/data/{user_id}")
+async def save_data(user_id: str, request: Request):
     body = await request.json()
     async with httpx.AsyncClient() as client:
-        r = await client.patch(
-            f"{SUPABASE_URL}/rest/v1/biznes_data?id=eq.main",
-            headers=HEADERS,
-            json={"data": body, "updated_at": "now()"}
-        )
-        if r.status_code not in (200, 201, 204):
-            raise HTTPException(status_code=500, detail="Supabase error")
-        return {"ok": True}
+        r = await client.get(f"{SUPABASE_URL}/rest/v1/uma_data?id=eq.{user_id}", headers=HEADERS)
+        rows = r.json()
+        if rows:
+            r2 = await client.patch(f"{SUPABASE_URL}/rest/v1/uma_data?id=eq.{user_id}", headers=HEADERS, json={"data": body})
+        else:
+            r2 = await client.post(f"{SUPABASE_URL}/rest/v1/uma_data", headers=HEADERS, json={"id": user_id, "data": body})
+        if r2.status_code not in (200, 201, 204):
+            raise HTTPException(status_code=500, detail=r2.text)
+        return JSONResponse({"ok": True})
 
-def start_api_thread():
-    import uvicorn
-    port = int(os.getenv("PORT", 8080))
-    thread = threading.Thread(
-        target=uvicorn.run,
-        args=(app,),
-        kwargs={"host": "0.0.0.0", "port": port},
-        daemon=True
-    )
-    thread.start()
+@app.get("/uma")
+async def uma(): return FileResponse("uma.html")
+
+@app.get("/sirly")
+async def sirly(): return FileResponse("sirly.html")
+
+@app.get("/")
+async def root(): return FileResponse("index.html")
+
+@app.get("/{full_path:path}")
+async def frontend(full_path: str): return FileResponse("index.html")
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
