@@ -579,6 +579,7 @@ function startApp(app){
 
 function doLogoutAll(){
   localStorage.removeItem('app_login');
+  _umaStarted = false;
   document.getElementById('uma-app').style.display = 'none';
   document.getElementById('sirly-app').style.display = 'none';
   document.getElementById('select-screen').style.display = 'flex';
@@ -843,7 +844,10 @@ loadData();
 render();
 sbLoad().then(function(ok){if(ok)render();}).catch(function(e){console.error('SB error:',e);});
 
+var _umaStarted = false;
 function umaStart(){
+  if(_umaStarted) return;
+  _umaStarted = true;
   // Modal event listeners
 document.getElementById('modal-kitob').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 document.getElementById('kitob-cancel').addEventListener('click',function(){document.getElementById('modal-kitob').classList.remove('open');});
