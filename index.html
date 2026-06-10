@@ -205,7 +205,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 <body>
 
 <!-- TANLOV -->
-<div id="select-screen">
+<div id="select-screen" style="display:none!important">
   <div class="select-box">
     <div class="select-title">Sirly</div>
     <div class="select-sub">Biznes jarayonlar tizimi</div>
@@ -365,23 +365,17 @@ async function umaApiSave(uid, payload){
 document.getElementById('sel-sirly').addEventListener('click', function(){ showLogin('sirly'); });
 
 function showLogin(app){
-  CURRENT_APP = app;
+  CURRENT_APP = 'sirly';
   var ls = document.getElementById('login-screen');
-  ls.className = app + '-theme';
+  ls.className = 'sirly-theme';
   ls.style.display = 'flex';
   document.getElementById('select-screen').style.display = 'none';
   document.getElementById('login-error').style.display = 'none';
   document.getElementById('login-input').value = '';
   document.getElementById('parol-input').value = '';
-  if(app === 'uma'){
-    document.getElementById('login-logo').textContent = '🌿';
-    document.getElementById('login-app-name').textContent = 'Uma-tizim';
-    document.getElementById('login-sub').textContent = 'Shaxsiy rivojlanish';
-  } else {
-    document.getElementById('login-logo').textContent = '📋';
-    document.getElementById('login-app-name').textContent = 'Sirly';
-    document.getElementById('login-sub').textContent = 'Biznes jarayonlar';
-  }
+  document.getElementById('login-logo').textContent = '📋';
+  document.getElementById('login-app-name').textContent = 'Sirly';
+  document.getElementById('login-sub').textContent = 'Biznes jarayonlar';
   setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
 }
 document.getElementById('login-back').addEventListener('click', function(){
@@ -723,9 +717,9 @@ showLogin('sirly');
 function doLogoutAll(){
   localStorage.removeItem('app_login');
   document.getElementById('sirly-app').style.display = 'none';
-  document.getElementById('select-screen').style.display = 'flex';
   USER_ID = 'guest'; CURRENT_APP = null;
   window.scrollTo(0,0);
+  showLogin('sirly');
 }
 
 // =================== UMA-TIZIM ===================
