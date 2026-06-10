@@ -3,1237 +3,167 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Kim nima ishni qanday qiladi?</title>
+<title>Kirish</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; }
 
-:root{
-  --green-dark:#0d4a2e;
-  --green-mid:#1a6b42;
-  --green-card:#16573a;
-  --green-light:#1e7a4a;
-  --lime:#a8e063;
-  --lime-dark:#7ec832;
-  --white:#ffffff;
-  --white-80:rgba(255,255,255,0.80);
-  --white-50:rgba(255,255,255,0.50);
-  --white-20:rgba(255,255,255,0.20);
-  --white-10:rgba(255,255,255,0.10);
-  --white-06:rgba(255,255,255,0.06);
+#select-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.select-box { width: 100%; max-width: 340px; }
+.select-title { text-align: center; font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
+.select-sub { text-align: center; font-size: 14px; color: #888; margin-bottom: 32px; }
+.app-card { border-radius: 16px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 2px solid transparent; transition: all 0.2s; margin-bottom: 12px; }
+.app-card:active { transform: scale(0.98); }
+.app-card.uma { background: #e8f5e0; border-color: #558237; }
+.app-card.sirly { background: #e3f2e8; border-color: #1a6b42; }
+.app-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+.app-card.uma .app-card-icon { background: #1e5927; }
+.app-card.sirly .app-card-icon { background: #0d4a2e; }
+.app-card-info { flex: 1; }
+.app-card-name { font-size: 17px; font-weight: 700; }
+.app-card.uma .app-card-name { color: #1e5927; }
+.app-card.sirly .app-card-name { color: #0d4a2e; }
+.app-card-desc { font-size: 13px; margin-top: 2px; }
+.app-card.uma .app-card-desc { color: #558237; }
+.app-card.sirly .app-card-desc { color: #1a6b42; }
+.app-card-arrow { font-size: 20px; color: #aaa; }
 
-  /* Telegram overrides → prefer our palette */
-  --acc:var(--lime);
-  --acc-text:#0d4a2e;
-  --hint:var(--white-50);
-  --bg2:var(--green-card);
-  --border:var(--white-10);
-}
-
-body{
-  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;
-  background:var(--green-dark);
-  color:var(--white);
-  font-size:14px;
-  min-height:100vh;
-}
-
-/* subtle dot-grid texture */
-body::before{
-  content:'';
-  position:fixed;
-  inset:0;
-  background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);
-  background-size:24px 24px;
-  pointer-events:none;
-  z-index:0;
-}
-
-.page{display:none;padding:16px;position:relative;z-index:1}
-.page.active{display:block}
-
-/* ── HOME ── */
-.home-header{padding:28px 0 20px}
-.home-title{font-size:26px;font-weight:800;letter-spacing:-0.6px;line-height:1.2;color:var(--white)}
-.home-title span{color:var(--lime)}
-.home-sub{font-size:13px;color:var(--white-50);margin-top:5px;font-weight:500}
-
-/* ── PAGE HEADER ── */
-.page-topbar{
-  position:sticky;top:0;z-index:10;
-  background:var(--green-dark);
-  padding:10px 16px 0;
-  margin:-16px -16px 16px;
-}
-.page-topbar-row1{
-  display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:6px;
-}
-.page-header{display:flex;align-items:center;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--white-10);margin-bottom:16px}
-.back-btn{
-  background:var(--white-10);border:none;
-  font-size:12px;color:var(--white);
-  cursor:pointer;font-family:inherit;font-weight:600;
-  padding:6px 10px;border-radius:10px;
-  display:flex;align-items:center;gap:3px;
-  transition:background .15s;white-space:nowrap;flex-shrink:0;
-}
-.back-btn:active{background:var(--white-20)}
-.page-title{
-  font-size:15px;font-weight:700;color:var(--white);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  flex:1;min-width:0;
-}
-
-/* ── CARDS GRID (home) ── */
-.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.nav-card{
-  background:var(--green-card);
-  border:1px solid var(--white-10);
-  border-radius:18px;
-  padding:18px 16px 38px;
-  cursor:pointer;
-  position:relative;
-  min-height:90px;
-  transition:transform .15s,background .15s;
-  overflow:hidden;
-}
-.nav-card::after{
-  content:'';
-  position:absolute;
-  bottom:-20px;right:-20px;
-  width:70px;height:70px;
-  background:var(--lime);
-  opacity:.06;
-  border-radius:50%;
-}
-.nav-card:active{transform:scale(.97);background:var(--green-light)}
-.nav-card.dragging{opacity:.4}
-.nav-card.drag-over{outline:2px dashed var(--lime)}
-.nav-card-title{font-size:14px;font-weight:700;color:var(--white);line-height:1.4;margin-top:4px}
-.nav-card-arrow{position:absolute;bottom:14px;right:16px;font-size:18px;color:var(--lime);font-weight:700}
-.nav-card-drag{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;opacity:.35}
-.nav-card-drag span{display:block;width:13px;height:2px;background:var(--white);border-radius:2px}
-.nav-card-actions{position:absolute;top:7px;right:7px;display:flex;gap:3px;opacity:0;transition:opacity .15s}
-.nav-card:hover .nav-card-actions{opacity:1}
-
-/* academy card tint */
-.nav-card.acad-card{background:linear-gradient(135deg,#1a3d55,#0e2e40)}
-
-/* ── ADD BUTTONS ── */
-.add-btn{
-  width:100%;padding:13px;
-  background:var(--white-06);
-  border:1.5px dashed var(--white-20);
-  border-radius:14px;
-  font-size:13px;color:var(--white-50);
-  cursor:pointer;font-family:inherit;
-  margin-top:6px;
-  transition:background .15s;
-}
-.add-btn:active{background:var(--white-10)}
-.add-item-btn{
-  width:100%;padding:11px;
-  background:var(--white-06);
-  border:1.5px dashed var(--white-20);
-  border-radius:12px;
-  font-size:13px;color:var(--white-50);
-  cursor:pointer;font-family:inherit;
-  margin-top:8px;
-  transition:background .15s;
-}
-.add-item-btn:active{background:var(--white-10)}
-
-/* ── SEARCH ── */
-.search-wrap{margin-bottom:14px}
-.search-inp{
-  width:100%;padding:10px 14px;
-  border:1px solid var(--white-10);
-  border-radius:12px;
-  font-size:13px;font-family:inherit;
-  background:var(--white-06);
-  color:var(--white);
-  outline:none;
-  transition:border-color .15s;
-}
-.search-inp::placeholder{color:var(--white-50)}
-.search-inp:focus{border-color:var(--lime)}
-
-/* ── SECTION LIST ── */
-.section-list{display:flex;flex-direction:column;gap:8px}
-.section-item{
-  background:var(--green-card);
-  border:1px solid var(--white-10);
-  border-radius:14px;
-  padding:13px 14px;
-  display:flex;align-items:center;justify-content:space-between;
-  cursor:pointer;
-  transition:background .15s;
-}
-.section-item:active{background:var(--green-light)}
-.section-item.dragging{opacity:.4}
-.section-item.drag-over{border:2px dashed var(--lime)}
-.section-num{
-  width:30px;height:30px;
-  border-radius:9px;
-  background:var(--white-10);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:800;
-  color:var(--lime);
-  flex-shrink:0;margin-right:12px;
-}
-.section-name{font-size:14px;font-weight:600;color:var(--white)}
-.chevron{color:var(--white-50);font-size:18px;font-weight:300}
-.drag-handle{display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;margin-right:8px;opacity:.3}
-.drag-handle span{display:block;width:14px;height:2px;background:var(--white);border-radius:2px}
-.drag-handle:active{cursor:grabbing}
-
-/* ── FORMS ── */
-.form-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:16px;padding:16px;margin-top:10px}
-.fi{
-  width:100%;padding:10px 12px;
-  border:1px solid var(--white-10);
-  border-radius:10px;
-  font-size:13px;font-family:inherit;
-  background:var(--white-06);
-  color:var(--white);
-  outline:none;margin-top:5px;
-  transition:border-color .15s;
-}
-.fi:focus{border-color:var(--lime)}
-.fi::placeholder{color:var(--white-50)}
-.flbl{font-size:11px;font-weight:700;color:var(--white-50);text-transform:uppercase;letter-spacing:.6px}
-.frow{margin-bottom:12px}
-.fbtns{display:flex;gap:8px;margin-top:14px}
-.fsave{
-  background:var(--lime);color:var(--green-dark);
-  border:none;padding:10px 20px;
-  border-radius:10px;font-size:13px;font-weight:700;
-  cursor:pointer;font-family:inherit;
-  transition:background .15s;
-}
-.fsave:active{background:var(--lime-dark)}
-.fcancel{
-  background:var(--white-10);border:none;
-  padding:10px 16px;border-radius:10px;
-  font-size:13px;cursor:pointer;
-  color:var(--white-80);font-family:inherit;
-}
-
-/* ── ACTION BUTTONS ── */
-.action-btns{display:flex;gap:4px;align-items:center}
-.abtn{
-  border:1px solid var(--white-10);
-  background:var(--white-06);
-  border-radius:7px;padding:4px 8px;
-  font-size:11px;cursor:pointer;
-  color:var(--white-50);
-  transition:background .15s;
-}
-.abtn:active{background:var(--white-20)}
-.abtn-red{border-color:rgba(255,100,100,.25);color:#ff7070}
-
-/* ── TREE / NODES ── */
-.tree-wrap{overflow-x:auto;padding-bottom:16px}
-.tree-col{display:flex;flex-direction:column}
-.node-row{display:flex;flex-direction:row;align-items:flex-start;margin-bottom:10px}
-.node-card{
-  width:260px;flex-shrink:0;
-  background:var(--green-card);
-  border:1px solid var(--white-10);
-  border-radius:14px;padding:14px;
-  position:relative;
-}
-.node-num{
-  position:absolute;top:10px;left:10px;
-  width:26px;height:26px;
-  background:var(--lime);
-  color:var(--green-dark);
-  border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:800;
-}
-.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:32px;padding-right:36px;color:var(--white)}
-.node-msg{
-  background:var(--white-06);
-  border-radius:8px;
-  padding:8px 30px 8px 10px;
-  font-size:11px;line-height:1.6;
-  margin-top:8px;white-space:pre-wrap;
-  position:relative;
-  font-family:monospace;
-  color:var(--white-80);
-  border:1px solid var(--white-10);
-}
-.copy-btn{
-  width:20px;height:20px;
-  border:1px solid var(--white-10);
-  background:var(--green-dark);
-  border-radius:5px;cursor:pointer;
-  font-size:10px;display:flex;
-  align-items:center;justify-content:center;
-  opacity:.7;color:var(--white);
-}
-.node-link{font-size:11px;margin-top:8px;word-break:break-all}
-.node-link a{
-  display:inline-flex;align-items:center;gap:5px;
-  background:var(--lime);
-  color:var(--green-dark);
-  padding:5px 12px;border-radius:8px;
-  font-size:12px;font-weight:700;text-decoration:none;
-}
-.node-corner{position:absolute;top:6px;right:6px;display:flex;gap:2px;opacity:0;transition:opacity .15s}
-.node-card:hover .node-corner{opacity:1}
-.corner-btn{
-  width:22px;height:22px;
-  border:1px solid var(--white-10);
-  background:var(--green-dark);
-  border-radius:6px;cursor:pointer;
-  font-size:10px;display:flex;
-  align-items:center;justify-content:center;
-  color:var(--white-50);
-}
-.corner-btn.always{opacity:1!important}
-
-.connector{display:flex;flex-direction:row;align-items:stretch}
-.vbar-wrap{width:24px;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
-.vbar{width:1px;background:var(--white-20);flex:1}
-.children-col{display:flex;flex-direction:column}
-.child-row{display:flex;align-items:flex-start}
-.hbar{width:24px;height:1px;background:var(--white-20);flex-shrink:0;margin-top:22px}
-.add-child-btn{
-  width:260px;padding:8px 12px;
-  background:var(--white-06);
-  border:1.5px dashed var(--white-20);
-  border-radius:10px;
-  font-size:11px;color:var(--white-50);
-  cursor:pointer;font-family:inherit;
-  text-align:left;margin-bottom:8px;
-}
-.add-root-btn{
-  padding:10px 16px;
-  background:var(--white-06);
-  border:1.5px dashed var(--white-20);
-  border-radius:12px;
-  font-size:12px;color:var(--white-50);
-  cursor:pointer;font-family:inherit;
-  margin-top:8px;
-  display:flex;align-items:center;gap:6px;
-}
-.node-form{width:260px;background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:14px;margin-bottom:8px}
-
-/* ── MODAL ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-bg.open{display:flex}
-.modal-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:300px}
-.modal-title{font-size:18px;font-weight:800;margin-bottom:4px;color:var(--white)}
-.modal-sub{font-size:12px;color:var(--white-50);margin-bottom:16px}
-.modal-err{font-size:11px;color:#ff7070;margin-top:6px;display:none}
-.modal-err.show{display:block}
-/* confirm modal */
-.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
-.confirm-bg.open{display:flex}
-.confirm-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:280px;text-align:center}
-.confirm-msg{font-size:15px;font-weight:600;color:var(--white);margin-bottom:20px;line-height:1.5}
-.confirm-btns{display:flex;gap:10px;justify-content:center}
-.confirm-yes{background:#e53935;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.confirm-no{background:var(--white-10);color:var(--white-80);border:none;padding:10px 20px;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit}
-
-/* ── NOTIF ── */
-.notif{
-  position:fixed;bottom:28px;left:50%;
-  transform:translateX(-50%) translateY(8px);
-  background:var(--lime);color:var(--green-dark);
-  padding:10px 20px;border-radius:12px;
-  font-size:13px;font-weight:700;
-  z-index:999;opacity:0;
-  transition:all .25s;pointer-events:none;white-space:nowrap;
-}
-.notif.show{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* ── IMAGE MODAL ── */
-.img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;align-items:center;justify-content:center;cursor:zoom-out}
-.img-modal.open{display:flex}
-.img-modal img{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
-
-/* ── BREADCRUMB ── */
-.breadcrumb{
-  font-size:11px;color:var(--white-50);
-  display:flex;flex-wrap:nowrap;gap:3px;align-items:center;
-  overflow:hidden;
-  position:relative;z-index:1;
-  margin-bottom:4px;
-}
-.bc-item{cursor:pointer;color:var(--lime);font-weight:600;white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis}
-.bc-sep{opacity:.4;flex-shrink:0}
-.bc-cur{color:var(--white-80);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
-
-/* ── FADE ── */
-.fade{animation:fadeIn .2s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-
-/* ── MSG EXPAND ── */
-.node-msg-collapsed{max-height:80px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 100%);mask-image:linear-gradient(to bottom,black 40%,transparent 100%)}
-.node-msg-btns{position:absolute;top:6px;right:6px;display:flex;gap:3px}
-.expand-btn{width:20px;height:20px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:5px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--white-50)}
-
-/* ── ACADEMY ── */
-.acad-intro{
-  background:rgba(168,224,99,.1);
-  border-left:3px solid var(--lime);
-  border-radius:0 12px 12px 0;
-  padding:12px 16px;margin-bottom:16px;
-  font-size:13px;line-height:1.7;
-  color:var(--white-80);
-}
-.acad-section-block{
-  background:var(--green-card);
-  border:1px solid var(--white-10);
-  border-radius:14px;
-  padding:14px 16px;margin-bottom:10px;
-}
-.acad-section-label{
-  font-size:10px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.6px;
-  margin-bottom:10px;padding:4px 10px;
-  border-radius:8px;display:inline-block;
-}
-.acad-label-standard{background:rgba(99,102,241,.18);color:#a5b4fc}
-.acad-label-violation{background:rgba(255,112,112,.15);color:#ff9090}
-.acad-label-decision{background:rgba(168,224,99,.15);color:var(--lime)}
-.acad-content{font-size:13px;line-height:1.85;color:var(--white-80)}
-.acad-content ul{padding-left:18px;margin:6px 0}
-.acad-content li{margin-bottom:4px}
-.acad-content b{font-weight:700;color:var(--white)}
+#login-screen { min-height: 100vh; display: none; align-items: center; justify-content: center; padding: 24px; }
+#login-screen.uma-theme { background: #f0f3ee; }
+#login-screen.sirly-theme { background: #0d4a2e; }
+.login-box { width: 100%; max-width: 340px; }
+.login-logo { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 12px; }
+.uma-theme .login-logo { background: #1e5927; }
+.sirly-theme .login-logo { background: rgba(255,255,255,0.15); }
+.login-app-name { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.uma-theme .login-app-name { color: #1e5927; }
+.sirly-theme .login-app-name { color: #fff; }
+.login-sub { text-align: center; font-size: 13px; margin-bottom: 32px; }
+.uma-theme .login-sub { color: #7a9669; }
+.sirly-theme .login-sub { color: rgba(255,255,255,0.6); }
+.login-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
+.uma-theme .login-label { color: #7a9669; }
+.sirly-theme .login-label { color: rgba(255,255,255,0.7); }
+.login-input { width: 100%; border-radius: 10px; padding: 14px; font-size: 16px; outline: none; margin-bottom: 14px; border: 1px solid transparent; }
+.uma-theme .login-input { background: #fff; color: #1e2e1a; border-color: #e2e8de; }
+.sirly-theme .login-input { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+.sirly-theme .login-input::placeholder { color: rgba(255,255,255,0.4); }
+.login-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
+.uma-theme .login-btn { background: #558237; color: white; }
+.sirly-theme .login-btn { background: #a8e063; color: #0d4a2e; }
+.login-error { font-size: 13px; text-align: center; margin-bottom: 10px; display: none; }
+.uma-theme .login-error { color: #c0392b; }
+.sirly-theme .login-error { color: #ff9090; }
+.login-back { background: none; border: none; cursor: pointer; font-size: 13px; margin-top: 16px; display: block; width: 100%; text-align: center; font-family: inherit; }
+.uma-theme .login-back { color: #7a9669; }
+.sirly-theme .login-back { color: rgba(255,255,255,0.5); }
 </style>
 </head>
 <body>
 
-<div class="page active" id="p-home">
-  <div class="home-header">
-    <div class="home-title">Kim nima ishni<br><span>qanday qiladi?</span></div>
-    <div class="home-sub">Bo'limni tanlang</div>
-  </div>
-  <div id="sections-grid" class="cards-grid"></div>
-  <div id="section-form"></div>
-</div>
-
-<div class="page" id="p-section">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-section"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-home')">← Orqaga</button>
-      <span class="page-title" id="section-title"></span>
-    </div>
-  </div>
-  <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
-  <div id="cats-list" class="section-list"></div>
-  <div id="cat-form"></div>
-</div>
-
-<div class="page" id="p-cat">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-cat"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-section')">← Orqaga</button>
-      <span class="page-title" id="cat-title"></span>
-    </div>
-  </div>
-  <div class="search-wrap"><input class="search-inp" id="search-flows" placeholder="🔍 Qidirish..." oninput="renderFlows()"></div>
-  <div id="flows-list" class="section-list"></div>
-  <div id="flow-form"></div>
-</div>
-
-<div class="page" id="p-flow">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-flow"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-cat')">← Orqaga</button>
-      <span class="page-title" id="flow-title"></span>
-      <div id="flow-admin-btns" style="display:none;margin-left:auto;gap:4px;flex-shrink:0;display:none">
-        <button class="abtn" onclick="editFlowName()">✏</button>
-        <button class="abtn abtn-red" onclick="deleteFlow()">✕</button>
+<div id="select-screen">
+  <div class="select-box">
+    <div class="select-title">Ilovani tanlang</div>
+    <div class="select-sub">Qaysi tizimga kirasiz?</div>
+    <div class="app-card uma" id="sel-uma">
+      <div class="app-card-icon">🌿</div>
+      <div class="app-card-info">
+        <div class="app-card-name">Uma-tizim</div>
+        <div class="app-card-desc">Shaxsiy rivojlanish</div>
       </div>
+      <div class="app-card-arrow">›</div>
     </div>
-  </div>
-  <div id="flow-name-form" style="display:none;margin-bottom:14px"></div>
-  <div class="tree-wrap" id="tree-wrap"></div>
-  <div id="root-form"></div>
-</div>
-
-<div class="page" id="p-acad-cats">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-acad-cats"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-home')">← Orqaga</button>
-      <span class="page-title" id="acad-sec-title"></span>
-    </div>
-  </div>
-  <div id="acad-cats-list" class="section-list"></div>
-  <div id="acad-cats-form"></div>
-</div>
-
-<div class="page" id="p-acad-items">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-acad-items"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-acad-cats')">← Orqaga</button>
-      <span class="page-title" id="acad-cat-title"></span>
-    </div>
-  </div>
-  <div id="acad-cat-intro-box"></div>
-  <div id="acad-items-list" class="section-list"></div>
-  <div id="acad-items-form"></div>
-</div>
-
-<div class="page" id="p-acad-detail">
-  <div class="page-topbar">
-    <div class="breadcrumb" id="bc-acad-detail"></div>
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-acad-items')">← Orqaga</button>
-      <span class="page-title" id="acad-item-title"></span>
-    </div>
-  </div>
-  <div id="acad-detail-body"></div>
-</div>
-
-<div class="modal-bg" id="login-modal">
-  <div class="modal-box">
-    <div class="modal-title">Admin kirish</div>
-    <div class="modal-sub">Tahrirlash uchun kiring</div>
-    <div class="frow"><label class="flbl">Login</label><input class="fi" id="l-login" autocomplete="off"></div>
-    <div class="frow"><label class="flbl">Parol</label><input class="fi" id="l-pass" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="modal-err" id="l-err">Login yoki parol noto'g'ri</div>
-    <div class="fbtns" style="margin-top:16px">
-      <button class="fsave" onclick="doLogin()">Kirish</button>
-      <button class="fcancel" onclick="closeModal()">Bekor</button>
+    <div class="app-card sirly" id="sel-sirly">
+      <div class="app-card-icon">📋</div>
+      <div class="app-card-info">
+        <div class="app-card-name">Sirly</div>
+        <div class="app-card-desc">Kim nima ishni qanday qiladi</div>
+      </div>
+      <div class="app-card-arrow">›</div>
     </div>
   </div>
 </div>
 
-<div class="img-modal" id="img-modal" onclick="closeImg()"><img id="img-src" src="" alt=""></div>
-<div class="notif" id="notif"></div>
-
-<div style="position:fixed;top:10px;right:12px;z-index:50">
-  <button id="admin-btn" onclick="handleAdmin()" style="border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)">⚙</button>
-</div>
-
-<div class="confirm-bg" id="confirm-modal">
-  <div class="confirm-box">
-    <div class="confirm-msg" id="confirm-msg">O'chirasizmi?</div>
-    <div class="confirm-btns">
-      <button class="confirm-yes" id="confirm-yes">O'chirish</button>
-      <button class="confirm-no" onclick="closeConfirm()">Bekor</button>
-    </div>
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo" id="login-logo">🌿</div>
+    <div class="login-app-name" id="login-app-name">Uma-tizim</div>
+    <div class="login-sub" id="login-sub">Shaxsiy rivojlanish</div>
+    <label class="login-label">Login</label>
+    <input id="login-input" type="text" class="login-input" placeholder="loginni kiriting" autocomplete="off" autocapitalize="none">
+    <label class="login-label">Parol</label>
+    <input id="parol-input" type="password" class="login-input" placeholder="parolni kiriting">
+    <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
+    <button id="login-btn" class="login-btn">Kirish</button>
+    <button id="login-back" class="login-back">← Orqaga</button>
   </div>
 </div>
 
 <script>
-const tg=window.Telegram?.WebApp;
-if(tg){tg.ready();tg.expand();}
+if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
 
-// ---- CUSTOM CONFIRM ----
-let confirmCallback=null;
-function askConfirm(msg,cb){
-  confirmCallback=cb;
-  document.getElementById('confirm-msg').textContent=msg;
-  document.getElementById('confirm-modal').classList.add('open');
-  document.getElementById('confirm-yes').onclick=()=>{closeConfirm();cb();};
-}
-function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
+var CURRENT_APP = null;
+var UMA_USERS = { 'umid': 'umid2025', 'test': 'test123' };
+var SIRLY_USERS = { 'testlogin': 'test26', 'admin': 'admin123' };
 
-const ADMIN_L='testlogin',ADMIN_P='test26';
-let isAdmin=false;
-const DB_KEY='biznes_db_v1';
-
-let db={sections:[]};
-let curSection=null,curCat=null,curFlow=null;
-let navStack=['p-home'];
-
-const SB_URL='https://ubakgpkcemlchpfejmke.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
-const SB_H={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
-
-async function save(){
+// Saved login tekshir
+var saved = localStorage.getItem('app_login');
+if(saved){
   try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{
-      method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({data:db})
-    });
-  }catch(e){localStorage.setItem(DB_KEY,JSON.stringify(db));}
-}
-async function load(){
-  try{
-    const r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.main',{headers:SB_H});
-    const rows=await r.json();
-    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections) db=rows[0].data;
-    else{const d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
-  }catch(e){const d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
-}
-
-function goTo(p){
-  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-  document.getElementById(p).classList.add('active','fade');
-  if(navStack[navStack.length-1]!==p) navStack.push(p);
-  render(p);window.scrollTo(0,0);
-}
-function goBack(p){
-  while(navStack[navStack.length-1]!==p&&navStack.length>1) navStack.pop();
-  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-  document.getElementById(p).classList.add('active');
-  render(p);window.scrollTo(0,0);
-}
-function render(p){
-  if(p==='p-home') renderSections();
-  else if(p==='p-section') renderCats();
-  else if(p==='p-cat') renderFlows();
-  else if(p==='p-flow') renderTree();
-  else if(p==='p-acad-cats') renderAcadCats();
-  else if(p==='p-acad-items') renderAcadItems();
-  else if(p==='p-acad-detail') renderAcadDetail();
-  updateBc();
-}
-function updateBc(){
-  const sec=db.sections.find(s=>s.id===curSection);
-  const cat=sec?.cats.find(c=>c.id===curCat);
-  const flow=cat?.flows.find(f=>f.id===curFlow);
-  const map={'p-home':'Bosh sahifa','p-section':sec?.title||'','p-cat':cat?.title||'','p-flow':flow?.title||''};
-  navStack.forEach((p,i)=>{
-    if(p.startsWith('p-acad')) return;
-    const el=document.getElementById('bc-'+p.replace('p-',''));
-    if(!el) return;
-    let html='';
-    navStack.slice(0,i+1).forEach((pp,ii)=>{
-      if(pp.startsWith('p-acad')) return;
-      if(ii<i) html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]||''}</span><span class="bc-sep">›</span>`;
-      else html+=`<span class="bc-cur">${map[pp]||''}</span>`;
-    });
-    el.innerHTML=html;
-  });
-}
-
-function handleAdmin(){isAdmin?logout():openModal()}
-function openModal(){
-  document.getElementById('login-modal').classList.add('open');
-  document.getElementById('l-login').value='';
-  document.getElementById('l-pass').value='';
-  document.getElementById('l-err').classList.remove('show');
-  setTimeout(()=>document.getElementById('l-login').focus(),100);
-}
-function closeModal(){document.getElementById('login-modal').classList.remove('open')}
-function doLogin(){
-  const l=document.getElementById('l-login').value.trim();
-  const p=document.getElementById('l-pass').value;
-  if(l===ADMIN_L&&p===ADMIN_P){
-    isAdmin=true;closeModal();
-    const btn=document.getElementById('admin-btn');
-    btn.textContent='⚙✓';btn.style.background='var(--lime)';btn.style.color='var(--green-dark)';btn.style.borderColor='transparent';
-    notify('Admin ✓');render(navStack[navStack.length-1]);
-  }else{document.getElementById('l-err').classList.add('show');document.getElementById('l-pass').value='';}
-}
-function logout(){
-  isAdmin=false;
-  const btn=document.getElementById('admin-btn');
-  btn.textContent='⚙';btn.style.background='var(--white-06)';btn.style.color='var(--white-80)';btn.style.borderColor='var(--white-10)';
-  notify('Chiqildi');render(navStack[navStack.length-1]);
-}
-
-// ---- DRAG ----
-let dragSrcIndex=null,dragContext=null;
-function initDrag(listEl,getItems,setItems){
-  const items=listEl.querySelectorAll('[draggable="true"]');
-  items.forEach((el,i)=>{
-    el.addEventListener('dragstart',e=>{
-      dragSrcIndex=i;dragContext={getItems,setItems};
-      e.dataTransfer.effectAllowed='move';
-      setTimeout(()=>el.classList.add('dragging'),0);
-    });
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));});
-    el.addEventListener('dragover',e=>{e.preventDefault();listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));el.classList.add('drag-over');});
-    el.addEventListener('drop',e=>{
-      e.preventDefault();
-      if(dragSrcIndex===null||dragSrcIndex===i) return;
-      const arr=dragContext.getItems();const moved=arr.splice(dragSrcIndex,1)[0];arr.splice(i,0,moved);
-      dragContext.setItems(arr);save();dragSrcIndex=null;dragContext=null;
-    });
-  });
-}
-function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){
-  let ti=null,clone=null,startY=0;
-  const items=()=>listEl.querySelectorAll(selector);
-  listEl.addEventListener('touchstart',e=>{
-    const handle=e.target.closest('.drag-handle,.nav-card-drag');if(!handle) return;
-    const item=handle.closest(selector);const all=[...items()];ti=all.indexOf(item);startY=e.touches[0].clientY;
-    clone=item.cloneNode(true);const rect=item.getBoundingClientRect();
-    clone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);top:${rect.top}px;left:${rect.left}px`;
-    document.body.appendChild(clone);item.style.opacity='0.4';
-  },{passive:true});
-  listEl.addEventListener('touchmove',e=>{
-    if(ti===null||!clone) return;e.preventDefault();
-    const y=e.touches[0].clientY;const dy=y-startY;
-    const rect=[...items()][ti].getBoundingClientRect();clone.style.top=(rect.top+dy)+'px';
-    [...items()].forEach((el,i)=>{const r=el.getBoundingClientRect();el.classList.toggle('drag-over',i!==ti&&y>r.top&&y<r.bottom);});
-  },{passive:false});
-  listEl.addEventListener('touchend',e=>{
-    if(ti===null) return;if(clone){clone.remove();clone=null;}
-    [...items()].forEach(x=>{x.classList.remove('drag-over');x.style.opacity='';});
-    const y=e.changedTouches[0].clientY;let target=ti;
-    [...items()].forEach((el,i)=>{const r=el.getBoundingClientRect();if(y>r.top&&y<r.bottom&&i!==ti) target=i;});
-    if(target!==ti){const arr=getItems();const moved=arr.splice(ti,1)[0];arr.splice(target,0,moved);setItems(arr);save();}
-    ti=null;
-  },{passive:true});
-}
-
-// ---- SECTIONS ----
-function renderSections(){
-  const g=document.getElementById('sections-grid');
-  let h='';
-  const allCards=[
-    ...db.sections.map(s=>({...s,_type:'process'})),
-    ...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))
-  ];
-  const savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');
-  let ordered=allCards;
-  if(savedOrder){
-    const map=Object.fromEntries(allCards.map(s=>[s.id,s]));
-    ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];
-  }
-  ordered.forEach(s=>{
-    const isAcad=s._type==='academy';
-    const onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;
-    const editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;
-    const delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;
-    h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">
-      ${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-      ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
-        <button class="abtn" onclick="${editFn}">✏</button>
-        <button class="abtn abtn-red" onclick="${delFn}">✕</button>
-      </div>`:''}
-      <div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div>
-      <div class="nav-card-arrow">→</div>
-    </div>`;
-  });
-  if(isAdmin) h+=`<button class="add-btn" onclick="showSecForm()" style="grid-column:1/-1">＋ Jarayon bo'limi</button>
-    <button class="add-btn" onclick="showAcadSecForm()" style="grid-column:1/-1;margin-top:0">＋ Akademiya bo'limi</button>`;
-  g.innerHTML=h;
-  document.getElementById('section-form').innerHTML='';
-  if(isAdmin){
-    initDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();});
-    initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');
-  }
-}
-
-function showAcadSecForm(id){
-  const sec=id?acadDb.sections.find(s=>s.id===id):null;
-  document.getElementById('section-form').innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div>
-    <div class="fbtns"><button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div>
-  </div>`;
-  document.getElementById('asf-title').focus();
-}
-function saveAcadSection(id){
-  const title=document.getElementById('asf-title').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  if(!acadDb.sections)acadDb.sections=[];
-  if(id){const s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}
-  else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});
-  acadSave();notify('Saqlandi ✓');renderSections();
-}
-function editAcadSection(id){showAcadSecForm(id)}
-function delAcadSection(id){
-  askConfirm("Bo'limni o'chirasizmi?",()=>{
-    acadDb.sections=acadDb.sections.filter(s=>s.id!==id);
-    acadSave();notify("O'chirildi ✓");renderSections();
-  });
-}
-function openSection(id){curSection=id;goTo('p-section')}
-function showSecForm(id){
-  const sec=id?db.sections.find(s=>s.id===id):null;
-  document.getElementById('section-form').innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div>
-    <div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div>
-  </div>`;
-  document.getElementById('sf-title').focus();
-}
-function saveSection(id){
-  const title=document.getElementById('sf-title').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  if(id){const s=db.sections.find(x=>x.id===id);if(s)s.title=title;}
-  else db.sections.push({id:'s'+Date.now(),title,cats:[]});
-  save();notify('Saqlandi ✓');renderSections();
-}
-function editSection(id){showSecForm(id)}
-function delSection(id){
-  askConfirm("Bo'limni o'chirasizmi?",()=>{
-    db.sections=db.sections.filter(s=>s.id!==id);
-    save();notify("O'chirildi ✓");renderSections();
-  });
-}
-
-// ---- CATS ----
-function renderCats(){
-  const sec=db.sections.find(s=>s.id===curSection);if(!sec)return;
-  document.getElementById('section-title').textContent=sec.title;
-  const q=(document.getElementById('search-cats')?.value||'').trim().toLowerCase();
-  const filtered=q?sec.cats.filter(c=>c.title.toLowerCase().includes(q)):sec.cats;
-  let h='';
-  filtered.forEach((c,i)=>{
-    h+=`<div class="section-item" onclick="openCat('${c.id}')" ${isAdmin?'draggable="true"':''}>
-      <div style="display:flex;align-items:center;flex:1;min-width:0">
-        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div style="min-width:0"><div class="section-name">${esc(c.title)}</div>${c.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.desc)}</div>`:''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isAdmin?`<div class="action-btns">
-          <button class="abtn" onclick="event.stopPropagation();editCat('${c.id}')">✏</button>
-          <button class="abtn abtn-red" onclick="event.stopPropagation();delCat('${c.id}')">✕</button>
-        </div>`:''}
-        <span class="chevron">›</span>
-      </div>
-    </div>`;
-  });
-  if(!filtered.length) h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Kategoriyalar yo\'q'}</div>`;
-  document.getElementById('cats-list').innerHTML=h;
-  if(isAdmin){
-    document.getElementById('cat-form').innerHTML=`<button class="add-item-btn" onclick="showCatForm()">＋ Kategoriya qo'shish</button>`;
-    if(!q){const listEl=document.getElementById('cats-list');initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});}
-  } else document.getElementById('cat-form').innerHTML='';
-}
-function openCat(id){curCat=id;goTo('p-cat')}
-function showCatForm(id){
-  const sec=db.sections.find(s=>s.id===curSection);
-  const cat=id?sec?.cats.find(c=>c.id===id):null;
-  document.getElementById('cat-form').innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="cf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div>
-    <div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="cf-desc" value="${esc(cat?.desc||'')}" placeholder="Qisqacha tavsif..."></div>
-    <div class="fbtns"><button class="fsave" onclick="saveCat('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderCats()">Bekor</button></div>
-  </div>`;
-  document.getElementById('cf-title').focus();
-}
-function saveCat(id){
-  const sec=db.sections.find(s=>s.id===curSection);if(!sec)return;
-  const title=document.getElementById('cf-title').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  const desc=document.getElementById('cf-desc')?.value.trim()||'';
-  if(id){const c=sec.cats.find(x=>x.id===id);if(c){c.title=title;c.desc=desc;}}
-  else sec.cats.push({id:'c'+Date.now(),title,desc,flows:[]});
-  save();notify('Saqlandi ✓');renderCats();
-}
-function editCat(id){showCatForm(id)}
-function delCat(id){
-  askConfirm("Kategoriyani o'chirasizmi?",()=>{
-    const sec=db.sections.find(s=>s.id===curSection);if(!sec)return;
-    sec.cats=sec.cats.filter(c=>c.id!==id);
-    save();notify("O'chirildi ✓");renderCats();
-  });
-}
-
-// ---- FLOWS ----
-function getCat(){const sec=db.sections.find(s=>s.id===curSection);return sec?.cats.find(c=>c.id===curCat);}
-function renderFlows(){
-  const cat=getCat();if(!cat)return;
-  document.getElementById('cat-title').textContent=cat.title;
-  const q=(document.getElementById('search-flows')?.value||'').trim().toLowerCase();
-  const filtered=q?cat.flows.filter(f=>f.title.toLowerCase().includes(q)):cat.flows;
-  let h='';
-  filtered.forEach((f,i)=>{
-    h+=`<div class="section-item" onclick="openFlow('${f.id}')" ${isAdmin?'draggable="true"':''}>
-      <div style="display:flex;align-items:center;flex:1;min-width:0">
-        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div style="min-width:0"><div class="section-name">${esc(f.title)}</div>${f.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(f.desc)}</div>`:''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isAdmin?`<div class="action-btns">
-          <button class="abtn" onclick="event.stopPropagation();editFlowItem('${f.id}')">✏</button>
-          <button class="abtn abtn-red" onclick="event.stopPropagation();delFlowItem('${f.id}')">✕</button>
-        </div>`:''}
-        <span class="chevron">›</span>
-      </div>
-    </div>`;
-  });
-  if(!filtered.length) h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Jarayonlar yo\'q'}</div>`;
-  document.getElementById('flows-list').innerHTML=h;
-  if(isAdmin){
-    document.getElementById('flow-form').innerHTML=`<button class="add-item-btn" onclick="showFlowForm()">＋ Jarayon qo'shish</button>`;
-    if(!q){const listEl=document.getElementById('flows-list');initDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});initTouchDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});}
-  } else document.getElementById('flow-form').innerHTML='';
-}
-function openFlow(id){curFlow=id;goTo('p-flow')}
-function showFlowForm(id){
-  const cat=getCat();const flow=id?cat?.flows.find(f=>f.id===id):null;
-  document.getElementById('flow-form').innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="ff-title" value="${esc(flow?.title||'')}" placeholder="Jarayon nomi..."></div>
-    <div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="ff-desc" value="${esc(flow?.desc||'')}" placeholder="Qisqacha tavsif..."></div>
-    <div class="fbtns"><button class="fsave" onclick="saveFlowItem('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderFlows()">Bekor</button></div>
-  </div>`;
-  document.getElementById('ff-title').focus();
-}
-function saveFlowItem(id){
-  const cat=getCat();if(!cat)return;
-  const title=document.getElementById('ff-title').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  const fdesc=document.getElementById('ff-desc')?.value.trim()||'';
-  if(id){const f=cat.flows.find(x=>x.id===id);if(f){f.title=title;f.desc=fdesc;}}
-  else cat.flows.push({id:'f'+Date.now(),title,desc:fdesc,nodes:[]});
-  save();notify('Saqlandi ✓');renderFlows();
-}
-function editFlowItem(id){showFlowForm(id)}
-function delFlowItem(id){
-  askConfirm("Jarayonni o'chirasizmi?",()=>{
-    const cat=getCat();if(!cat)return;
-    cat.flows=cat.flows.filter(f=>f.id!==id);
-    save();notify("O'chirildi ✓");renderFlows();
-  });
-}
-
-// ---- TREE ----
-function getFlow(){const cat=getCat();return cat?.flows.find(f=>f.id===curFlow);}
-function renderTree(){
-  const flow=getFlow();if(!flow)return;
-  document.getElementById('flow-title').textContent=flow.title;
-  const fab=document.getElementById('flow-admin-btns');
-  fab.style.display=isAdmin?'flex':'none';
-  document.getElementById('flow-name-form').style.display='none';
-  document.getElementById('root-form').innerHTML='';
-  let h='<div class="tree-col">';
-  flow.nodes.forEach((n,i)=>{
-    if(i>0) h+='<div style="border-top:1.5px dashed var(--white-10);margin:4px 0 12px 0;width:100vw;position:relative;left:-16px"></div>';
-    h+=nodeHTML(n,String(i+1).padStart(2,'0'));
-  });
-  h+='</div>';
-  if(isAdmin) h+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;
-  document.getElementById('tree-wrap').innerHTML=h;
-}
-function nodeHTML(n,num){
-  const ab=isAdmin?`<div class="node-corner">
-    ${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''}
-    ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}
-    <button class="corner-btn" onclick="showNodeForm('${n.id}',null,true)">✏</button>
-    <button class="corner-btn" style="color:#ff7070" onclick="delNode('${n.id}')">✕</button>
-  </div>`:(n.link||n.img?`<div class="node-corner">
-    ${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''}
-    ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}
-  </div>`:'');
-  let card=`<div class="node-card" id="nc-${n.id}">
-    <div class="node-num">${num}</div>
-    ${ab}
-    <div class="node-name">${esc(n.name)}</div>
-    ${n.msg?`<div class="node-msg node-msg-collapsed" id="nm-wrap-${n.id}">${esc(n.msg)}<div class="node-msg-btns"><button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><button class="expand-btn" id="nm-btn-${n.id}" onclick="toggleMsg('${n.id}')">▼</button></div><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''}
-    ${n.link?`<div class="node-link"><a href="${esc(n.link)}" target="_blank">🔗 Link</a></div>`:''}
-  </div>`;
-  const hasC=n.children?.length>0;
-  let ch='';
-  if(hasC||isAdmin){
-    ch+=`<div class="connector"><div class="vbar-wrap"><div class="vbar"></div></div><div class="children-col">`;
-    n.children?.forEach((c,ci)=>{ch+=`<div class="child-row"><div class="hbar"></div>${nodeHTML(c,String(ci+1).padStart(2,'0'))}</div>`;});
-    if(isAdmin) ch+=`<div style="display:flex;align-items:center"><div class="hbar"></div><button class="add-child-btn" onclick="showNodeForm('${n.id}',null)">＋ Variant</button></div><div id="cf-${n.id}"></div>`;
-    ch+=`</div></div>`;
-  }
-  return `<div class="node-row" id="nr-${n.id}"><div style="display:flex;flex-direction:column">${card}<div id="ef-${n.id}"></div></div>${ch}</div>`;
-}
-function editFlowName(){
-  const flow=getFlow();if(!flow)return;
-  const f=document.getElementById('flow-name-form');f.style.display='block';
-  f.innerHTML=`<div class="form-box fade">
-    <div class="frow"><input class="fi" id="fn-title" value="${esc(flow.title)}"></div>
-    <div class="fbtns"><button class="fsave" onclick="saveFlowName()">Saqlash</button><button class="fcancel" onclick="document.getElementById('flow-name-form').style.display='none'">Bekor</button></div>
-  </div>`;
-  document.getElementById('fn-title').focus();
-}
-function saveFlowName(){
-  const flow=getFlow();if(!flow)return;
-  const t=document.getElementById('fn-title').value.trim();if(!t)return;
-  flow.title=t;save();document.getElementById('flow-title').textContent=t;
-  document.getElementById('flow-name-form').style.display='none';
-  notify('Saqlandi ✓');updateBc();
-}
-function deleteFlow(){
-  askConfirm("Jarayonni o'chirasizmi?",()=>{
-    const cat=getCat();if(!cat)return;
-    cat.flows=cat.flows.filter(f=>f.id!==curFlow);
-    curFlow=null;save();notify("O'chirildi ✓");goBack('p-cat');
-  });
-}
-function showNodeForm(pid,_,edit){
-  const isE=!!edit;const flow=getFlow();
-  const node=isE?findNode(flow.nodes,pid):null;
-  const fid=isE?`ef-${pid}`:(pid&&pid!=='null'?`cf-${pid}`:'root-form');
-  const t=document.getElementById(fid);if(!t)return;
-  t.innerHTML=`<div class="node-form fade">
-    <div class="frow"><label class="flbl">Nomi</label><input class="fi" id="${fid}_n" value="${esc(node?.name||'')}"></div>
-    <div class="frow"><label class="flbl">Xabar matni</label><textarea class="fi" id="${fid}_m" style="min-height:60px;resize:vertical;font-size:11px">${esc(node?.msg||'')}</textarea></div>
-    <div class="frow"><label class="flbl">Link</label><input class="fi" id="${fid}_l" value="${esc(node?.link||'')}" placeholder="https://..."></div>
-    <div class="frow"><label class="flbl">Rasm</label><input type="file" accept="image/*" id="${fid}_i" style="font-size:11px;width:100%;color:var(--white-80)">${node?.img?'<div style="font-size:11px;color:var(--lime);margin-top:3px">✓ Rasm bor</div>':''}</div>
-    <div class="fbtns">
-      <button class="fsave" onclick="${isE?`saveEditNode('${pid}','${fid}')`:`saveNewNode('${pid}','${fid}')`}">Saqlash</button>
-      <button class="fcancel" onclick="renderTree()">Bekor</button>
-    </div>
-  </div>`;
-  document.getElementById(fid+'_n').focus();
-}
-function saveNewNode(pid,fid){
-  const name=document.getElementById(fid+'_n').value.trim();
-  const msg=document.getElementById(fid+'_m').value.trim();
-  const link=document.getElementById(fid+'_l').value.trim();
-  if(!name){notify('Nom kiriting!');return;}
-  const imgF=document.getElementById(fid+'_i')?.files[0];
-  const go=(img)=>{
-    const n={id:'n'+Date.now(),name,msg,link,img:img||'',children:[]};
-    const flow=getFlow();
-    if(!pid||pid==='null') flow.nodes.push(n);
-    else{const p=findNode(flow.nodes,pid);if(p)p.children.push(n);}
-    save();notify('Saqlandi ✓');renderTree();
-  };
-  if(imgF){const r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');
-}
-function saveEditNode(nid,fid){
-  const name=document.getElementById(fid+'_n').value.trim();
-  const msg=document.getElementById(fid+'_m').value.trim();
-  const link=document.getElementById(fid+'_l').value.trim();
-  if(!name){notify('Nom kiriting!');return;}
-  const imgF=document.getElementById(fid+'_i')?.files[0];
-  const flow=getFlow();const n=findNode(flow.nodes,nid);if(!n)return;
-  const go=(img)=>{n.name=name;n.msg=msg;n.link=link;if(img)n.img=img;save();notify('Saqlandi ✓');renderTree();};
-  if(imgF){const r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');
-}
-function delNode(id){
-  askConfirm("Harakatni o'chirasizmi?",()=>{
-    const flow=getFlow();flow.nodes=rmNode(flow.nodes,id);
-    save();notify("O'chirildi ✓");renderTree();
-  });
-}
-function findNode(ns,id){for(const n of ns){if(n.id===id)return n;const f=findNode(n.children||[],id);if(f)return f;}return null;}
-function rmNode(ns,id){return ns.filter(n=>n.id!==id).map(n=>({...n,children:rmNode(n.children||[],id)}));}
-function openImg(nid){
-  const flow=getFlow();const n=findNode(flow.nodes,nid);if(!n?.img)return;
-  document.getElementById('img-src').src=n.img;document.getElementById('img-modal').classList.add('open');
-}
-function closeImg(){document.getElementById('img-modal').classList.remove('open');document.getElementById('img-src').src='';}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function notify(m){const n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
-document.getElementById('login-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
-
-// ======== ACADEMY ========
-const ACAD_KEY='academy_db_v1';
-let acadDb={sections:[]};
-let curAcadSec=null,curAcadCat=null,curAcadItem=null;
-
-async function acadSave(){
-  try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{
-      method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({data:acadDb})
-    });
-  }catch(e){localStorage.setItem(ACAD_KEY,JSON.stringify(acadDb));}
-}
-async function acadLoad(){
-  try{
-    const r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{headers:SB_H});
-    const rows=await r.json();
-    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){acadDb=rows[0].data;}
-    else{
-      const d=localStorage.getItem(ACAD_KEY);if(d) acadDb=JSON.parse(d);
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'academy',data:acadDb})});}catch(e2){}
+    var u = JSON.parse(saved);
+    var users = u.app === 'uma' ? UMA_USERS : SIRLY_USERS;
+    if(users[u.login] && users[u.login] === u.parol){
+      window.location.href = '/' + u.app + '?uid=' + u.app + '_' + u.login;
     }
-  }catch(e){const d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);}
-  renderSections();
+  }catch(e){ localStorage.removeItem('app_login'); }
 }
 
-function formatAcadText(t){
-  if(!t) return '';
-  let s=esc(t);
-  s=s.split('**').map((p,i)=>i%2===1?'<b>'+p+'</b>':p).join('');
-  const lines=s.split('\n');let out=[],inList=false;
-  lines.forEach(line=>{
-    if(line.startsWith('* ')){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+line.slice(2)+'</li>');}
-    else{if(inList){out.push('</ul>');inList=false;}out.push(line?(line+'<br>'):'<br>');}
-  });
-  if(inList) out.push('</ul>');
-  return out.join('');
+document.getElementById('sel-uma').addEventListener('click', function(){ showLogin('uma'); });
+document.getElementById('sel-sirly').addEventListener('click', function(){ showLogin('sirly'); });
+
+function showLogin(app){
+  CURRENT_APP = app;
+  var ls = document.getElementById('login-screen');
+  ls.className = app + '-theme';
+  ls.style.display = 'flex';
+  document.getElementById('select-screen').style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-input').value = '';
+  document.getElementById('parol-input').value = '';
+  if(app === 'uma'){
+    document.getElementById('login-logo').textContent = '🌿';
+    document.getElementById('login-app-name').textContent = 'Uma-tizim';
+    document.getElementById('login-sub').textContent = 'Shaxsiy rivojlanish';
+  } else {
+    document.getElementById('login-logo').textContent = '📋';
+    document.getElementById('login-app-name').textContent = 'Sirly';
+    document.getElementById('login-sub').textContent = 'Kim nima ishni qanday qiladi';
+  }
+  setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
 }
 
-function openAcadSection(id){curAcadSec=id;curAcadCat=null;curAcadItem=null;goTo('p-acad-cats');}
+document.getElementById('login-back').addEventListener('click', function(){
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'flex';
+});
 
-function renderAcadCats(){
-  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
-  document.getElementById('acad-sec-title').textContent=sec.title;
-  let h='';
-  (sec.cats||[]).forEach((cat,i)=>{
-    h+=`<div class="section-item" onclick="openAcadCat('${cat.id}')" ${isAdmin?'draggable="true"':''}>
-      <div style="display:flex;align-items:center;flex:1;min-width:0">
-        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div style="min-width:0">
-          <div class="section-name">${esc(cat.title)}</div>
-          ${cat.intro?`<div style="font-size:11px;color:var(--white-50);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat.intro.substring(0,60))}${cat.intro.length>60?'...':''}</div>`:''}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isAdmin?`<div class="action-btns">
-          <button class="abtn" onclick="event.stopPropagation();showAcadCatForm('${curAcadSec}','${cat.id}')">✏</button>
-          <button class="abtn abtn-red" onclick="event.stopPropagation();delAcadCat('${curAcadSec}','${cat.id}')">✕</button>
-        </div>`:''}
-        <span class="chevron">›</span>
-      </div>
-    </div>`;
-  });
-  if(!sec.cats||!sec.cats.length) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Kategoriyalar yo\'q</div>';
-  document.getElementById('acad-cats-list').innerHTML=h;
-  if(isAdmin){
-    document.getElementById('acad-cats-form').innerHTML=`<button class="add-item-btn" onclick="showAcadCatForm('${curAcadSec}')">＋ Kategoriya qo'shish</button>`;
-    const listEl=document.getElementById('acad-cats-list');
-    initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});
-    initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});
-  } else document.getElementById('acad-cats-form').innerHTML='';
-  updateAcadBc();
-}
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
 
-function openAcadCat(id){curAcadCat=id;curAcadItem=null;goTo('p-acad-items');}
-
-function renderAcadItems(){
-  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
-  const cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;
-  document.getElementById('acad-cat-title').textContent=cat.title;
-  const introBox=document.getElementById('acad-cat-intro-box');
-  introBox.innerHTML=cat.intro?`<div class="acad-intro">${formatAcadText(cat.intro)}</div>`:'';
-  let h='';
-  (cat.items||[]).forEach((item,i)=>{
-    h+=`<div class="section-item" onclick="openAcadItem('${item.id}')" ${isAdmin?'draggable="true"':''}>
-      <div style="display:flex;align-items:center;flex:1;min-width:0">
-        ${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}
-        <div class="section-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="section-name">${esc(item.title)}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isAdmin?`<div class="action-btns">
-          <button class="abtn" onclick="event.stopPropagation();showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}')">✏</button>
-          <button class="abtn abtn-red" onclick="event.stopPropagation();delAcadItem('${curAcadSec}','${curAcadCat}','${item.id}')">✕</button>
-        </div>`:''}
-        <span class="chevron">›</span>
-      </div>
-    </div>`;
-  });
-  if(!cat.items||!cat.items.length) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Mavzular yo\'q</div>';
-  document.getElementById('acad-items-list').innerHTML=h;
-  if(isAdmin){
-    document.getElementById('acad-items-form').innerHTML=`<button class="add-item-btn" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}')">＋ Mavzu qo'shish</button>`;
-    const listEl=document.getElementById('acad-items-list');
-    initDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});
-    initTouchDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});
-  } else document.getElementById('acad-items-form').innerHTML='';
-  updateAcadBc();
+function doLogin(){
+  var login = document.getElementById('login-input').value.trim().toLowerCase();
+  var parol = document.getElementById('parol-input').value;
+  var users = CURRENT_APP === 'uma' ? UMA_USERS : SIRLY_USERS;
+  if(users[login] && users[login] === parol){
+    var uid = CURRENT_APP + '_' + login;
+    localStorage.setItem('app_login', JSON.stringify({app: CURRENT_APP, login: login, parol: parol}));
+    window.location.href = '/' + CURRENT_APP + '?uid=' + uid;
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('parol-input').value = '';
+  }
 }
-
-function openAcadItem(id){curAcadItem=id;goTo('p-acad-detail');}
-
-function renderAcadDetail(){
-  const sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;
-  const cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;
-  const item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;
-  document.getElementById('acad-item-title').textContent=item.title;
-  let h='';
-  if(item.standard) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-standard">Standart</div><div class="acad-content">${formatAcadText(item.standard)}</div></div>`;
-  if(item.violation) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-violation">Qoidabuzarlik</div><div class="acad-content">${formatAcadText(item.violation)}</div></div>`;
-  if(item.decision) h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-decision">Qaror va harakat</div><div class="acad-content">${formatAcadText(item.decision)}</div></div>`;
-  if(!item.standard&&!item.violation&&!item.decision&&item.content) h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;
-  if(isAdmin) h+=`<div style="margin-top:16px"><button class="fsave" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}',true)">✏ Tahrirlash</button></div><div id="acad-detail-form" style="margin-top:8px"></div>`;
-  document.getElementById('acad-detail-body').innerHTML=h;
-  updateAcadBc();
-}
-
-function updateAcadBc(){
-  const sec=acadDb.sections.find(s=>s.id===curAcadSec);
-  const cat=sec?.cats?.find(c=>c.id===curAcadCat);
-  const item=cat?.items?.find(i=>i.id===curAcadItem);
-  const pages=['p-acad-cats','p-acad-items','p-acad-detail'];
-  const titles={'p-home':'Bosh sahifa','p-acad-cats':sec?.title||'','p-acad-items':cat?.title||'','p-acad-detail':item?.title||''};
-  pages.forEach(p=>{
-    const el=document.getElementById('bc-'+p.replace('p-',''));if(!el) return;
-    const stack=['p-home',...pages.slice(0,pages.indexOf(p)+1)];
-    let html='';
-    stack.forEach((pp,ii)=>{
-      if(ii<stack.length-1) html+=`<span class="bc-item" onclick="goBack('${pp}')">${titles[pp]}</span><span class="bc-sep">›</span>`;
-      else html+=`<span class="bc-cur">${titles[pp]}</span>`;
-    });
-    el.innerHTML=html;
-  });
-}
-
-function showAcadCatForm(secId,catId){
-  const sec=acadDb.sections.find(s=>s.id===secId);const cat=catId?sec?.cats.find(c=>c.id===catId):null;
-  document.getElementById('acad-cats-form').innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Kategoriya nomi</label><input class="fi" id="acf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div>
-    <div class="frow"><label class="flbl">Kirish matni</label><textarea class="fi" id="acf-intro" style="min-height:80px;resize:vertical" placeholder="Bu bo'limda nima o'rganiladi...">${esc(cat?.intro||'')}</textarea></div>
-    <div class="fbtns"><button class="fsave" onclick="saveAcadCat('${secId}','${catId||''}')">Saqlash</button><button class="fcancel" onclick="renderAcadCats()">Bekor</button></div>
-  </div>`;
-  document.getElementById('acf-title').focus();
-}
-function saveAcadCat(secId,catId){
-  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
-  const title=document.getElementById('acf-title').value.trim();
-  const intro=document.getElementById('acf-intro').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  if(!sec.cats)sec.cats=[];
-  if(catId){const c=sec.cats.find(x=>x.id===catId);if(c){c.title=title;c.intro=intro;}}
-  else sec.cats.push({id:'ac'+Date.now(),title,intro,items:[]});
-  acadSave();notify('Saqlandi ✓');renderAcadCats();
-}
-function delAcadCat(secId,catId){
-  askConfirm("Kategoriyani o'chirasizmi?",()=>{
-    const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
-    sec.cats=sec.cats.filter(c=>c.id!==catId);
-    acadSave();notify("O'chirildi ✓");renderAcadCats();
-  });
-}
-function showAcadItemForm(secId,catId,itemId,inDetail){
-  const sec=acadDb.sections.find(s=>s.id===secId);const cat=sec?.cats.find(c=>c.id===catId);
-  const item=itemId?cat?.items.find(i=>i.id===itemId):null;
-  const containerId=inDetail?'acad-detail-form':'acad-items-form';
-  document.getElementById(containerId).innerHTML=`<div class="form-box fade">
-    <div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div>
-    <div class="frow"><label class="flbl" style="color:#a5b4fc">Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:#ff9090">Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div>
-    <div class="frow"><label class="flbl" style="color:var(--lime)">Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div>
-    <div class="fbtns">
-      <button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button>
-      <button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button>
-    </div>
-  </div>`;
-  document.getElementById('afi-title').focus();
-}
-function saveAcadItem(secId,catId,itemId,inDetail){
-  const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
-  const cat=sec.cats.find(c=>c.id===catId);if(!cat)return;
-  const title=document.getElementById('afi-title').value.trim();
-  const standard=document.getElementById('afi-standard').value.trim();
-  const violation=document.getElementById('afi-violation').value.trim();
-  const decision=document.getElementById('afi-decision').value.trim();
-  if(!title){notify('Nom kiriting!');return;}
-  if(!cat.items)cat.items=[];
-  if(itemId){const it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.standard=standard;it.violation=violation;it.decision=decision;}}
-  else cat.items.push({id:'ai'+Date.now(),title,standard,violation,decision});
-  acadSave();notify('Saqlandi ✓');
-  if(inDetail) renderAcadDetail(); else renderAcadItems();
-}
-function delAcadItem(secId,catId,itemId){
-  askConfirm("Mavzuni o'chirasizmi?",()=>{
-    const sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;
-    const cat=sec.cats.find(c=>c.id===catId);if(!cat)return;
-    cat.items=cat.items.filter(i=>i.id!==itemId);
-    acadSave();notify("O'chirildi ✓");renderAcadItems();
-  });
-}
-
-function toggleMsg(id){
-  var wrap=document.getElementById('nm-wrap-'+id);var btn=document.getElementById('nm-btn-'+id);if(!wrap) return;
-  var collapsed=wrap.classList.contains('node-msg-collapsed');
-  if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}
-  else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}
-}
-load().then(()=>{renderSections();updateBc();});
-acadLoad().catch(()=>{});
 </script>
 </body>
 </html>
