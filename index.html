@@ -3,167 +3,755 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Kirish</title>
+<title>Biznes jarayonlar</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; }
+:root{
+  --bg:#F7F6F3;--surface:#FFF;--surface2:#F0EEE9;--border:#E4E1D9;
+  --text:#1A1916;--muted:#7A7770;
+  --green:#1A6B3C;--green-bg:#E8F5EE;
+  --red:#8B1A1A;--red-bg:#FDF0F0;--red-border:#E8AAAA;
+  --radius:16px;--radius-sm:10px;--card-w:280px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;padding-bottom:60px}
 
-#select-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.select-box { width: 100%; max-width: 340px; }
-.select-title { text-align: center; font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
-.select-sub { text-align: center; font-size: 14px; color: #888; margin-bottom: 32px; }
-.app-card { border-radius: 16px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 14px; border: 2px solid transparent; transition: all 0.2s; margin-bottom: 12px; }
-.app-card:active { transform: scale(0.98); }
-.app-card.uma { background: #e8f5e0; border-color: #558237; }
-.app-card.sirly { background: #e3f2e8; border-color: #1a6b42; }
-.app-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
-.app-card.uma .app-card-icon { background: #1e5927; }
-.app-card.sirly .app-card-icon { background: #0d4a2e; }
-.app-card-info { flex: 1; }
-.app-card-name { font-size: 17px; font-weight: 700; }
-.app-card.uma .app-card-name { color: #1e5927; }
-.app-card.sirly .app-card-name { color: #0d4a2e; }
-.app-card-desc { font-size: 13px; margin-top: 2px; }
-.app-card.uma .app-card-desc { color: #558237; }
-.app-card.sirly .app-card-desc { color: #1a6b42; }
-.app-card-arrow { font-size: 20px; color: #aaa; }
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:8px}
+.header-title{font-size:15px;font-weight:700}
+.admin-btn{border:1px solid var(--border);background:none;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted);font-family:'Manrope',sans-serif;transition:all .15s}
+.admin-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
 
-#login-screen { min-height: 100vh; display: none; align-items: center; justify-content: center; padding: 24px; }
-#login-screen.uma-theme { background: #f0f3ee; }
-#login-screen.sirly-theme { background: #0d4a2e; }
-.login-box { width: 100%; max-width: 340px; }
-.login-logo { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 12px; }
-.uma-theme .login-logo { background: #1e5927; }
-.sirly-theme .login-logo { background: rgba(255,255,255,0.15); }
-.login-app-name { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-.uma-theme .login-app-name { color: #1e5927; }
-.sirly-theme .login-app-name { color: #fff; }
-.login-sub { text-align: center; font-size: 13px; margin-bottom: 32px; }
-.uma-theme .login-sub { color: #7a9669; }
-.sirly-theme .login-sub { color: rgba(255,255,255,0.6); }
-.login-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
-.uma-theme .login-label { color: #7a9669; }
-.sirly-theme .login-label { color: rgba(255,255,255,0.7); }
-.login-input { width: 100%; border-radius: 10px; padding: 14px; font-size: 16px; outline: none; margin-bottom: 14px; border: 1px solid transparent; }
-.uma-theme .login-input { background: #fff; color: #1e2e1a; border-color: #e2e8de; }
-.sirly-theme .login-input { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
-.sirly-theme .login-input::placeholder { color: rgba(255,255,255,0.4); }
-.login-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
-.uma-theme .login-btn { background: #558237; color: white; }
-.sirly-theme .login-btn { background: #a8e063; color: #0d4a2e; }
-.login-error { font-size: 13px; text-align: center; margin-bottom: 10px; display: none; }
-.uma-theme .login-error { color: #c0392b; }
-.sirly-theme .login-error { color: #ff9090; }
-.login-back { background: none; border: none; cursor: pointer; font-size: 13px; margin-top: 16px; display: block; width: 100%; text-align: center; font-family: inherit; }
-.uma-theme .login-back { color: #7a9669; }
-.sirly-theme .login-back { color: rgba(255,255,255,0.5); }
+.breadcrumb{padding:12px 16px 0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.breadcrumb-item{cursor:pointer;transition:color .15s}.breadcrumb-item:hover{color:var(--text)}
+.breadcrumb-sep{opacity:.4}.breadcrumb-current{color:var(--text);font-weight:500}
+
+.main{padding:16px}
+.screen{display:none}.screen.active{display:block}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+
+.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.nav-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .2s;position:relative;min-height:100px}
+.nav-card:active{transform:scale(0.98)}
+.nav-card-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.nav-card-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.nav-card-arrow{position:absolute;bottom:12px;right:12px;font-size:16px;opacity:.2}
+.nav-card-actions{position:absolute;top:8px;right:8px;display:flex;gap:3px;opacity:0;transition:opacity .15s}
+.nav-card:hover .nav-card-actions{opacity:1}
+
+.add-card-btn{background:none;border:1.5px dashed var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);font-family:'Manrope',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;min-height:100px;width:100%}
+.add-card-btn:active{background:var(--surface)}
+
+.section-list-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px}
+.search-input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Manrope',sans-serif;background:var(--surface);color:var(--text);width:160px}
+.search-input:focus{outline:none;border-color:var(--text)}
+.section-list{display:flex;flex-direction:column;gap:8px}
+.section-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all .15s}
+.section-item:active{background:var(--surface2)}
+.section-item-left{display:flex;align-items:center;gap:12px}
+.section-num{width:28px;height:28px;border-radius:7px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0}
+.section-name{font-size:14px;font-weight:600}
+.section-chevron{color:var(--muted);font-size:16px}
+.section-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.section-item:hover .section-actions{opacity:1}
+.no-results{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+.add-flow-btn{margin-top:10px;width:100%;padding:12px 16px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);background:none;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Manrope',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.add-flow-btn:active{background:var(--surface)}
+
+.inline-form{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:8px}
+.inline-form-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.form-row{margin-bottom:8px}
+.fi{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text)}
+.fi:focus{outline:none;border-color:var(--text)}
+.form-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;display:block}
+.form-actions{display:flex;gap:6px;margin-top:10px}
+.btn-save{background:var(--text);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Manrope',sans-serif}
+.btn-cancel{background:none;border:1px solid var(--border);padding:7px 12px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--muted);font-family:'Manrope',sans-serif}
+.btn-sm{border:1px solid var(--border);background:none;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:'Manrope',sans-serif;color:var(--muted)}
+.btn-sm-danger{border:1px solid var(--red-border);background:none;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:'Manrope',sans-serif;color:var(--red)}
+
+/* TREE */
+.flow-tree{overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch}
+.tree-col{display:flex;flex-direction:column;flex-shrink:0}
+.node-row{display:flex;flex-direction:row;align-items:flex-start;margin-bottom:12px}
+.node-card{width:var(--card-w);flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 12px 10px;position:relative}
+.node-num{position:absolute;top:-1px;left:-1px;width:26px;height:26px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm) 0 var(--radius-sm) 0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted)}
+.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:14px;margin-bottom:2px;padding-right:44px}
+.node-msg-wrap{position:relative;margin-top:8px}
+.node-msg{background:var(--bg);border-left:2px solid var(--border);border-radius:0 6px 6px 0;padding:8px 32px 8px 10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);line-height:1.6;white-space:pre-wrap}
+.node-link{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:11px;color:var(--muted);word-break:break-all}
+.node-link a{color:var(--text);text-decoration:underline}
+.node-corner{position:absolute;top:5px;right:5px;display:flex;gap:2px}
+.corner-btn{width:20px;height:20px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);opacity:0}
+.node-card:hover .corner-btn{opacity:1}
+.corner-btn.link-btn{opacity:1!important}
+.corner-btn.danger-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.children-connector{display:flex;flex-direction:row;align-items:stretch}
+.v-bar-wrap{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0}
+.v-bar{width:1px;background:var(--border);flex:1}
+.children-col{display:flex;flex-direction:column}
+.child-row{display:flex;flex-direction:row;align-items:flex-start}
+.child-h-line{width:28px;height:1px;background:var(--border);flex-shrink:0;margin-top:24px}
+.add-child-btn{width:var(--card-w);padding:8px 10px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);background:none;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Manrope',sans-serif;transition:all .15s;text-align:left;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.add-root-btn{padding:10px 14px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);background:none;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Manrope',sans-serif;display:flex;align-items:center;gap:6px;margin-top:6px}
+.step-form{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px;flex:1;min-width:var(--card-w)}
+
+.back-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text);font-family:'Manrope',sans-serif;margin-bottom:16px}
+.progress-bar{background:var(--border);border-radius:4px;height:3px;margin-bottom:20px;overflow:hidden}
+.progress-fill{height:100%;background:var(--text);border-radius:4px;transition:width .4s ease}
+
+.loading{display:flex;align-items:center;justify-content:center;height:200px;flex-direction:column;gap:12px;color:var(--muted);font-size:13px}
+.spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:20px;width:300px;box-shadow:0 16px 48px rgba(0,0,0,.15)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:16px}
+.modal-error{font-size:11px;color:var(--red);margin-top:6px;display:none}
+.modal-error.show{display:block}
+
+.notification{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--text);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:500;z-index:999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.notification.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+.img-modal.open{display:flex}
+.img-modal img{max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain}
+
+.fade-in{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
 
-<div id="select-screen">
-  <div class="select-box">
-    <div class="select-title">Ilovani tanlang</div>
-    <div class="select-sub">Qaysi tizimga kirasiz?</div>
-    <div class="app-card uma" id="sel-uma">
-      <div class="app-card-icon">🌿</div>
-      <div class="app-card-info">
-        <div class="app-card-name">Uma-tizim</div>
-        <div class="app-card-desc">Shaxsiy rivojlanish</div>
-      </div>
-      <div class="app-card-arrow">›</div>
+<div class="header">
+  <div class="header-title">Biznes jarayonlar</div>
+  <button class="admin-btn" id="adminBtn" onclick="handleAdminBtn()">⚙ Admin</button>
+</div>
+<div class="breadcrumb" id="breadcrumb"></div>
+<div class="main">
+
+  <!-- HOME -->
+  <div class="screen active" id="screen-home">
+    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+    <div class="page-title">Bo'limlar</div>
+    <div class="page-sub">Bo'limni tanlang</div>
+    <div id="sectionsGrid" class="cards-grid"></div>
+    <div id="addSectionFormWrap"></div>
+    <div id="loadingWrap" class="loading" style="display:none">
+      <div class="spinner"></div>
+      <span>Yuklanmoqda...</span>
     </div>
-    <div class="app-card sirly" id="sel-sirly">
-      <div class="app-card-icon">📋</div>
-      <div class="app-card-info">
-        <div class="app-card-name">Sirly</div>
-        <div class="app-card-desc">Kim nima ishni qanday qiladi</div>
+  </div>
+
+  <!-- SECTION -->
+  <div class="screen" id="screen-section">
+    <div class="progress-bar"><div class="progress-fill" style="width:33%"></div></div>
+    <button class="back-btn" onclick="goBack('home')">← Orqaga</button>
+    <div class="section-list-header">
+      <div><div class="page-title" id="section-title" style="margin-bottom:2px"></div></div>
+      <input class="search-input" id="searchCats" placeholder="🔍 Qidirish..." oninput="renderCategories()">
+    </div>
+    <div class="section-list" id="catsGrid"></div>
+    <div id="addCatBtnWrap" style="display:none"><button class="add-flow-btn" onclick="showAddCatForm()">＋ Kategoriya qo'shish</button></div>
+    <div id="addCatFormWrap"></div>
+  </div>
+
+  <!-- CAT -->
+  <div class="screen" id="screen-cat">
+    <div class="progress-bar"><div class="progress-fill" style="width:50%"></div></div>
+    <button class="back-btn" onclick="goBack('section')">← Orqaga</button>
+    <div class="section-list-header">
+      <div><div class="page-title" id="cat-title" style="margin-bottom:2px"></div></div>
+      <input class="search-input" id="searchFlows" placeholder="🔍 Qidirish..." oninput="renderFlowList()">
+    </div>
+    <div class="section-list" id="flowList"></div>
+    <div id="addFlowBtnWrap" style="display:none"><button class="add-flow-btn" onclick="showFlowForm()">＋ Jarayon qo'shish</button></div>
+    <div id="flowFormWrap" style="display:none"></div>
+  </div>
+
+  <!-- FLOW -->
+  <div class="screen" id="screen-flow">
+    <div class="progress-bar"><div class="progress-fill" style="width:75%"></div></div>
+    <button class="back-btn" onclick="goBack('cat')">← Orqaga</button>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <div><div class="page-title" id="flow-title"></div></div>
+      <div id="flowHeaderActions" style="display:none;gap:6px;margin-top:2px">
+        <button class="btn-sm" onclick="startEditFlowName()">✏</button>
+        <button class="btn-sm-danger" onclick="deleteCurrentFlow()">✕</button>
       </div>
-      <div class="app-card-arrow">›</div>
+    </div>
+    <div id="editFlowNameForm" style="display:none;margin-bottom:14px;margin-top:8px"></div>
+    <div class="flow-tree" id="flowTree" style="margin-top:16px;overflow-x:auto"></div>
+    <div id="rootFormWrap"></div>
+  </div>
+
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box">
+    <div class="modal-title">Admin kirish</div>
+    <div class="modal-sub">Tahrirlash uchun kiring</div>
+    <div style="margin-bottom:8px"><label class="form-label">Login</label><input class="fi" id="loginInput" autocomplete="off"></div>
+    <div style="margin-bottom:4px"><label class="form-label">Parol</label><input class="fi" id="passInput" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="modal-error" id="loginError">Login yoki parol noto'g'ri</div>
+    <div class="form-actions" style="margin-top:14px">
+      <button class="btn-save" onclick="doLogin()">Kirish</button>
+      <button class="btn-cancel" onclick="closeLoginModal()">Bekor</button>
     </div>
   </div>
 </div>
 
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo" id="login-logo">🌿</div>
-    <div class="login-app-name" id="login-app-name">Uma-tizim</div>
-    <div class="login-sub" id="login-sub">Shaxsiy rivojlanish</div>
-    <label class="login-label">Login</label>
-    <input id="login-input" type="text" class="login-input" placeholder="loginni kiriting" autocomplete="off" autocapitalize="none">
-    <label class="login-label">Parol</label>
-    <input id="parol-input" type="password" class="login-input" placeholder="parolni kiriting">
-    <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
-    <button id="login-btn" class="login-btn">Kirish</button>
-    <button id="login-back" class="login-back">← Orqaga</button>
-  </div>
+<!-- IMAGE MODAL -->
+<div class="img-modal" id="imgModal" onclick="closeImgModal()">
+  <img id="imgModalSrc" src="" alt="">
 </div>
+
+<div class="notification" id="notification"></div>
 
 <script>
-if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
-
-var CURRENT_APP = null;
-var UMA_USERS = { 'umid': 'umid2025', 'test': 'test123' };
-var SIRLY_USERS = { 'testlogin': 'test26', 'admin': 'admin123' };
-
-// Saved login tekshir
-var saved = localStorage.getItem('app_login');
-if(saved){
-  try{
-    var u = JSON.parse(saved);
-    var users = u.app === 'uma' ? UMA_USERS : SIRLY_USERS;
-    if(users[u.login] && users[u.login] === u.parol){
-      window.location.href = '/' + u.app + '?uid=' + u.app + '_' + u.login;
-    }
-  }catch(e){ localStorage.removeItem('app_login'); }
+// ---- TELEGRAM INIT ----
+const tg = window.Telegram?.WebApp;
+if(tg){
+  tg.ready();
+  tg.expand();
 }
 
-document.getElementById('sel-uma').addEventListener('click', function(){ showLogin('uma'); });
-document.getElementById('sel-sirly').addEventListener('click', function(){ showLogin('sirly'); });
+const API_BASE = window.location.origin;
+const ADMIN_LOGIN = 'testlogin';
+const ADMIN_PASS = 'test26';
+let isAdmin = false;
+let isSaving = false;
 
-function showLogin(app){
-  CURRENT_APP = app;
-  var ls = document.getElementById('login-screen');
-  ls.className = app + '-theme';
-  ls.style.display = 'flex';
-  document.getElementById('select-screen').style.display = 'none';
-  document.getElementById('login-error').style.display = 'none';
-  document.getElementById('login-input').value = '';
-  document.getElementById('parol-input').value = '';
-  if(app === 'uma'){
-    document.getElementById('login-logo').textContent = '🌿';
-    document.getElementById('login-app-name').textContent = 'Uma-tizim';
-    document.getElementById('login-sub').textContent = 'Shaxsiy rivojlanish';
-  } else {
-    document.getElementById('login-logo').textContent = '📋';
-    document.getElementById('login-app-name').textContent = 'Sirly';
-    document.getElementById('login-sub').textContent = 'Kim nima ishni qanday qiladi';
-  }
-  setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
+// ---- AUTH ----
+function handleAdminBtn(){isAdmin?doLogout():openLoginModal()}
+function openLoginModal(){
+  document.getElementById('loginModal').classList.add('open');
+  ['loginInput','passInput'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('loginError').classList.remove('show');
+  setTimeout(()=>document.getElementById('loginInput').focus(),100);
 }
-
-document.getElementById('login-back').addEventListener('click', function(){
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('select-screen').style.display = 'flex';
-});
-
-document.getElementById('login-btn').addEventListener('click', doLogin);
-document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
-
+function closeLoginModal(){document.getElementById('loginModal').classList.remove('open')}
 function doLogin(){
-  var login = document.getElementById('login-input').value.trim().toLowerCase();
-  var parol = document.getElementById('parol-input').value;
-  var users = CURRENT_APP === 'uma' ? UMA_USERS : SIRLY_USERS;
-  if(users[login] && users[login] === parol){
-    var uid = CURRENT_APP + '_' + login;
-    localStorage.setItem('app_login', JSON.stringify({app: CURRENT_APP, login: login, parol: parol}));
-    window.location.href = '/' + CURRENT_APP + '?uid=' + uid;
+  const l=document.getElementById('loginInput').value.trim();
+  const p=document.getElementById('passInput').value;
+  if(l===ADMIN_LOGIN&&p===ADMIN_PASS){
+    isAdmin=true;closeLoginModal();
+    const btn=document.getElementById('adminBtn');
+    btn.classList.add('active');btn.textContent='⚙ Chiqish';
+    notify('Admin rejimiga kirildingiz ✓');renderCurrent();
   } else {
-    document.getElementById('login-error').style.display = 'block';
-    document.getElementById('parol-input').value = '';
+    document.getElementById('loginError').classList.add('show');
+    document.getElementById('passInput').value='';
   }
 }
+function doLogout(){
+  isAdmin=false;
+  const btn=document.getElementById('adminBtn');
+  btn.classList.remove('active');btn.textContent='⚙ Admin';
+  notify('Chiqildi');renderCurrent();
+}
+
+// ---- DATA ----
+let db = {sections:[]};
+let navHistory = ['home'];
+let activeSectionId = null, activeCatId = null, activeFlowId = null;
+
+async function loadData(){
+  document.getElementById('loadingWrap').style.display='flex';
+  try {
+    const r = await fetch(`${API_BASE}/api/data`);
+    const data = await r.json();
+    if(data && data.sections) db = data;
+    else db = getDefaultData();
+  } catch(e) {
+    db = getDefaultData();
+  }
+  document.getElementById('loadingWrap').style.display='none';
+  renderSections();
+  updateBreadcrumb();
+}
+
+function getDefaultData(){
+  return {
+    sections:[{
+      id:'sec1',title:'Support',desc:'',
+      categories:[
+        {id:'cat1',title:'Mijozlar murojaatlari',desc:'',type:'list',flows:[
+          {id:'flow1',title:'Buyurtmani bekor qilish',sub:'',nodes:[
+            {id:'n1',name:'Murojaat qabul qilindi',desc:'',msg:'',link:'',img:'',children:[]},
+            {id:'n2',name:'Vaqt rangini aniqlang',desc:'',msg:'',link:'',img:'',children:[
+              {id:'n2a',name:'🟢 Yashil holat',desc:'',msg:'Assalomu alaykum. Buyurtma tasdiqlangan vaqtdan boshlab 1 soat ichida uni ilova orqali mustaqil ravishda bekor qilishingiz mumkin.',link:'',img:'',children:[]},
+              {id:'n2b',name:'🟡 Sariq holat',desc:'',msg:'',link:'',img:'',children:[
+                {id:'n2b1',name:'3 martadan kam',desc:'',msg:'Assalomu alaykum. Buyurtmani bekor qilish bo\'yicha murojatingiz ko\'rib chiqildi.',link:'',img:'',children:[]},
+                {id:'n2b2',name:'3 martaga yetgan',desc:'',msg:'Assalomu alaykum hurmatli mijoz! Afsuski buyurtmangizni bekor qilib berolmaymiz.',link:'',img:'',children:[]}
+              ]},
+              {id:'n2c',name:'🔴 Qizil holat',desc:'',msg:'Assalomu alaykum hurmatli mijoz. Uzr, olib ketish vaqtiga 30 daqiqadan kam vaqt bo\'lganda buyurtmalarni bekor qilib bo\'lmaydi.',link:'',img:'',children:[]}
+            ]}
+          ]}
+        ]},
+        {id:'cat2',title:'Hamkorlar murojaatlari',desc:'',type:'list',flows:[]}
+      ]
+    }]
+  };
+}
+
+async function saveData(){
+  if(isSaving) return;
+  isSaving=true;
+  try {
+    await fetch(`${API_BASE}/api/data`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(db)
+    });
+  } catch(e) {
+    console.error('Save error', e);
+  }
+  isSaving=false;
+}
+
+// ---- NAV ----
+function goTo(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active','fade-in');
+  navHistory.push(screen);renderCurrent();window.scrollTo(0,0);
+}
+function goBack(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  while(navHistory[navHistory.length-1]!==screen) navHistory.pop();
+  renderCurrent();window.scrollTo(0,0);
+}
+function navTo(idx,screen){
+  navHistory=navHistory.slice(0,idx+1);
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  renderCurrent();window.scrollTo(0,0);
+}
+function renderCurrent(){
+  const cur=navHistory[navHistory.length-1];
+  if(cur==='home') renderSections();
+  else if(cur==='section') renderCategories();
+  else if(cur==='cat') renderFlowList();
+  else if(cur==='flow') renderFlowTree();
+  updateBreadcrumb();
+}
+function updateBreadcrumb(){
+  const sec=db.sections.find(s=>s.id===activeSectionId);
+  const cat=sec?.categories.find(c=>c.id===activeCatId);
+  const flow=cat?.flows.find(f=>f.id===activeFlowId);
+  const names={home:'Bosh sahifa',section:sec?.title||'',cat:cat?.title||'',flow:flow?.title||''};
+  let html='';
+  navHistory.forEach((h,i)=>{
+    if(i<navHistory.length-1) html+=`<span class="breadcrumb-item" onclick="navTo(${i},'${h}')">${names[h]||h}</span><span class="breadcrumb-sep">›</span>`;
+    else html+=`<span class="breadcrumb-current">${names[h]||h}</span>`;
+  });
+  document.getElementById('breadcrumb').innerHTML=html;
+}
+
+// ---- FUZZY ----
+function fuzzyMatch(str,q){
+  str=str.toLowerCase();q=q.toLowerCase();
+  if(str.includes(q)) return true;
+  let si=0,qi=0;while(si<str.length&&qi<q.length){if(str[si]===q[qi])qi++;si++;}
+  return qi===q.length;
+}
+
+// ---- SECTIONS ----
+function renderSections(){
+  const grid=document.getElementById('sectionsGrid');
+  let html='';
+  db.sections.forEach(sec=>{
+    html+=`<div class="nav-card" onclick="openSection('${sec.id}')">
+      ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()">
+        <button class="btn-sm" onclick="startEditSection('${sec.id}')">✏</button>
+        <button class="btn-sm-danger" onclick="deleteSection('${sec.id}')">✕</button>
+      </div>`:''}
+      <div class="nav-card-title">${esc(sec.title)}</div>
+      <div class="nav-card-desc">${esc(sec.desc||'')}</div>
+      <div class="nav-card-arrow">→</div>
+    </div>`;
+  });
+  if(isAdmin) html+=`<button class="add-card-btn" onclick="showAddSectionForm()">＋ Bo'lim</button>`;
+  grid.innerHTML=html;
+  document.getElementById('addSectionFormWrap').innerHTML='';
+}
+function openSection(id){activeSectionId=id;goTo('section')}
+function showAddSectionForm(){
+  document.getElementById('addSectionFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="inline-form-title">＋ Yangi bo'lim</div>
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="nsTitle" placeholder="Bo'lim nomi..."></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveNewSection()">Saqlash</button>
+      <button class="btn-cancel" onclick="renderSections()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('nsTitle').focus();
+}
+function saveNewSection(){
+  const title=document.getElementById('nsTitle').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  db.sections.push({id:'sec'+Date.now(),title,desc:'',categories:[]});
+  notify('Saqlandi ✓');saveData();renderSections();
+}
+function deleteSection(id){
+  if(!confirm('O\'chirasizmi?')) return;
+  db.sections=db.sections.filter(s=>s.id!==id);
+  notify("O'chirildi ✓");saveData();renderSections();
+}
+function startEditSection(id){
+  const sec=db.sections.find(s=>s.id===id);if(!sec) return;
+  document.getElementById('addSectionFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="esTitle" value="${esc(sec.title)}"></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveEditSection('${id}')">Saqlash</button>
+      <button class="btn-cancel" onclick="renderSections()">Bekor</button>
+    </div>
+  </div>`;
+}
+function saveEditSection(id){
+  const sec=db.sections.find(s=>s.id===id);if(!sec) return;
+  sec.title=document.getElementById('esTitle').value.trim()||sec.title;
+  notify('Saqlandi ✓');saveData();renderSections();
+}
+
+// ---- CATEGORIES ----
+function renderCategories(){
+  const sec=db.sections.find(s=>s.id===activeSectionId);if(!sec) return;
+  document.getElementById('section-title').textContent=sec.title;
+  const q=(document.getElementById('searchCats')?.value||'').trim();
+  const filtered=q?sec.categories.filter(c=>fuzzyMatch(c.title,q)):sec.categories;
+  let html='';
+  filtered.forEach((cat,i)=>{
+    const num=String(i+1).padStart(2,'0');
+    html+=`<div class="section-item" onclick="openCat('${cat.id}')">
+      <div class="section-item-left">
+        <div class="section-num">${num}</div>
+        <div><div class="section-name">${esc(cat.title)}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${isAdmin?`<div class="section-actions">
+          <button class="btn-sm" onclick="event.stopPropagation();startEditCat('${cat.id}')">✏</button>
+          <button class="btn-sm-danger" onclick="event.stopPropagation();deleteCat('${cat.id}')">✕</button>
+        </div>`:''}
+        <div class="section-chevron">›</div>
+      </div>
+    </div>`;
+  });
+  if(!filtered.length) html=`<div class="no-results">${q?'Topilmadi 🔍':'Hozircha kategoriyalar yo\'q'}</div>`;
+  document.getElementById('catsGrid').innerHTML=html;
+  document.getElementById('addCatBtnWrap').style.display=isAdmin?'block':'none';
+  document.getElementById('addCatFormWrap').innerHTML='';
+}
+function openCat(id){activeCatId=id;goTo('cat')}
+function showAddCatForm(){
+  document.getElementById('addCatFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="ncTitle" placeholder="Kategoriya nomi..."></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveNewCat()">Saqlash</button>
+      <button class="btn-cancel" onclick="renderCategories()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('ncTitle').focus();
+}
+function saveNewCat(){
+  const sec=db.sections.find(s=>s.id===activeSectionId);if(!sec) return;
+  const title=document.getElementById('ncTitle').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  sec.categories.push({id:'cat'+Date.now(),title,desc:'',type:'list',flows:[]});
+  notify('Saqlandi ✓');saveData();renderCategories();
+}
+function deleteCat(id){
+  if(!confirm('O\'chirasizmi?')) return;
+  const sec=db.sections.find(s=>s.id===activeSectionId);if(!sec) return;
+  sec.categories=sec.categories.filter(c=>c.id!==id);
+  notify("O'chirildi ✓");saveData();renderCategories();
+}
+function startEditCat(id){
+  const sec=db.sections.find(s=>s.id===activeSectionId);
+  const cat=sec?.categories.find(c=>c.id===id);if(!cat) return;
+  document.getElementById('addCatFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="ecTitle" value="${esc(cat.title)}"></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveEditCat('${id}')">Saqlash</button>
+      <button class="btn-cancel" onclick="renderCategories()">Bekor</button>
+    </div>
+  </div>`;
+}
+function saveEditCat(id){
+  const sec=db.sections.find(s=>s.id===activeSectionId);
+  const cat=sec?.categories.find(c=>c.id===id);if(!cat) return;
+  cat.title=document.getElementById('ecTitle').value.trim()||cat.title;
+  notify('Saqlandi ✓');saveData();renderCategories();
+}
+
+// ---- FLOWS ----
+function getActiveCat(){
+  const sec=db.sections.find(s=>s.id===activeSectionId);
+  return sec?.categories.find(c=>c.id===activeCatId);
+}
+function renderFlowList(){
+  const cat=getActiveCat();if(!cat) return;
+  document.getElementById('cat-title').textContent=cat.title;
+  const q=(document.getElementById('searchFlows')?.value||'').trim();
+  const filtered=q?cat.flows.filter(f=>fuzzyMatch(f.title,q)):cat.flows;
+  let html='';
+  filtered.forEach((flow,i)=>{
+    const num=String(i+1).padStart(2,'0');
+    html+=`<div class="section-item" onclick="openFlow('${flow.id}')">
+      <div class="section-item-left">
+        <div class="section-num">${num}</div>
+        <div><div class="section-name">${esc(flow.title)}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${isAdmin?`<div class="section-actions">
+          <button class="btn-sm" onclick="event.stopPropagation();startEditFlowItem('${flow.id}')">✏</button>
+          <button class="btn-sm-danger" onclick="event.stopPropagation();deleteFlow('${flow.id}')">✕</button>
+        </div>`:''}
+        <div class="section-chevron">›</div>
+      </div>
+    </div>`;
+  });
+  if(!filtered.length) html=`<div class="no-results">${q?'Topilmadi 🔍':'Hozircha jarayonlar yo\'q'}</div>`;
+  document.getElementById('flowList').innerHTML=html;
+  document.getElementById('addFlowBtnWrap').style.display=isAdmin?'block':'none';
+  document.getElementById('flowFormWrap').style.display='none';
+}
+function openFlow(id){activeFlowId=id;goTo('flow')}
+function showFlowForm(){
+  document.getElementById('flowFormWrap').style.display='block';
+  document.getElementById('addFlowBtnWrap').style.display='none';
+  document.getElementById('flowFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="nfTitle" placeholder="Jarayon nomi..."></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveNewFlow()">Saqlash</button>
+      <button class="btn-cancel" onclick="renderFlowList()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('nfTitle').focus();
+}
+function saveNewFlow(){
+  const cat=getActiveCat();if(!cat) return;
+  const title=document.getElementById('nfTitle').value.trim();
+  if(!title){notify('Nom kiriting!');return;}
+  cat.flows.push({id:'flow'+Date.now(),title,sub:'',nodes:[]});
+  notify('Saqlandi ✓');saveData();renderFlowList();
+}
+function deleteFlow(id){
+  if(!confirm('O\'chirasizmi?')) return;
+  const cat=getActiveCat();if(!cat) return;
+  cat.flows=cat.flows.filter(f=>f.id!==id);
+  notify("O'chirildi ✓");saveData();renderFlowList();
+}
+function startEditFlowItem(id){
+  const cat=getActiveCat();
+  const flow=cat?.flows.find(f=>f.id===id);if(!flow) return;
+  document.getElementById('flowFormWrap').style.display='block';
+  document.getElementById('addFlowBtnWrap').style.display='none';
+  document.getElementById('flowFormWrap').innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="efItemTitle" value="${esc(flow.title)}"></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveEditFlowItem('${id}')">Saqlash</button>
+      <button class="btn-cancel" onclick="renderFlowList()">Bekor</button>
+    </div>
+  </div>`;
+}
+function saveEditFlowItem(id){
+  const cat=getActiveCat();
+  const flow=cat?.flows.find(f=>f.id===id);if(!flow) return;
+  const title=document.getElementById('efItemTitle').value.trim();
+  if(!title) return;
+  flow.title=title;notify('Saqlandi ✓');saveData();renderFlowList();
+}
+
+// ---- FLOW TREE ----
+function getActiveFlow(){
+  const cat=getActiveCat();
+  return cat?.flows.find(f=>f.id===activeFlowId);
+}
+function renderFlowTree(){
+  const flow=getActiveFlow();if(!flow) return;
+  document.getElementById('flow-title').textContent=flow.title;
+  document.getElementById('flowHeaderActions').style.display=isAdmin?'flex':'none';
+  document.getElementById('editFlowNameForm').style.display='none';
+  document.getElementById('rootFormWrap').innerHTML='';
+  const tree=document.getElementById('flowTree');
+  let html='<div class="tree-col">';
+  flow.nodes.forEach((node,i)=>html+=renderNodeHTML(node,String(i+1).padStart(2,'0')));
+  html+='</div>';
+  if(isAdmin) html+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;
+  tree.innerHTML=html;
+}
+function renderNodeHTML(node,numLabel){
+  const adminBtns=isAdmin?`<div class="node-corner">
+    ${node.link?`<button class="corner-btn link-btn" onclick="copyLink('${esc(node.link)}')" title="Link nusxa">🔗</button>`:''}
+    ${node.img?`<button class="corner-btn link-btn" onclick="openImgModal('${node.id}')" title="Rasm">🖼</button>`:''}
+    <button class="corner-btn" onclick="showNodeForm('${node.id}',null,true)">✏</button>
+    <button class="corner-btn danger-btn" onclick="deleteNode('${node.id}')">✕</button>
+  </div>`:(node.link||node.img?`<div class="node-corner">
+    ${node.link?`<button class="corner-btn link-btn" onclick="copyLink('${esc(node.link)}')">🔗</button>`:''}
+    ${node.img?`<button class="corner-btn link-btn" onclick="openImgModal('${node.id}')">🖼</button>`:''}
+  </div>`:'');
+  let cardHtml=`<div class="node-card" id="nc-${node.id}">
+    <div class="node-num">${numLabel}</div>
+    ${adminBtns}
+    <div class="node-name">${esc(node.name)}</div>
+    ${node.msg?`<div class="node-msg-wrap">
+      <div class="node-msg" id="msg-${node.id}">${esc(node.msg)}</div>
+      <button class="corner-btn link-btn" style="position:absolute;top:6px;right:6px;opacity:1;width:20px;height:20px" onclick="copyMsg('${node.id}')">⧉</button>
+    </div>`:''}
+    ${node.link?`<div class="node-link">🔗 <a href="${esc(node.link)}" target="_blank" onclick="event.stopPropagation()">${esc(node.link)}</a></div>`:''}
+  </div>`;
+  const hasChildren=node.children&&node.children.length>0;
+  let childrenHtml='';
+  if(hasChildren||isAdmin){
+    childrenHtml+=`<div class="children-connector">
+      <div class="v-bar-wrap"><div class="v-bar"></div></div>
+      <div class="children-col">`;
+    if(node.children){
+      node.children.forEach((child,ci)=>{
+        childrenHtml+=`<div class="child-row">
+          <div class="child-h-line"></div>
+          ${renderNodeHTML(child,String(ci+1).padStart(2,'00'))}
+        </div>`;
+      });
+    }
+    if(isAdmin){
+      childrenHtml+=`<div style="display:flex;align-items:center">
+        <div class="child-h-line"></div>
+        <button class="add-child-btn" onclick="showNodeForm('${node.id}',null)">＋ Variant</button>
+      </div>
+      <div id="childForm-${node.id}"></div>`;
+    }
+    childrenHtml+=`</div></div>`;
+  }
+  return `<div class="node-row" id="nr-${node.id}">
+    <div style="display:flex;flex-direction:column">${cardHtml}<div id="editForm-${node.id}"></div></div>
+    ${childrenHtml}
+  </div>`;
+}
+function startEditFlowName(){
+  const flow=getActiveFlow();if(!flow) return;
+  const f=document.getElementById('editFlowNameForm');
+  f.style.display='block';
+  f.innerHTML=`<div class="inline-form fade-in">
+    <div class="form-row"><input class="fi" id="efTitle" value="${esc(flow.title)}"></div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="saveFlowName()">Saqlash</button>
+      <button class="btn-cancel" onclick="document.getElementById('editFlowNameForm').style.display='none'">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById('efTitle').focus();
+}
+function saveFlowName(){
+  const flow=getActiveFlow();if(!flow) return;
+  const title=document.getElementById('efTitle').value.trim();if(!title) return;
+  flow.title=title;document.getElementById('flow-title').textContent=title;
+  document.getElementById('editFlowNameForm').style.display='none';
+  notify('Saqlandi ✓');saveData();updateBreadcrumb();
+}
+function deleteCurrentFlow(){
+  if(!confirm('O\'chirasizmi?')) return;
+  const cat=getActiveCat();if(!cat) return;
+  cat.flows=cat.flows.filter(f=>f.id!==activeFlowId);
+  activeFlowId=null;notify("O'chirildi ✓");saveData();goBack('cat');
+}
+
+// ---- NODE FORM ----
+function showNodeForm(nodeOrParentId,_,editMode){
+  const isEdit=!!editMode;
+  const flow=getActiveFlow();
+  let node=isEdit?findNode(flow.nodes,nodeOrParentId):null;
+  const formId=isEdit?`editForm-${nodeOrParentId}`:(nodeOrParentId&&nodeOrParentId!=='null'?`childForm-${nodeOrParentId}`:'rootFormWrap');
+  const target=document.getElementById(formId);if(!target) return;
+  target.innerHTML=`<div class="step-form fade-in">
+    <div class="inline-form-title">${isEdit?'✏ Tahrirlash':'＋ Yangi'}</div>
+    <div class="form-row"><label class="form-label">Nomi</label><input class="fi" id="${formId}_name" value="${esc(node?.name||'')}"></div>
+    <div class="form-row"><label class="form-label">Xabar matni</label>
+      <textarea class="fi" id="${formId}_msg" style="min-height:60px;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:11px">${esc(node?.msg||'')}</textarea></div>
+    <div class="form-row"><label class="form-label">Link</label><input class="fi" id="${formId}_link" value="${esc(node?.link||'')}" placeholder="https://..."></div>
+    <div class="form-row"><label class="form-label">Rasm</label>
+      <input type="file" accept="image/*" id="${formId}_img" style="font-size:11px;width:100%">
+      ${node?.img?'<div style="font-size:11px;color:var(--muted);margin-top:3px">✓ Rasm bor</div>':''}
+    </div>
+    <div class="form-actions">
+      <button class="btn-save" onclick="${isEdit?`saveEditNode('${nodeOrParentId}','${formId}')`:`saveNewNode('${nodeOrParentId}','${formId}')`}">Saqlash</button>
+      <button class="btn-cancel" onclick="renderFlowTree()">Bekor</button>
+    </div>
+  </div>`;
+  document.getElementById(formId+'_name').focus();
+}
+function saveNewNode(parentId,formId){
+  const name=document.getElementById(formId+'_name').value.trim();
+  const msg=document.getElementById(formId+'_msg').value.trim();
+  const link=document.getElementById(formId+'_link').value.trim();
+  if(!name){notify('Nom kiriting!');return;}
+  const imgFile=document.getElementById(formId+'_img')?.files[0];
+  const save=(img)=>{
+    const newNode={id:'n'+Date.now(),name,desc:'',msg,link,img:img||'',children:[]};
+    const flow=getActiveFlow();
+    if(!parentId||parentId==='null') flow.nodes.push(newNode);
+    else{const p=findNode(flow.nodes,parentId);if(p) p.children.push(newNode);}
+    notify('Saqlandi ✓');saveData();renderFlowTree();
+  };
+  if(imgFile){const r=new FileReader();r.onload=e=>save(e.target.result);r.readAsDataURL(imgFile);}
+  else save('');
+}
+function saveEditNode(nodeId,formId){
+  const name=document.getElementById(formId+'_name').value.trim();
+  const msg=document.getElementById(formId+'_msg').value.trim();
+  const link=document.getElementById(formId+'_link').value.trim();
+  if(!name){notify('Nom kiriting!');return;}
+  const imgFile=document.getElementById(formId+'_img')?.files[0];
+  const flow=getActiveFlow();
+  const node=findNode(flow.nodes,nodeId);if(!node) return;
+  const save=(img)=>{
+    node.name=name;node.msg=msg;node.link=link;
+    if(img) node.img=img;
+    notify('Saqlandi ✓');saveData();renderFlowTree();
+  };
+  if(imgFile){const r=new FileReader();r.onload=e=>save(e.target.result);r.readAsDataURL(imgFile);}
+  else save('');
+}
+function deleteNode(nodeId){
+  if(!confirm('O\'chirasizmi?')) return;
+  const flow=getActiveFlow();
+  flow.nodes=removeNode(flow.nodes,nodeId);
+  notify("O'chirildi ✓");saveData();renderFlowTree();
+}
+function findNode(nodes,id){for(const n of nodes){if(n.id===id)return n;const f=findNode(n.children||[],id);if(f)return f;}return null;}
+function removeNode(nodes,id){return nodes.filter(n=>n.id!==id).map(n=>({...n,children:removeNode(n.children||[],id)}));}
+
+// ---- UTILS ----
+function copyMsg(id){
+  const el=document.getElementById('msg-'+id);if(!el) return;
+  navigator.clipboard.writeText(el.textContent).then(()=>notify('Nusxa olindi ✓'));
+}
+function copyLink(link){navigator.clipboard.writeText(link).then(()=>notify('Link nusxa olindi ✓'))}
+function openImgModal(nodeId){
+  const flow=getActiveFlow();
+  const node=findNode(flow.nodes,nodeId);if(!node||!node.img) return;
+  document.getElementById('imgModalSrc').src=node.img;
+  document.getElementById('imgModal').classList.add('open');
+}
+function closeImgModal(){
+  document.getElementById('imgModal').classList.remove('open');
+  document.getElementById('imgModalSrc').src='';
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function notify(msg){
+  const n=document.getElementById('notification');
+  n.textContent=msg;n.classList.add('show');
+  setTimeout(()=>n.classList.remove('show'),2000);
+}
+document.getElementById('loginModal').addEventListener('click',function(e){if(e.target===this)closeLoginModal()});
+
+// ---- INIT ----
+loadData();
 </script>
 </body>
 </html>
