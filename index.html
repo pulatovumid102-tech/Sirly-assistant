@@ -245,8 +245,64 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 <div id="sirly-app">
 <button class="logout-btn" id="logout-btn">← Chiqish</button>
 
-<div class="page active" id="p-home">
+<div class="page active" id="p-main">
   <div class="home-header">
+    <div class="home-title">Xush kelibsiz 👋<br><span>Sirly tizimi</span></div>
+  </div>
+  <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+    <div onclick="goTo('p-dashboard')" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="font-size:28px;">📊</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--white-90);margin-bottom:2px;">Dashboard</div>
+        <div style="font-size:12px;color:var(--white-50);">Umumiy ko'rinish</div>
+      </div>
+    </div>
+    <div onclick="goTo('p-sections')" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="font-size:28px;">📋</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--white-90);margin-bottom:2px;">Bo'limlar</div>
+        <div style="font-size:12px;color:var(--white-50);">Jarayonlar</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div class="page" id="p-dashboard">
+  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
+    <button onclick="goBack('p-main')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
+    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Dashboard</div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:32px;text-align:center;">
+    <div style="font-size:64px;margin-bottom:16px;">🚧</div>
+    <div style="font-size:20px;font-weight:700;color:var(--white-90);margin-bottom:8px;">Yaqinda shakllanadi</div>
+    <div style="font-size:14px;color:var(--white-50);line-height:1.6;">Bu bo'lim hozirda tayyorlanmoqda.</div>
+  </div>
+</div>
+
+<div class="page" id="p-sections">
+  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
+    <button onclick="goBack('p-main')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
+    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Bo'limlar</div>
+  </div>
+  <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+    <div onclick="goTo('p-home')" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;">
+      <div style="font-size:24px;">📂</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:600;color:var(--white-90);">Support bo'limi</div>
+        <div style="font-size:12px;color:var(--white-50);margin-top:2px;">Jarayonlar va qarorlar</div>
+      </div>
+      <div style="color:var(--accent);font-size:18px;">›</div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="p-home">
+  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
+    <button onclick="goBack('p-sections')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
+    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Support bo'limi</div>
+  </div>
+  <div class="home-header" style="padding-top:8px;">
     <div class="home-title">Kim nima ishni<br><span>qanday qiladi?</span></div>
     <div class="home-sub">Bo'limni tanlang</div>
   </div>
@@ -744,6 +800,31 @@ function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;
 function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
 function editAcadSection(id){showAcadSecForm(id)}
 function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
+function renderSectionsList(){
+  var el = document.getElementById('sections-list');
+  if(!el) return;
+  var allSections = [...(db.sections||[]).map(function(s){ return {...s, _type:'process'}; }), ...((acadDb&&acadDb.sections)||[]).map(function(s){ return {...s, _type:'academy'}; })];
+  var h = '';
+  allSections.forEach(function(s){
+    var icon = s._type === 'academy' ? '🎓' : '📂';
+    var onclick = s._type === 'academy' ? "openAcadSection('"+s.id+"')" : "openSectionFromList('"+s.id+"')";
+    h += '<div onclick="'+onclick+'" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;">'+
+      '<div style="font-size:24px;">'+icon+'</div>'+
+      '<div style="flex:1;"><div style="font-size:15px;font-weight:600;color:var(--white-90);">'+esc(s.title)+'</div></div>'+
+      '<div style="color:var(--accent);font-size:18px;">›</div>'+
+    '</div>';
+  });
+  if(!h) h = "<div style='text-align:center;padding:32px;color:var(--white-50);'>Bo'limlar yo'q</div>";
+  el.innerHTML = h;
+}
+
+function openSectionFromList(id){
+  curSection = id;
+  goTo('p-home');
+}
+
+function openAcadSection(id){ curAcadSec=id; goTo('p-acad-cats'); }
+
 function openSection(id){curSection=id;goTo('p-section')}
 function showSecForm(id){var sec=id?db.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div><div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('sf-title').focus();}
 function saveSection(id){var title=document.getElementById('sf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(id){var s=db.sections.find(x=>x.id===id);if(s)s.title=title;}else db.sections.push({id:'s'+Date.now(),title,cats:[]});save();notify('Saqlandi ✓');renderSections();}
@@ -809,11 +890,14 @@ load().then(()=>{renderSections();updateBc();});
 acadLoad().catch(()=>{});
 
 function sirlyStart(role){
-  // Set isAdmin based on role
   if(role === 'editor'){
     isAdmin = true;
   }
-  load().then(function(){ renderSections(); updateBc(); });
+  // Start from p-main
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('p-main').classList.add('active');
+  navStack = ['p-main'];
+  load().then(function(){ renderSections(); renderSectionsList(); updateBc(); });
   acadLoad().catch(function(){});
 }
 </script>
