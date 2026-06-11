@@ -2656,6 +2656,9 @@ async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
     )]]
     await sb_save_screenshot(username, time_key, 'missed')
     await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"⚠️ {name} @{username} screenshot yubormadi!\n"
             f"📅 {date_str} | 🕐 {time_str}\n\n"
             f"💰 20,000 so'm jarima\n\n"
             f"@{ADMIN_USERNAME}"
