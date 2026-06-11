@@ -2472,10 +2472,21 @@ async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
         return wh[0] <= hour < wh[1]
 
     agents = [u for u in agents if is_working_at_time(u, tk_h)]
-    agents = [u for u in agents if not (
-        AGENTS_DATA.get(u, {}).get("lunch") and
-        AGENTS_DATA[u]["lunch"][0] <= tk_h < AGENTS_DATA[u]["lunch"][1]
-    )]
+
+    # Tushlik vaqtini tekshirish — soat va daqiqani hisobga olish
+    tk_m = int(time_key.split(":")[1])
+    def is_lunch_time(username, hour, minute):
+        lunch = AGENTS_DATA.get(username, {}).get("lunch")
+        if not lunch:
+            return False
+        lunch_start_h, lunch_end_h = lunch[0], lunch[1]
+        # Tushlik boshlanishidan 10 daqiqa oldin ham so'ramasin
+        pre_lunch_minutes = lunch_start_h * 60 - 10
+        current_minutes = hour * 60 + minute
+        lunch_end_minutes = lunch_end_h * 60
+        return pre_lunch_minutes <= current_minutes < lunch_end_minutes
+
+    agents = [u for u in agents if not is_lunch_time(u, tk_h, tk_m)]
     if not agents:
         h, m = map(int, time_key.split(":"))
         context.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": context.job.data["agents"]})
@@ -2677,6 +2688,45 @@ def main():
     application = Application.builder().token(TOKEN).build()
     load_tasks()
     state["cycle_id"] += 1
+
+    # Restart dan keyin zadacha joblarini qayta schedule qilish
+    now_startup = datetime.now(TIMEZONE)
+    for tid, task in zadacha_tasks.items():
+        if all_accepted(task):
+            continue
+        # Accept reminder
+        all_users = task["targets"] + task.get("supervisor", [])
+        earliest = 300
+        for u in all_users:
+            if is_agent_working_now(u):
+                earliest = 300
+                break
+            secs = seconds_until_agent_works(u)
+            if secs < earliest:
+                earliest = max(secs, 60)
+        application.job_queue.run_once(
+            zadacha_accept_reminder_job,
+            when=earliest,
+            name=f"zaccrem_{tid}",
+            data={"task_id": tid}
+        )
+        # Deadline jobs
+        dl = task["deadline"]
+        if dl > now_startup:
+            application.job_queue.run_once(
+                zadacha_deadline_job,
+                when=(dl - now_startup).total_seconds(),
+                name=f"zdue_{tid}",
+                data={"task_id": tid}
+            )
+            remind_time = dl - timedelta(minutes=30)
+            if remind_time > now_startup:
+                application.job_queue.run_once(
+                    zadacha_pre_deadline_job,
+                    when=(remind_time - now_startup).total_seconds(),
+                    name=f"zpre_{tid}",
+                    data={"task_id": tid}
+                )
 
     # Zadacha cleanup job
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
