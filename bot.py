@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import asyncio
+import httpx
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,24 @@ from telegram.ext import (
 
 TOKEN = "8935324683:AAFvaRkMnEy89ikySowTSLYRtaFqu_TDpyc"
 CHAT_ID = -1003914304171
+
+SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
+SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU"
+SB_HEADERS = {"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
+
+async def sb_save_screenshot(username, time_key, status):
+    now = datetime.now(TIMEZONE)
+    rid = f"{username}_{time_key.replace(':', '')}_{now.strftime('%d%m%Y')}"
+    data = {"id": rid, "username": username, "time_key": time_key, "sent_at": now.isoformat(), "status": status, "date": now.strftime("%d.%m.%Y")}
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.get(f"{SB_URL}/rest/v1/screenshots?id=eq.{rid}", headers=SB_HEADERS)
+            if r.json():
+                await c.patch(f"{SB_URL}/rest/v1/screenshots?id=eq.{rid}", headers=SB_HEADERS, json={"status": status})
+            else:
+                await c.post(f"{SB_URL}/rest/v1/screenshots", headers=SB_HEADERS, json=data)
+    except Exception as e:
+        logger.error(f"sb_save error: {e}")
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -141,6 +160,78 @@ MONTH_UZ = {1: "yanvar", 2: "fevral", 3: "mart", 4: "aprel", 5: "may", 6: "iyun"
 WEEKDAY_BUTTONS = [
     ("Dush", 0), ("Sesh", 1), ("Chor", 2), ("Pay", 3), ("Juma", 4), ("Shanba", 5), ("Yakshanba", 6),
 ]
+
+# =========================
+# CUSTOM CHECKLIST (yaratilgan checklistlar)
+# =========================
+
+CUSTOM_CHECKLISTS_FILE = "custom_checklists.json"
+custom_checklists = []  # list of dicts
+custom_checklist_state = {}  # user_id -> creation state
+custom_checklist_confirmations = {}  # cl_id -> {username: {task_index: bool}}
+custom_checklist_verified = {}  # cl_id -> set
+custom_checklist_verify_state = {}  # cl_id -> {verify_msg_id}
+custom_checklist_message_ids = {}  # cl_id -> message_id
+
+def save_custom_checklists():
+    with open(CUSTOM_CHECKLISTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(custom_checklists, f, ensure_ascii=False, indent=2)
+
+def load_custom_checklists():
+    global custom_checklists
+    if not os.path.exists(CUSTOM_CHECKLISTS_FILE):
+        return
+    try:
+        with open(CUSTOM_CHECKLISTS_FILE, "r", encoding="utf-8") as f:
+            custom_checklists = json.load(f)
+    except Exception as e:
+        logger.error(f"load_custom_checklists error: {e}")
+
+def get_next_cl_id():
+    if not custom_checklists:
+        return 1
+    return max(cl["id"] for cl in custom_checklists) + 1
+
+def seconds_until_custom_checklist(cl):
+    """Keyingi yuborish vaqtigacha sekundlar"""
+    now = datetime.now(TIMEZONE)
+    repeat = cl["repeat"]
+    hour = cl["hour"]
+    minute = 0
+
+    if repeat == "daily":
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return (target - now).total_seconds()
+
+    elif repeat == "interval":
+        days = cl["interval_days"]
+        last_sent = cl.get("last_sent")
+        if last_sent:
+            last_dt = datetime.fromisoformat(last_sent)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=TIMEZONE)
+            next_dt = last_dt + timedelta(days=days)
+            next_dt = next_dt.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        else:
+            next_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if next_dt <= now:
+                next_dt += timedelta(days=1)
+        if next_dt <= now:
+            next_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=1)
+        return max((next_dt - now).total_seconds(), 1)
+
+    elif repeat == "weekly":
+        weekday = cl["weekday"]
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        days_ahead = (weekday - now.weekday()) % 7
+        if days_ahead == 0 and target <= now:
+            days_ahead = 7
+        target += timedelta(days=days_ahead)
+        return (target - now).total_seconds()
+
+    return 86400
 
 # =========================
 # STATE
@@ -1790,6 +1881,14 @@ async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         sent = await context.bot.send_message(chat_id=user_id, text="✅ Vazifa matni yangilandi.")
         schedule_delete(context.bot, user_id, [update.message.message_id, sent.message_id])
 
+    # Custom checklist task kiritish
+    handled = await custom_checklist_text_handler(user_id, update.message.text, context)
+    if handled:
+        try:
+            await update.message.delete()
+        except:
+            pass
+
 # =========================
 # ZADACHA COMMAND + CALLBACKS
 # =========================
@@ -2449,6 +2548,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "chat_id": update.effective_chat.id,
             }
             cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
+            await sb_save_screenshot(sender, current_time_key, 'sent')
 
 # =========================
 # SCREENSHOT JOBS
@@ -2554,10 +2654,8 @@ async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
         f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
         callback_data=f"ss_fine_confirm_{time_key.replace(':', '')}_{username}"
     )]]
+    await sb_save_screenshot(username, time_key, 'missed')
     await context.bot.send_message(
-        chat_id=CHAT_ID,
-        text=(
-            f"⚠️ {name} @{username} screenshot yubormadi!\n"
             f"📅 {date_str} | 🕐 {time_str}\n\n"
             f"💰 20,000 so'm jarima\n\n"
             f"@{ADMIN_USERNAME}"
@@ -2597,7 +2695,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━\n"
             "📋 CHECKLIST\n"
             "━━━━━━━━━━━━━━\n"
-            "/checklist — Checklistni qo'lda yuborish\n\n"
+            "/checklist — Checklistni qo'lda yuborish\n"
+            "/cheklistyaratish — Yangi checklist yaratish\n\n"
             "━━━━━━━━━━━━━━\n"
             "📌 VAZIFALAR\n"
             "━━━━━━━━━━━━━━\n"
@@ -2643,6 +2742,400 @@ async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for t in CHECKLIST_TIMES:
         cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
     await context.bot.send_message(chat_id=CHAT_ID, text="🛑 Bot toxtatildi.\nQayta ishga tushirish uchun /start bosing.")
+
+async def custom_checklist_job(context: ContextTypes.DEFAULT_TYPE):
+    cl_id = context.job.data["cl_id"]
+    cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+    if not cl:
+        return
+
+    username = cl["username"]
+    supervisor = cl["supervisor"]
+    tasks = cl["tasks"]
+    now = datetime.now(TIMEZONE)
+    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}, {now.strftime('%H:%M')}"
+    name = AGENTS_DATA.get(username, {}).get("name", username)
+
+    # Eski xabarni o'chir
+    old_mid = custom_checklist_message_ids.get(cl_id)
+    if old_mid:
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_mid)
+        except:
+            pass
+
+    # State reset
+    custom_checklist_confirmations[cl_id] = {username: {}}
+    custom_checklist_verified[cl_id] = set()
+    custom_checklist_verify_state[cl_id] = {"verify_msg_id": None}
+
+    task_lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(tasks))
+    agent_info = get_agent_info(username)
+    text = (
+        f"📋 CHECKLIST — {date_str}\n\n"
+        f"{agent_info}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        f"📝 Vazifalar:\n<tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "⚠️ Avval o'qing, keyin bosing!\n"
+        "Har bir vazifa bajarilgandan so'ng tugmani bosing"
+    )
+
+    keyboard = []
+    for i, t in enumerate(tasks):
+        keyboard.append([
+            InlineKeyboardButton(f"⬜ {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+            InlineKeyboardButton("⬜ Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+        ])
+
+    sent = await context.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    custom_checklist_message_ids[cl_id] = sent.message_id
+
+    # last_sent yangilash
+    cl["last_sent"] = now.isoformat()
+    save_custom_checklists()
+
+    # Keyingi schedule
+    secs = seconds_until_custom_checklist(cl)
+    context.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl_id}", data={"cl_id": cl_id})
+
+async def cheklistyaratish_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    all_agents = list(AGENTS_DATA.keys())
+    keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ccl_new_agent_{u}")] for u in all_agents]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="👷 Qaysi xodim uchun checklist?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    custom_checklist_state[user_id] = {"step": "agent", "messages": [sent.message_id]}
+    if update.message:
+        custom_checklist_state[user_id]["messages"].append(update.message.message_id)
+
+async def cheklistyaratish_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+
+    if data == "ccl_new_cancel":
+        msgs = custom_checklist_state.pop(user_id, {}).get("messages", [])
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=mid)
+            except:
+                pass
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, [sent.message_id])
+        return
+
+    if user_id not in custom_checklist_state:
+        return
+    s = custom_checklist_state[user_id]
+
+    if data.startswith("ccl_new_agent_"):
+        username = data[14:]
+        s["username"] = username
+        s["step"] = "repeat"
+        keyboard = [
+            [InlineKeyboardButton("📅 Har kuni", callback_data="ccl_new_repeat_daily")],
+            [InlineKeyboardButton("📅 Kun ora", callback_data="ccl_new_repeat_interval")],
+            [InlineKeyboardButton("📅 Haftada bir", callback_data="ccl_new_repeat_weekly")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+        ]
+        sent = await context.bot.send_message(chat_id=user_id, text="🔄 Qanday takrorlansin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data == "ccl_new_repeat_daily":
+        s["repeat"] = "daily"
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data == "ccl_new_repeat_interval":
+        s["repeat"] = "interval"
+        s["step"] = "interval_days"
+        keyboard = [
+            [InlineKeyboardButton("2 kun", callback_data="ccl_new_idays_2"), InlineKeyboardButton("5 kun", callback_data="ccl_new_idays_5")],
+            [InlineKeyboardButton("10 kun", callback_data="ccl_new_idays_10"), InlineKeyboardButton("15 kun", callback_data="ccl_new_idays_15")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+        ]
+        sent = await context.bot.send_message(chat_id=user_id, text="🔢 Necha kunda bir yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_idays_"):
+        s["interval_days"] = int(data[14:])
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data == "ccl_new_repeat_weekly":
+        s["repeat"] = "weekly"
+        s["step"] = "weekday"
+        keyboard = [[InlineKeyboardButton(label, callback_data=f"ccl_new_wd_{idx}")] for label, idx in WEEKDAY_BUTTONS]
+        keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+        sent = await context.bot.send_message(chat_id=user_id, text="📅 Qaysi kuni yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_wd_"):
+        s["weekday"] = int(data[11:])
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data.startswith("ccl_new_hour_"):
+        s["hour"] = int(data[13:])
+        s["step"] = "supervisor"
+        # Nazoratchi tanlash — xodimdan boshqalar
+        username = s["username"]
+        sups = [u for u in AGENTS_DATA.keys() if u != username]
+        keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ccl_new_sup_{u}")] for u in sups]
+        keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_sup_"):
+        s["supervisor"] = data[12:]
+        s["step"] = "tasks"
+        s["tasks"] = []
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="✏️ 1-vazifani kiriting:",
+        )
+        s["messages"].append(sent.message_id)
+
+    elif data == "ccl_new_task_done":
+        if not s.get("tasks"):
+            await query.answer("❌ Kamida 1 ta vazifa kiriting!", show_alert=True)
+            return
+        s["step"] = "confirm"
+        await _ccl_show_confirm(context, user_id, s)
+
+async def _ccl_ask_hour(context, user_id, s):
+    hours = list(range(8, 24))
+    keyboard = []
+    row = []
+    for h in hours:
+        row.append(InlineKeyboardButton(f"⏰ {h:02d}:00", callback_data=f"ccl_new_hour_{h}"))
+        if len(row) == 4:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+    sent = await context.bot.send_message(chat_id=user_id, text="🕐 Qaysi soatda yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+    s["messages"].append(sent.message_id)
+
+async def _ccl_show_confirm(context, user_id, s):
+    username = s["username"]
+    supervisor = s["supervisor"]
+    repeat = s["repeat"]
+    hour = s["hour"]
+    tasks = s["tasks"]
+    name = AGENTS_DATA.get(username, {}).get("name", username)
+    sup_name = AGENTS_DATA.get(supervisor, {}).get("name", supervisor)
+
+    if repeat == "daily":
+        repeat_str = "Har kuni"
+    elif repeat == "interval":
+        repeat_str = f"Har {s['interval_days']} kunda bir"
+    else:
+        repeat_str = f"Haftada bir — {WEEKDAY_UZ[s['weekday']]}"
+
+    task_lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(tasks))
+    text = (
+        f"📋 Yangi checklist:\n\n"
+        f"👤 Xodim: {name}\n"
+        f"🧑 Nazoratchi: {sup_name}\n"
+        f"🔄 Takrorlanish: {repeat_str}\n"
+        f"🕐 Soat: {hour:02d}:00\n"
+        f"📝 Vazifalar:\n{task_lines}\n\n"
+        f"Yuborilsinmi?"
+    )
+    keyboard = [
+        [InlineKeyboardButton("✅ Tasdiqlash", callback_data="ccl_new_confirm")],
+        [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+    ]
+    sent = await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
+    s["messages"].append(sent.message_id)
+
+async def cheklistyaratish_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+
+    if query.data != "ccl_new_confirm":
+        return
+    if user_id not in custom_checklist_state:
+        return
+    s = custom_checklist_state.pop(user_id)
+
+    cl_id = get_next_cl_id()
+    cl = {
+        "id": cl_id,
+        "username": s["username"],
+        "supervisor": s["supervisor"],
+        "repeat": s["repeat"],
+        "hour": s["hour"],
+        "tasks": s["tasks"],
+        "last_sent": None,
+    }
+    if s["repeat"] == "interval":
+        cl["interval_days"] = s["interval_days"]
+    if s["repeat"] == "weekly":
+        cl["weekday"] = s["weekday"]
+
+    custom_checklists.append(cl)
+    save_custom_checklists()
+
+    # Schedule
+    secs = seconds_until_custom_checklist(cl)
+    context.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl_id}", data={"cl_id": cl_id})
+
+    msgs = s.get("messages", [])
+    for mid in msgs:
+        try:
+            await context.bot.delete_message(chat_id=user_id, message_id=mid)
+        except:
+            pass
+
+    name = AGENTS_DATA.get(cl["username"], {}).get("name", cl["username"])
+    sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Checklist yaratildi!\n👤 {name}\n🕐 {cl['hour']:02d}:00")
+    schedule_delete(context.bot, user_id, [sent.message_id], delay=30)
+
+async def custom_checklist_text_handler(user_id, text, context):
+    """Custom checklist task kiritish"""
+    if user_id not in custom_checklist_state:
+        return False
+    s = custom_checklist_state[user_id]
+    if s.get("step") != "tasks":
+        return False
+
+    s["tasks"].append(text)
+    task_num = len(s["tasks"]) + 1
+    keyboard = [[InlineKeyboardButton("✅ Tayyor", callback_data="ccl_new_task_done")]]
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text=f"✏️ {task_num}-vazifani kiriting:\n(Tugatish uchun \"Tayyor\" bosing)",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    s["messages"].append(sent.message_id)
+    return True
+
+async def ccl_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Custom checklist Bajardim va Tekshirdim tugmalari"""
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+
+    # BAJARDIM
+    if data.startswith("ccl_") and not data.startswith("ccl_verify_") and not data.startswith("ccl_new_"):
+        parts = data[4:].split("_")
+        cl_id = int(parts[0])
+        username = parts[1]
+        task_index = int(parts[2])
+        presser = query.from_user.username
+
+        if presser != username:
+            return
+
+        cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+        if not cl:
+            return
+
+        custom_checklist_confirmations.setdefault(cl_id, {}).setdefault(username, {})
+        user_conf = custom_checklist_confirmations[cl_id][username]
+        if user_conf.get(task_index, False):
+            return
+        user_conf[task_index] = True
+
+        verified_set = custom_checklist_verified.get(cl_id, set())
+        tasks = cl["tasks"]
+
+        # Keyboard yangilash
+        keyboard = []
+        for i, t in enumerate(tasks):
+            done = user_conf.get(i, False)
+            verified = i in verified_set
+            keyboard.append([
+                InlineKeyboardButton(f"{'✅' if done else '⬜'} {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+                InlineKeyboardButton(f"{'✅' if verified else '⬜'} Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+            ])
+        try:
+            await query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+        except:
+            pass
+
+        # Barcha vazifalar bajariladimi?
+        all_done = all(user_conf.get(i, False) for i in range(len(tasks)))
+        if all_done:
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            vs = custom_checklist_verify_state.get(cl_id, {})
+            old_vmid = vs.get("verify_msg_id")
+            if old_vmid:
+                try:
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_vmid)
+                except:
+                    pass
+            sent_v = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"✅ {name} barcha vazifalarni bajardi!\n@{ADMIN_USERNAME} checklistdan tekshiring"
+            )
+            custom_checklist_verify_state[cl_id] = {"verify_msg_id": sent_v.message_id}
+        return
+
+    # TEKSHIRDIM
+    if data.startswith("ccl_verify_") and not data.startswith("ccl_verify_"):
+        pass
+
+    if data.startswith("ccl_verify_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            return
+        parts = data[11:].split("_")
+        cl_id = int(parts[0])
+        task_index = int(parts[1])
+
+        cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+        if not cl:
+            return
+
+        custom_checklist_verified.setdefault(cl_id, set()).add(task_index)
+        verified_set = custom_checklist_verified[cl_id]
+        tasks = cl["tasks"]
+        username = cl["username"]
+        user_conf = custom_checklist_confirmations.get(cl_id, {}).get(username, {})
+
+        # Keyboard yangilash
+        keyboard = []
+        for i, t in enumerate(tasks):
+            done = user_conf.get(i, False)
+            verified = i in verified_set
+            keyboard.append([
+                InlineKeyboardButton(f"{'✅' if done else '⬜'} {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+                InlineKeyboardButton(f"{'✅' if verified else '⬜'} Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+            ])
+        msg_id = custom_checklist_message_ids.get(cl_id)
+        if msg_id:
+            try:
+                await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=msg_id, reply_markup=InlineKeyboardMarkup(keyboard))
+            except:
+                pass
+
+        # Barcha tekshirildimi?
+        all_verified = all(i in verified_set for i in range(len(tasks)))
+        if all_verified:
+            vs = custom_checklist_verify_state.get(cl_id, {})
+            vmid = vs.get("verify_msg_id")
+            if vmid:
+                async def del_v():
+                    await asyncio.sleep(1)
+                    try:
+                        await context.bot.delete_message(chat_id=CHAT_ID, message_id=vmid)
+                    except:
+                        pass
+                asyncio.create_task(del_v())
+                custom_checklist_verify_state[cl_id]["verify_msg_id"] = None
+        return
 
 async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username != ADMIN_USERNAME:
@@ -2756,12 +3249,19 @@ def main():
         h, m = map(int, time_key.split(":"))
         application.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": agents})
 
+    # Custom checklist jobs
+    load_custom_checklists()
+    for cl in custom_checklists:
+        secs = seconds_until_custom_checklist(cl)
+        application.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl['id']}", data={"cl_id": cl["id"]})
+
     application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
     application.add_handler(MessageHandler(filters.Document.IMAGE & filters.Chat(CHAT_ID), photo_handler))
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("umidstop", umidstop_command))
     application.add_handler(CommandHandler("checklist", checklist_command))
+    application.add_handler(CommandHandler("cheklistyaratish", cheklistyaratish_command))
     application.add_handler(CommandHandler("zadacha", zadacha_command))
     application.add_handler(CommandHandler("zadachi", zadachi_command))
     application.add_handler(CommandHandler("addagent", addagent_command))
@@ -2774,6 +3274,9 @@ def main():
     application.add_handler(CallbackQueryHandler(editagent_callback, pattern="^(edit_)"))
     application.add_handler(CallbackQueryHandler(delagent_callback, pattern="^(delagent_)"))
     application.add_handler(CallbackQueryHandler(zadacha_callback, pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_)"))
+    application.add_handler(CallbackQueryHandler(cheklistyaratish_callback, pattern="^ccl_new_"))
+    application.add_handler(CallbackQueryHandler(cheklistyaratish_confirm_callback, pattern="^ccl_new_confirm$"))
+    application.add_handler(CallbackQueryHandler(ccl_button_callback, pattern="^ccl_"))
     application.add_handler(CallbackQueryHandler(button_callback))
 
     logger.info("Bot starting...")
