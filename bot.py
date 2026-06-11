@@ -53,6 +53,7 @@ DEFAULT_AGENTS = {
         "name": "Ozodbek", "username": "sirlyinfo", "phone": "+998 93 798 13 04",
         "work_days": [0, 1, 2, 3, 4, 5, 6],
         "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
+        "lunch": [13, 14],
     },
     "kh_nosirov": {
         "name": "Xojiakbar", "username": "kh_nosirov", "phone": "",
