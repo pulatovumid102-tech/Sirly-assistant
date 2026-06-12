@@ -181,7 +181,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 </style>
 </head>
 <body>
-<div id="page-num-badge" style="position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;font-weight:700;padding:4px 9px;border-radius:8px;font-family:monospace;">P?</div>
 
 <!-- TANLOV -->
 
@@ -246,62 +245,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 <div id="sirly-app">
 <button class="logout-btn" id="logout-btn">← Chiqish</button>
 
-<div class="page active" id="p-main">
+<div class="page active" id="p-home">
   <div class="home-header">
-    <div class="home-title">Xush kelibsiz 👋<br><span>Sirly tizimi</span></div>
-  </div>
-  <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
-    <div onclick="goTo('p-agents')" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;cursor:pointer;min-height:140px;display:flex;flex-direction:column;justify-content:flex-end;">
-      <div>
-        <div style="font-size:20px;font-weight:700;color:var(--white-90);margin-bottom:4px;">Dashboard</div>
-        <div style="font-size:13px;color:var(--white-50);">Umumiy ko'rinish</div>
-      </div>
-    </div>
-    <div onclick="goTo('p-sections')" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;cursor:pointer;min-height:140px;display:flex;flex-direction:column;justify-content:flex-end;">
-      <div>
-        <div style="font-size:20px;font-weight:700;color:var(--white-90);margin-bottom:4px;">Bo'limlar</div>
-        <div style="font-size:13px;color:var(--white-50);">Jarayonlar</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- DASHBOARD PAGE -->
-<div class="page" id="p-agents">
-  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
-    <button onclick="goBack('p-main')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
-    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Xodimlar</div>
-  </div>
-  <div style="padding:16px;display:flex;flex-direction:column;gap:8px;" id="agents-list">
-    <div style="text-align:center;padding:32px;color:var(--white-50);">Yuklanmoqda...</div>
-  </div>
-</div>
-
-<div class="page" id="p-dashboard">
-  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 8px;">
-    <button onclick="goBack('p-agents')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
-    <div style="font-size:18px;font-weight:700;color:var(--white-90);" id="dash-agent-name">Dashboard</div>
-  </div>
-  <div style="padding:0 16px 16px;" id="dash-content">
-    <div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px;">Yuklanmoqda...</div>
-  </div>
-</div>
-
-<div class="page" id="p-sections">
-  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
-    <button onclick="goBack('p-main')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
-    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Bo'limlar</div>
-  </div>
-  <div style="padding:16px;display:flex;flex-direction:column;gap:10px;" id="sections-list2"></div>
-  <div id="add-section-wrap" style="padding:0 16px 16px;"></div>
-</div>
-
-<div class="page" id="p-home">
-  <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 0;">
-    <button onclick="goBack('p-sections')" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--white-80);">←</button>
-    <div style="font-size:18px;font-weight:700;color:var(--white-90);">Support bo'limi</div>
-  </div>
-  <div class="home-header" style="padding-top:8px;">
     <div class="home-title">Kim nima ishni<br><span>qanday qiladi?</span></div>
     <div class="home-sub">Bo'limni tanlang</div>
   </div>
@@ -309,7 +254,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   <div id="section-form"></div>
 </div>
 <div class="page" id="p-section">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-section"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-sections')">← Orqaga</button><span class="page-title" id="section-title"></span></div></div>
+  <div class="page-topbar"><div class="breadcrumb" id="bc-section"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-home')">← Orqaga</button><span class="page-title" id="section-title"></span></div></div>
   <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
   <div id="cats-list" class="section-list"></div><div id="cat-form"></div>
 </div>
@@ -349,7 +294,6 @@ if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram
 var CURRENT_APP = null;
 var USER_ID = 'guest';
 var SIRLY_USERS = { 'umid': 'umid2025' };
-var USER_PERMS = {edit:false, support:false, dashboard:false};
 var ADMIN_LOGIN = 'admin';
 var ADMIN_PAROL = 'admin2025';
 var CURRENT_ADMIN_TAB = 'sirly';
@@ -383,8 +327,6 @@ async function umaApiSave(uid, payload){
 // Tanlov
 
 function showLogin(app){
-  updatePageBadge('p-login');
-
   CURRENT_APP = 'sirly';
   var ls = document.getElementById('login-screen');
   ls.className = 'sirly-theme';
@@ -565,16 +507,20 @@ async function loadAdminList(){
         loadAdminList();
       });
     });
-    // Permission checkboxes
-    listEl.querySelectorAll('[data-perm]').forEach(function(cb){
-      cb.addEventListener('change', async function(){
-        var id = this.getAttribute('data-uid');
-        var perm = this.getAttribute('data-perm');
-        var row = rows.find(function(r){ return r.id === id; });
-        var perms = (row && row.permissions) || {};
-        perms[perm] = this.checked;
-        await updatePermissions(id, perms);
-        if(row) row.permissions = perms;
+    // Editor buttons
+    listEl.querySelectorAll('[data-editor]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var id = this.getAttribute('data-editor');
+        await updateRole(id, 'editor');
+        loadAdminList();
+      });
+    });
+    // Guest buttons
+    listEl.querySelectorAll('[data-guest]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        var id = this.getAttribute('data-guest');
+        await updateRole(id, 'guest');
+        loadAdminList();
       });
     });
     // Delete buttons
@@ -597,31 +543,28 @@ async function loadAdminList(){
 
 function adminCard(u){
   var date = u.created_at ? new Date(u.created_at).toLocaleDateString('uz') : '';
-  var perms = u.permissions || {};
-  var canEdit = !!perms.edit;
-  var canSupport = !!perms.support;
-  var canDashboard = !!perms.dashboard;
-
+  var role = u.role || 'guest';
+  var roleBadge = role === 'editor' 
+    ? '<span style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;">✏ Editor</span>'
+    : '<span style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:6px;padding:2px 8px;font-size:11px;">👁 Guest</span>';
   var btns = '';
   if(u.status === 'pending'){
     btns = '<button data-approve="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✅ Tasdiqlash</button>'+
            '<button data-reject="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;">❌ Rad etish</button>';
   } else if(u.status === 'approved'){
-    btns = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">';
-    btns += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;background:#f5f5f5;border-radius:6px;padding:5px 10px;">'+
-      '<input type="checkbox" data-perm="edit" data-uid="'+u.id+'" '+(canEdit?'checked':'')+' style="cursor:pointer;"> ✏ Tahrirlash</label>';
-    btns += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;background:#f5f5f5;border-radius:6px;padding:5px 10px;">'+
-      '<input type="checkbox" data-perm="support" data-uid="'+u.id+'" '+(canSupport?'checked':'')+' style="cursor:pointer;"> 📂 Support</label>';
-    btns += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;background:#f5f5f5;border-radius:6px;padding:5px 10px;">'+
-      '<input type="checkbox" data-perm="dashboard" data-uid="'+u.id+'" '+(canDashboard?'checked':'')+' style="cursor:pointer;"> 📊 Dashboard</label>';
-    btns += '</div>';
-    btns += '<button data-delete="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;margin-top:8px;">🗑 O\'chirish</button>';
+    if(role === 'editor'){
+      btns = '<button data-guest="'+u.id+'" style="background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">👁 Guest qilish</button>';
+    } else {
+      btns = '<button data-editor="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✏ Editor qilish</button>';
+    }
+    btns += '<button data-delete="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑</button>';
   } else {
     btns = '<button data-delete="'+u.id+'" style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑 O\'chirish</button>';
   }
   return '<div style="background:white;border:1px solid #e2e8de;border-radius:12px;padding:14px;margin-bottom:10px;">'+
-    '<div style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:2px;">'+u.ism+'</div>'+
-    '<div style="font-size:13px;color:#888;margin-bottom:6px;">@'+u.login+' · '+date+'</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
+    '<div style="font-size:15px;font-weight:600;color:#1a1a1a;">'+u.ism+'</div>'+roleBadge+'</div>'+
+    '<div style="font-size:13px;color:#888;margin-bottom:10px;">@'+u.login+' · '+date+'</div>'+
     btns+'</div>';
 }
 
@@ -633,11 +576,11 @@ async function updateStatus(id, status){
   });
 }
 
-async function updatePermissions(id, permissions){
+async function updateRole(id, role){
   await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
     method:'PATCH',
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({permissions:permissions})
+    body:JSON.stringify({role:role})
   });
 }
 
@@ -658,9 +601,9 @@ async function doAppLogin(){
   if(users[login] && users[login] === parol){
     USER_ID = CURRENT_APP + '_' + login;
     STORAGE_KEY = 'umatizim_data_' + USER_ID;
-    var fullPerms = {edit:true, support:true, dashboard:true};
-    localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, permissions:fullPerms}));
-    startApp(CURRENT_APP, fullPerms);
+    localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:'editor'}));
+    document.getElementById('login-screen').style.display = 'none';
+    startApp(CURRENT_APP, 'editor');
     return;
   }
   
@@ -677,9 +620,10 @@ async function doAppLogin(){
       if(user.status === 'approved'){
         USER_ID = CURRENT_APP + '_' + login;
         STORAGE_KEY = 'umatizim_data_' + USER_ID;
-        var userPerms = user.permissions || {};
-        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, permissions:userPerms}));
-        startApp(CURRENT_APP, userPerms);
+        var userRole = user.role || 'guest';
+        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole}));
+        document.getElementById('login-screen').style.display = 'none';
+        startApp(CURRENT_APP, userRole);
       } else if(user.status === 'pending'){
         document.getElementById('login-error').textContent = '⏳ Arizangiz hali tasdiqlanmagan';
         document.getElementById('login-error').style.display = 'block';
@@ -699,10 +643,9 @@ async function doAppLogin(){
   document.getElementById('login-btn').disabled = false;
 }
 
-function startApp(app, permissions){
-  document.getElementById('login-screen').style.display = 'none';
+function startApp(app, role){
   document.getElementById('sirly-app').style.display = 'block';
-  sirlyStart(permissions);
+  sirlyStart(role);
 }
 
 // Auto show sirly login
@@ -719,9 +662,7 @@ showLogin('sirly');
       CURRENT_APP = u.app;
       USER_ID = u.app + '_' + u.login;
       STORAGE_KEY = 'umatizim_data_' + USER_ID;
-      // Hardcoded foydalanuvchilar (umid) doim to'liq ruxsatga ega
-      var perms = u.permissions || {edit:true, support:true, dashboard:true};
-      startApp(u.app, perms);
+          startApp(u.app, u.role || 'guest');
     }
   }catch(e){ localStorage.removeItem('app_login'); }
 })();
@@ -765,10 +706,8 @@ async function load(){
   catch(e){var d=localStorage.getItem(DB_KEY);if(d)db=JSON.parse(d);}
 }
 
-var PAGE_NUMBERS = {'p-main':1,'p-agents':2,'p-dashboard':3,'p-sections':4,'p-home':5,'p-section':6,'p-cat':7,'p-flow':8,'p-acad-cats':9,'p-acad-items':10,'p-acad-detail':11,'p-login':1};
-function updatePageBadge(p){var b=document.getElementById('page-num-badge');if(b&&typeof PAGE_NUMBERS!=='undefined')b.textContent='P'+(PAGE_NUMBERS[p]||'?');}
-function goTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active','fade');if(navStack[navStack.length-1]!==p)navStack.push(p);sirlyRender(p);window.scrollTo(0,0);if(p==='p-dashboard')loadDashboard();if(p==='p-agents')loadAgentsList();if(p==='p-sections')renderExtraSections();updatePageBadge(p);}
-function goBack(p){while(navStack[navStack.length-1]!==p&&navStack.length>1)navStack.pop();document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active');sirlyRender(p);window.scrollTo(0,0);updatePageBadge(p);}
+function goTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active','fade');if(navStack[navStack.length-1]!==p)navStack.push(p);sirlyRender(p);window.scrollTo(0,0);}
+function goBack(p){while(navStack[navStack.length-1]!==p&&navStack.length>1)navStack.pop();document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active');sirlyRender(p);window.scrollTo(0,0);}
 function sirlyRender(p){
   if(p==='p-home')renderSections();
   else if(p==='p-section')renderCats();
@@ -805,36 +744,6 @@ function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;
 function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
 function editAcadSection(id){showAcadSecForm(id)}
 function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
-function renderSectionsList(){
-  var el = document.getElementById('sections-list');
-  if(!el) return;
-  var allSections = [...(db.sections||[]).map(function(s){ return {...s, _type:'process'}; }), ...((acadDb&&acadDb.sections)||[]).map(function(s){ return {...s, _type:'academy'}; })];
-  var h = '';
-  allSections.forEach(function(s){
-    var icon = s._type === 'academy' ? '🎓' : '📂';
-    var onclick = s._type === 'academy' ? "openAcadSection('"+s.id+"')" : "openSectionFromList('"+s.id+"')";
-    h += '<div onclick="'+onclick+'" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;">'+
-      '<div style="font-size:24px;">'+icon+'</div>'+
-      '<div style="flex:1;"><div style="font-size:15px;font-weight:600;color:var(--white-90);">'+esc(s.title)+'</div></div>'+
-      '<div style="color:var(--accent);font-size:18px;">›</div>'+
-    '</div>';
-  });
-  if(!h) h = "<div style='text-align:center;padding:32px;color:var(--white-50);'>Bo'limlar yo'q</div>";
-  el.innerHTML = h;
-  el.querySelectorAll('.agent-card').forEach(function(card){
-    card.onclick = function(){
-      selectAgent(this.getAttribute('data-username'), this.getAttribute('data-name'));
-    };
-  });
-}
-
-function openSectionFromList(id){
-  curSection = id;
-  goTo('p-home');
-}
-
-function openAcadSection(id){ curAcadSec=id; goTo('p-acad-cats'); }
-
 function openSection(id){curSection=id;goTo('p-section')}
 function showSecForm(id){var sec=id?db.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div><div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('sf-title').focus();}
 function saveSection(id){var title=document.getElementById('sf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(id){var s=db.sections.find(x=>x.id===id);if(s)s.title=title;}else db.sections.push({id:'s'+Date.now(),title,cats:[]});save();notify('Saqlandi ✓');renderSections();}
@@ -899,329 +808,13 @@ function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=d
 load().then(()=>{renderSections();updateBc();});
 acadLoad().catch(()=>{});
 
-// =================== DASHBOARD ===================
-var dashSelectedDate = null;
-var dashSelectedAgent = null;
-
-// Xodimlar - Supabase screenshots jadvalidan unique usernames
-var AGENTS_LIST = [
-  {username: 'sirlyinfo', name: 'Ozodbek'}
-];
-
-function loadAgentsList(){
-  var el = document.getElementById('agents-list');
-  if(!el) return;
-  var h = '';
-  AGENTS_LIST.forEach(function(agent){
-    h += '<div data-username="'+agent.username+'" data-name="'+agent.name+'" class="agent-card" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">'+
-      '<div style="font-size:15px;font-weight:600;color:var(--white-90);">'+agent.name+'</div>'+
-      '<div style="font-size:12px;color:var(--white-50);">@'+agent.username+'</div>'+
-      '<div style="color:var(--accent);font-size:18px;">›</div>'+
-    '</div>';
-  });
-  el.innerHTML = h;
-  el.querySelectorAll('.agent-card').forEach(function(card){
-    card.onclick = function(){
-      selectAgent(this.getAttribute('data-username'), this.getAttribute('data-name'));
-    };
-  });
-}
-
-function selectAgent(username, name){
-  dashSelectedAgent = username;
-  dashSelectedDate = null;
-  document.getElementById('dash-agent-name').textContent = name;
-  goTo('p-dashboard');
-}
-
-async function loadDashboard(){
-  var el = document.getElementById('dash-content');
-  if(!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px;">Yuklanmoqda...</div>';
-
-  try{
-    // So'nggi 14 kun
-    var dates = [];
-    for(var i = 0; i < 14; i++){
-      var d = new Date();
-      d.setDate(d.getDate() - i);
-      var dd = String(d.getDate()).padStart(2,'0');
-      var mm = String(d.getMonth()+1).padStart(2,'0');
-      var yy = d.getFullYear();
-      dates.push(dd+'.'+mm+'.'+yy);
-    }
-
-    // Barcha ma'lumotlarni yuklash
-    var url = SB_URL+'/rest/v1/screenshots?order=sent_at.desc';
-    if(dashSelectedAgent) url += '&username=eq.'+dashSelectedAgent;
-    var r = await fetch(url, {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(!r.ok){
-      throw new Error('Supabase xato: '+r.status+' '+r.statusText);
-    }
-    var rows = await r.json();
-
-    var h = '';
-
-    dates.forEach(function(dateVal){
-      var dayRows = rows.filter(function(r){ return r.date === dateVal; });
-      if(!dayRows.length) return;
-
-      var sent = dayRows.filter(function(r){ return r.status==='sent'; }).length;
-      var missed = dayRows.filter(function(r){ return r.status==='missed'; }).length;
-      var fine = missed * 20000;
-
-      // Format date label
-      var parts = dateVal.split('.');
-      var dateLabel = parts[0]+'.'+parts[1];
-
-      h += '<div style="margin-bottom:20px;">';
-      // Sana header
-      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">';
-      h += '<div style="font-size:14px;font-weight:700;color:var(--white-90);">📅 '+dateLabel+'</div>';
-      h += '<div style="font-size:12px;color:var(--white-50);">✅ '+sent+' &nbsp; ❌ '+missed+'</div>';
-      h += '</div>';
-
-      // Qatorlar
-      dayRows.forEach(function(row){
-        var ok = row.status === 'sent';
-        var sentTime = ok && row.sent_at ? new Date(row.sent_at).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}) : '—';
-        h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;">';
-        h += '<div style="font-size:13px;font-weight:600;color:var(--white-80);">'+row.time_key+'</div>';
-        h += '<div style="font-size:12px;color:var(--white-50);">'+(ok ? sentTime : '')+'</div>';
-        var statusTxt = ok ? '✅ Yuborildi' : '❌ -20,000 som';
-        h += '<div style="font-size:12px;font-weight:600;color:'+(ok?'#4ade80':'#f87171')+';min-width:80px;text-align:right;">'+statusTxt+'</div>';
-        h += '</div>';
-      });
-
-      // Kun jarima summasi
-      if(fine > 0){
-        h += '<div style="text-align:right;font-size:12px;font-weight:600;color:#f87171;margin-top:4px;">Jami jarima: '+fine.toLocaleString()+' som</div>';
-      }
-
-      h += '</div>';
-    });
-
-    if(!h) h = "<div style='text-align:center;padding:32px;color:var(--white-50);font-size:13px;'>Ma'lumot yo'q</div>";
-    el.innerHTML = h;
-
-  }catch(e){
-    el.innerHTML = '<div style="text-align:center;padding:24px;color:#f87171;font-size:13px;">Xatolik: '+e.message+'</div>';
-  }
-}
-
-
-
-var extraSections = [];
-
-async function loadExtraSections(){
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/extra_sections?order=created_at.asc', {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(!r.ok) return [];
-    extraSections = await r.json();
-    return extraSections;
-  }catch(e){ return []; }
-}
-
-function renderExtraSections(){
-  loadExtraSections().then(function(extraSecs){
-    var wrap = document.getElementById('add-section-wrap');
-    var list = document.getElementById('sections-list2');
-    list.innerHTML = '';
-
-    // Support bo'limi - doimiy birinchi karta (db.sections dagi 1-bo'lim)
-    var supportSec = db.sections[0];
-    var secs = [];
-    if(supportSec){
-      secs.push({id: supportSec.id, title: supportSec.title, subtitle: supportSec.subtitle || 'Jarayonlar va qarorlar', _isMain:true});
-    }
-    extraSecs.forEach(function(s){ secs.push(s); });
-
-    secs.forEach(function(sec, idx){
-      var card = document.createElement('div');
-      card.className = 'extra-sec-card';
-      card.setAttribute('data-secid', sec.id);
-      card.setAttribute('draggable', USER_PERMS.edit ? 'true' : 'false');
-      card.style = "background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:10px;cursor:pointer;";
-
-      var ctrls = '';
-      if(USER_PERMS.edit){
-        ctrls += '<span class="sec-handle" style="cursor:grab;color:var(--white-50);font-size:16px;padding:4px;">\u2630</span>';
-        ctrls += '<button type="button" class="sec-edit" data-id="'+sec.id+'" data-title="'+esc(sec.title)+'" style="background:none;border:none;color:var(--white-50);font-size:16px;cursor:pointer;padding:4px;">\u270f</button>';
-        ctrls += '<button type="button" class="sec-del" data-id="'+sec.id+'" style="background:none;border:none;color:#f87171;font-size:16px;cursor:pointer;padding:4px;">\u2715</button>';
-      }
-
-      card.innerHTML = '<div style="flex:1;" class="sec-open"><div style="font-size:15px;font-weight:600;color:var(--white-90);">'+esc(sec.title)+'</div><div style="font-size:12px;color:var(--white-50);margin-top:2px;">'+esc(sec.subtitle||'')+'</div></div>'+ctrls+'<div style="color:var(--accent);font-size:18px;">\u203a</div>';
-
-      // Drag and drop reorder
-      card.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', sec.id); card.style.opacity='0.4'; });
-      card.addEventListener('dragend', function(){ card.style.opacity='1'; });
-      card.addEventListener('dragover', function(e){ e.preventDefault(); });
-      card.addEventListener('drop', function(e){
-        e.preventDefault();
-        var draggedId = e.dataTransfer.getData('text/plain');
-        if(draggedId && draggedId !== sec.id){
-          reorderSection(draggedId, sec.id);
-        }
-      });
-
-      list.appendChild(card);
-    });
-
-    // Event delegation - bitta marta
-    if(!list.dataset.bound){
-      list.dataset.bound = '1';
-      list.addEventListener('click', function(e){
-        var openEl = e.target.closest('.sec-open');
-        var editEl = e.target.closest('.sec-edit');
-        var delEl = e.target.closest('.sec-del');
-        if(editEl){
-          e.stopPropagation();
-          renameSection(editEl.getAttribute('data-id'), editEl.getAttribute('data-title'));
-          return;
-        }
-        if(delEl){
-          e.stopPropagation();
-          deleteSection(delEl.getAttribute('data-id'));
-          return;
-        }
-        if(openEl){
-          var card2 = openEl.closest('.extra-sec-card');
-          openExtraSection(card2.getAttribute('data-secid'));
-        }
-      });
-    }
-
-    // Add "+" button if user has edit permission
-    if(USER_PERMS.edit){
-      wrap.innerHTML = '<button id="add-section-btn" style="width:100%;padding:14px;border:1.5px dashed var(--border);border-radius:14px;background:none;color:var(--white-50);font-size:14px;cursor:pointer;font-family:inherit;">+ Yangi bo\'lim</button>';
-      document.getElementById('add-section-btn').onclick = showAddSectionForm2;
-    } else {
-      wrap.innerHTML = '';
-    }
-  });
-}
-
-function showAddSectionForm2(){
-  var wrap = document.getElementById('add-section-wrap');
-  wrap.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">'+
-    '<div style="font-size:13px;color:var(--white-70);margin-bottom:8px;font-weight:600;">Yangi bo\'lim</div>'+
-    '<input id="new-sec-title" placeholder="Bo\'lim nomi" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--white-90);font-size:13px;margin-bottom:8px;font-family:inherit;">'+
-    '<input id="new-sec-sub" placeholder="Qisqa tavsif" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--white-90);font-size:13px;margin-bottom:10px;font-family:inherit;">'+
-    '<div style="display:flex;gap:8px;">'+
-    '<button id="save-sec-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#a8e063;color:#0d4a2e;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;">Saqlash</button>'+
-    '<button id="cancel-sec-btn" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:none;color:var(--white-70);font-size:13px;cursor:pointer;font-family:inherit;">Bekor</button>'+
-    '</div></div>';
-  document.getElementById('cancel-sec-btn').onclick = function(){ renderExtraSections(); };
-  document.getElementById('save-sec-btn').onclick = saveNewSection2;
-}
-
-async function saveNewSection2(){
-  try{
-    var title = document.getElementById('new-sec-title').value.trim();
-    var sub = document.getElementById('new-sec-sub').value.trim();
-    if(!title){ alert('Bo\'lim nomini kiriting'); return; }
-    var id = 'sec_'+Date.now();
-    db.sections.push({id:id, title:title, subtitle:sub, cats:[]});
-    await save();
-    try{
-      await fetch(SB_URL+'/rest/v1/extra_sections', {
-        method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-        body:JSON.stringify({id:id, title:title, subtitle:sub, created_at:new Date().toISOString(), data:{}})
-      });
-    }catch(e2){}
-    renderSections();
-    renderExtraSections();
-    alert('Bo\'lim qo\'shildi: '+title);
-  }catch(err){
-    alert('XATO: '+err.message);
-  }
-}
-
-async function reorderSection(draggedId, targetId){
-  var fromIdx = db.sections.findIndex(function(s){ return s.id === draggedId; });
-  var toIdx = db.sections.findIndex(function(s){ return s.id === targetId; });
-  if(fromIdx === -1 || toIdx === -1) return;
-  var item = db.sections.splice(fromIdx, 1)[0];
-  db.sections.splice(toIdx, 0, item);
-  await save();
-  renderSections();
-  renderExtraSections();
-}
-
-async function renameSection(secId, oldTitle){
-  var newTitle = prompt('Yangi nom:', oldTitle);
-  if(!newTitle || !newTitle.trim()) return;
-  newTitle = newTitle.trim();
-  var sec = db.sections.find(function(s){ return s.id === secId; });
-  if(sec) sec.title = newTitle;
-  await save();
-  try{
-    await fetch(SB_URL+'/rest/v1/extra_sections?id=eq.'+secId, {
-      method:'PATCH',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({title:newTitle})
-    });
-  }catch(e){}
-  renderSections();
-  renderSectionsList();
-  renderExtraSections();
-}
-
-async function deleteSection(secId){
-  if(!confirm('Bu bo\'limni o\'chirishni tasdiqlaysizmi?')) return;
-  db.sections = db.sections.filter(function(s){ return s.id !== secId; });
-  await save();
-  try{
-    await fetch(SB_URL+'/rest/v1/extra_sections?id=eq.'+secId, {
-      method:'DELETE',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-  }catch(e){}
-  renderSections();
-  renderSectionsList();
-  renderExtraSections();
-}
-
-function openExtraSection(secId){
-  curSection = secId;
-  var exists = db.sections.find(function(s){ return s.id === secId; });
-  if(!exists){
-    var ex = extraSections.find(function(s){ return s.id === secId; });
-    db.sections.push({id:secId, title: ex?ex.title:'Bo\'lim', subtitle: ex?ex.subtitle:'', cats:[]});
-    save();
-  }
-  goTo('p-section');
-}
-
-function sirlyStart(permissions){
-  USER_PERMS = permissions || {edit:true, support:true, dashboard:true};
-  if(USER_PERMS.edit){
+function sirlyStart(role){
+  // Set isAdmin based on role
+  if(role === 'editor'){
     isAdmin = true;
   }
-  // Start from p-main
-  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  document.getElementById('p-main').classList.add('active');
-  navStack = ['p-main'];
-  applyPermissions();
-  load().then(function(){ renderSections(); renderSectionsList(); updateBc(); });
+  load().then(function(){ renderSections(); updateBc(); });
   acadLoad().catch(function(){});
-}
-
-function applyPermissions(){
-  var cards = document.querySelectorAll('#p-main [onclick]');
-  cards.forEach(function(card){
-    var oc = card.getAttribute('onclick');
-    if(oc.indexOf('p-sections') !== -1){
-      card.style.display = USER_PERMS.support ? '' : 'none';
-    } else if(oc.indexOf('p-agents') !== -1){
-      card.style.display = USER_PERMS.dashboard ? '' : 'none';
-    }
-  });
 }
 </script>
 </body>
