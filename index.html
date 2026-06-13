@@ -1360,8 +1360,8 @@ function kaitenCard(t){
     ${isAdmin?`<div class="kaiten-card-btns">
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
-      <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
-      <button class="abtn abtn-red" style="margin-left:auto" onclick="kaitenDelTask('${t.id}')">✕</button>
+      <button class="abtn" style="margin-left:auto" onclick="kaitenShowEditForm('${t.id}')">✏</button>
+      <button class="abtn abtn-red" onclick="kaitenDelTask('${t.id}')">✕</button>
     </div>`:''}
   </div>`;
 }
