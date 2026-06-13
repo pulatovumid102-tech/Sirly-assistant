@@ -178,7 +178,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
 .kaiten-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
 .kaiten-card-text{font-size:13px;color:var(--white);line-height:1.4}
-.kaiten-card-meta{font-size:11px;color:var(--white-50)}
+.kaiten-card-meta{font-size:13px;color:var(--white-80);font-weight:600}
+.kaiten-card-naz{font-size:11px;color:var(--white-50);font-weight:400}
+.kaiten-card-timer{font-size:11px;font-weight:700}
 .kaiten-card-deadline{font-size:11px;color:var(--lime);font-weight:600}
 .kaiten-card-btns{display:flex;gap:6px;margin-top:4px}
 </style>
@@ -275,6 +277,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div class="kaiten-col">
       <div class="kaiten-col-title">Bajarildi</div>
       <div class="kaiten-col-list" id="kaiten-list-done"></div>
+    </div>
+    <div class="kaiten-col">
+      <div class="kaiten-col-title">Qabul qilindi</div>
+      <div class="kaiten-col-list" id="kaiten-list-accepted"></div>
     </div>
   </div>
 </div>
@@ -1179,56 +1185,126 @@ function kaitenGetEmployees(deptName){
   if(!dept) return [];
   return orgData.filter(n=>n.parentId===dept.id && n.fio && n.fio.trim());
 }
-function kaitenShowAddForm(){
-  var deptOptions = KAITEN_DEPTS.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
-  document.getElementById('kaiten-add-form').innerHTML = `<div class="form-box fade">
+function kaitenGetAllEmployees(){
+  var result=[];
+  KAITEN_DEPTS.forEach(function(deptName){
+    var dept=orgData.find(function(n){return kaitenNorm(n.name)===kaitenNorm(deptName);});
+    if(!dept) return;
+    orgData.filter(function(n){return n.parentId===dept.id && n.fio && n.fio.trim();}).forEach(function(e){
+      result.push({fio:e.fio, role:e.name, dept:deptName});
+    });
+  });
+  return result;
+}
+function kaitenFieldsHtml(prefix, task){
+  task = task || {};
+  var deptOptions = KAITEN_DEPTS.map(function(d){return `<option value="${esc(d)}">${esc(d)}</option>`;}).join('');
+  var allEmps = kaitenGetAllEmployees();
+  var nazOptions = allEmps.map(function(e){
+    var val = e.fio+'|'+e.role+'|'+e.dept;
+    return `<option value="${esc(val)}">${esc(e.fio)} (${esc(e.role)} — ${esc(e.dept)})</option>`;
+  }).join('');
+  var dateVal='', timeVal='';
+  if(task.deadline){
+    var parts = task.deadline.split('T');
+    dateVal = parts[0]||''; timeVal=(parts[1]||'').slice(0,5);
+  }
+  return `
     <div class="frow"><label class="flbl">Bo'lim</label>
-      <select class="fi" id="kt-dept" onchange="kaitenUpdateEmpOptions()">
+      <select class="fi" id="${prefix}-dept" onchange="kaitenUpdateEmpOptions('${prefix}')">
         <option value="">— tanlang —</option>${deptOptions}
       </select>
     </div>
     <div class="frow"><label class="flbl">Xodim</label>
-      <select class="fi" id="kt-emp"><option value="">— avval bo'limni tanlang —</option></select>
+      <select class="fi" id="${prefix}-emp"><option value="">— avval bo&#39;limni tanlang —</option></select>
+    </div>
+    <div class="frow"><label class="flbl">Nazoratchi xodim</label>
+      <select class="fi" id="${prefix}-naz"><option value="">— tanlanmagan —</option>${nazOptions}</select>
     </div>
     <div class="frow"><label class="flbl">Yakuniy muddat</label>
       <div style="display:flex;gap:8px;margin-top:5px">
-        <input class="fi" type="date" id="kt-deadline-date" style="margin-top:0">
-        <input class="fi" type="time" id="kt-deadline-time" style="margin-top:0">
+        <input class="fi" type="date" id="${prefix}-deadline-date" value="${esc(dateVal)}" style="margin-top:0">
+        <input class="fi" type="time" id="${prefix}-deadline-time" value="${esc(timeVal)}" style="margin-top:0">
       </div>
     </div>
     <div class="frow"><label class="flbl">Vazifa matni</label>
-      <textarea class="fi" id="kt-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi..."></textarea>
-    </div>
+      <textarea class="fi" id="${prefix}-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi...">${esc(task.text||'')}</textarea>
+    </div>`;
+}
+function kaitenFillFormValues(prefix, task){
+  task = task || {};
+  var deptSel=document.getElementById(prefix+'-dept');
+  if(deptSel) deptSel.value = task.dept||'';
+  var presetEmp = (task.empFio && task.empRole) ? (task.empFio+'|'+task.empRole) : '';
+  kaitenUpdateEmpOptions(prefix, presetEmp);
+  var nazSel=document.getElementById(prefix+'-naz');
+  if(nazSel && task.nazFio){
+    nazSel.value = task.nazFio+'|'+task.nazRole+'|'+(task.nazDept||'');
+  }
+}
+function kaitenShowAddForm(){
+  document.getElementById('kaiten-add-form').innerHTML = `<div class="form-box fade">
+    ${kaitenFieldsHtml('kt', {})}
     <div class="fbtns">
       <button class="fsave" onclick="kaitenAddTask()">Saqlash</button>
       <button class="fcancel" onclick="document.getElementById('kaiten-add-form').innerHTML=''">Bekor</button>
     </div>
   </div>`;
 }
-function kaitenUpdateEmpOptions(){
-  var dept = document.getElementById('kt-dept').value;
-  var empSel = document.getElementById('kt-emp');
+function kaitenShowEditForm(id){
+  var t = kaitenTasks.find(function(x){return x.id===id;});
+  if(!t) return;
+  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Vazifani tahrirlash</div>
+    ${kaitenFieldsHtml('ke', t)}
+    <div class="fbtns">
+      <button class="fsave" onclick="kaitenSaveEdit('${id}')">Saqlash</button>
+      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
+    </div>`;
+  orgShowModal(html);
+  kaitenFillFormValues('ke', t);
+}
+function kaitenUpdateEmpOptions(prefix, presetVal){
+  var dept = document.getElementById(prefix+'-dept').value;
+  var empSel = document.getElementById(prefix+'-emp');
   if(!dept){ empSel.innerHTML = '<option value="">— avval bo&#39;limni tanlang —</option>'; return; }
   var emps = kaitenGetEmployees(dept);
   if(!emps.length){ empSel.innerHTML = '<option value="">— xodim topilmadi —</option>'; return; }
-  empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(e=>`<option value="${esc(e.fio)}|${esc(e.name)}">${esc(e.fio)} (${esc(e.name)})</option>`).join('');
+  empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(function(e){
+    var val = e.fio+'|'+e.name;
+    var sel = (presetVal && presetVal===val) ? 'selected' : '';
+    return `<option value="${esc(val)}" ${sel}>${esc(e.fio)} (${esc(e.name)})</option>`;
+  }).join('');
+}
+function kaitenReadFields(prefix){
+  var dept = document.getElementById(prefix+'-dept').value;
+  var empRaw = document.getElementById(prefix+'-emp').value;
+  var nazRaw = document.getElementById(prefix+'-naz').value;
+  var deadlineDate = document.getElementById(prefix+'-deadline-date').value;
+  var deadlineTime = document.getElementById(prefix+'-deadline-time').value;
+  var deadline = deadlineDate ? (deadlineDate + 'T' + (deadlineTime||'00:00')) : '';
+  var text = document.getElementById(prefix+'-text').value.trim();
+  var empFio='', empRole='';
+  if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; }
+  var nazFio='', nazRole='', nazDept='';
+  if(nazRaw){ var np=nazRaw.split('|'); nazFio=np[0]; nazRole=np[1]||''; nazDept=np[2]||''; }
+  return {dept,empFio,empRole,nazFio,nazRole,nazDept,deadline,text};
 }
 function kaitenAddTask(){
-  var dept = document.getElementById('kt-dept').value;
-  var empRaw = document.getElementById('kt-emp').value;
-  var deadlineDate = document.getElementById('kt-deadline-date').value;
-  var deadlineTime = document.getElementById('kt-deadline-time').value;
-  var deadline = deadlineDate ? (deadlineDate + (deadlineTime ? 'T'+deadlineTime : 'T00:00')) : '';
-  var text = document.getElementById('kt-text').value.trim();
-  if(!text){ notify('Vazifa matnini kiriting!'); return; }
-  var empFio='', empRole='';
-  if(empRaw){ var parts=empRaw.split('|'); empFio=parts[0]; empRole=parts[1]||''; }
-  kaitenTasks.push({
-    id:'kt'+Date.now(), text, dept, empFio, empRole, deadline, status:'todo'
-  });
+  var f = kaitenReadFields('kt');
+  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
+  f.id='kt'+Date.now(); f.status='todo';
+  kaitenTasks.push(f);
   kaitenSave(); notify('Saqlandi ✓');
   document.getElementById('kaiten-add-form').innerHTML='';
   renderKaiten();
+}
+function kaitenSaveEdit(id){
+  var t = kaitenTasks.find(function(x){return x.id===id;});
+  if(!t) return;
+  var f = kaitenReadFields('ke');
+  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
+  Object.assign(t, f);
+  kaitenSave(); notify('Saqlandi ✓'); orgCloseModal(); renderKaiten();
 }
 function kaitenDelTask(id){
   askConfirm("Vazifani o'chirasizmi?",()=>{
@@ -1237,7 +1313,7 @@ function kaitenDelTask(id){
   });
 }
 function kaitenMove(id, dir){
-  var order=['todo','progress','done'];
+  var order=['todo','progress','done','accepted'];
   var t = kaitenTasks.find(x=>x.id===id);
   if(!t) return;
   var idx = order.indexOf(t.status);
@@ -1254,25 +1330,45 @@ function kaitenFormatDeadline(dl){
     return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
   }catch(e){ return dl; }
 }
+function kaitenTimeLeft(dl){
+  if(!dl) return null;
+  var end=new Date(dl);
+  if(isNaN(end.getTime())) return null;
+  var diff=end-new Date();
+  if(diff<=0) return {text:"Muddat o'tdi", overdue:true};
+  var days=Math.floor(diff/86400000);
+  var hours=Math.floor((diff%86400000)/3600000);
+  var mins=Math.floor((diff%3600000)/60000);
+  var parts=[];
+  if(days>0) parts.push(days+' kun');
+  if(hours>0||days>0) parts.push(hours+' soat');
+  parts.push(mins+' daqiqa');
+  return {text: parts.join(' ')+' qoldi', overdue:false};
+}
 function kaitenCard(t){
-  var idx=['todo','progress','done'].indexOf(t.status);
-  var canLeft = idx>0, canRight = idx<2;
+  var idx=['todo','progress','done','accepted'].indexOf(t.status);
+  var canLeft = idx>0, canRight = idx<3;
   var meta = [t.dept, t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):''].filter(Boolean).join(' — ');
+  var nazText = t.nazFio ? `Nazoratchi: ${t.nazFio}${t.nazRole?' ('+t.nazRole+')':''}` : '';
+  var tl = kaitenTimeLeft(t.deadline);
   return `<div class="kaiten-card">
     <div class="kaiten-card-text">${esc(t.text)}</div>
     ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
+    ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
     ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
+    ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#ff7070':'var(--lime)'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
     ${isAdmin?`<div class="kaiten-card-btns">
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
+      <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
       <button class="abtn abtn-red" style="margin-left:auto" onclick="kaitenDelTask('${t.id}')">✕</button>
     </div>`:''}
   </div>`;
 }
 function renderKaiten(){
-  var cols={todo:[],progress:[],done:[]};
+  var cols={todo:[],progress:[],done:[],accepted:[]};
   kaitenTasks.forEach(t=>{ if(cols[t.status]) cols[t.status].push(t); });
-  ['todo','progress','done'].forEach(status=>{
+  ['todo','progress','done','accepted'].forEach(status=>{
     var el=document.getElementById('kaiten-list-'+status);
     if(!el) return;
     if(!cols[status].length){ el.innerHTML='<div style="text-align:center;padding:16px;color:var(--white-50);font-size:12px">Vazifalar yo&#39;q</div>'; }
@@ -1287,6 +1383,10 @@ function renderKaiten(){
     addFormEl.innerHTML='';
   }
 }
+setInterval(function(){
+  var p=document.getElementById('p-kaiten');
+  if(p && p.classList.contains('active')) renderKaiten();
+}, 60000);
 
 load().then(()=>{updateBc();});
 acadLoad().catch(()=>{});
