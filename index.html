@@ -1191,7 +1191,10 @@ function kaitenShowAddForm(){
       <select class="fi" id="kt-emp"><option value="">— avval bo'limni tanlang —</option></select>
     </div>
     <div class="frow"><label class="flbl">Yakuniy muddat</label>
-      <input class="fi" type="datetime-local" id="kt-deadline">
+      <div style="display:flex;gap:8px;margin-top:5px">
+        <input class="fi" type="date" id="kt-deadline-date" style="margin-top:0">
+        <input class="fi" type="time" id="kt-deadline-time" style="margin-top:0">
+      </div>
     </div>
     <div class="frow"><label class="flbl">Vazifa matni</label>
       <textarea class="fi" id="kt-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi..."></textarea>
@@ -1213,7 +1216,9 @@ function kaitenUpdateEmpOptions(){
 function kaitenAddTask(){
   var dept = document.getElementById('kt-dept').value;
   var empRaw = document.getElementById('kt-emp').value;
-  var deadline = document.getElementById('kt-deadline').value;
+  var deadlineDate = document.getElementById('kt-deadline-date').value;
+  var deadlineTime = document.getElementById('kt-deadline-time').value;
+  var deadline = deadlineDate ? (deadlineDate + (deadlineTime ? 'T'+deadlineTime : 'T00:00')) : '';
   var text = document.getElementById('kt-text').value.trim();
   if(!text){ notify('Vazifa matnini kiriting!'); return; }
   var empFio='', empRole='';
