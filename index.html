@@ -250,8 +250,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <span class="page-title">Org struktura</span>
     </div>
   </div>
-  <div class="org-pan-wrap" id="org-pan-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;width:100%;touch-action:pan-x pan-y;">
-    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;padding:8px"></div>
+  <div class="org-pan-wrap" id="org-pan-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;width:100%;touch-action:pan-x pan-y;display:flex;justify-content:center;">
+    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;padding:8px 8px 80px 8px"></div>
   </div>
   <script>
   var orgData = [
@@ -302,128 +302,199 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
         </div>
-        ${isAdmin?`<button class="abtn" onclick="event.stopPropagation();orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
+        ${isAdmin?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
       </div>
-      ${detailOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
-        <button class="add-item-btn" style="margin-top:0" onclick="orgShowInfo('${node.id}')">Ma'lumot</button>
-        <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasks('${node.id}')">Vazifalar ro'yxati</button>
-        <button class="fcancel" onclick="orgDetailOpen=null;renderOrg()">Yopish</button>
-      </div>` : ''}
-      ${orgInfoOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
-        ${isAdmin?`<button class="abtn" onclick="orgToggleInfoMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>`:''}
-        <div style="padding-right:24px"><span class="flbl">F.I.O</span><br>${esc(node.fio||'—')}</div>
-        <div><span class="flbl">Tel raqam</span><br>${esc(node.tel||'—')}</div>
-        <div><span class="flbl">Telegram</span><br>${esc(node.tg||'—')}</div>
-        <div><span class="flbl">Ish kunlari/vaqti</span><br>${esc(node.workhours||'—')}</div>
-        <div><span class="flbl">Ishga kirgan sana</span><br>${esc(node.startdate||'—')}</div>
-        <div><span class="flbl">Oylik</span><br>${esc(node.salary||'—')}</div>
-        ${orgInfoMenuOpen===node.id ? `<button class="add-item-btn" style="margin-top:0" onclick="orgEdit('${node.id}')">Tahrirlash</button>` : ''}
-        <button class="fcancel" onclick="orgInfoOpen=null;orgInfoMenuOpen=null;renderOrg()">Yopish</button>
-      </div>` : ''}
-      ${orgTasksOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
-        ${isAdmin?`<button class="abtn" onclick="orgToggleTasksMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>`:''}
-        <div style="padding-right:24px;display:flex;flex-direction:column;gap:4px">
-          ${(node.tasks&&node.tasks.length) ? node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:6px">
-            <span style="flex:1">${i+1}. ${esc(t)}</span>
-            ${orgTasksMenuOpen===node.id?`<button class="abtn abtn-red" onclick="orgDelTask('${node.id}',${i})">x</button>`:''}
-          </div>`).join('') : '<div style="color:var(--white-50)">Vazifalar yo&#39;q</div>'}
-        </div>
-        ${orgTasksMenuOpen===node.id ? `<div id="org-taskform-${node.id}"><div class="frow"><input class="fi" id="ot-input-${node.id}" placeholder="Vazifa matni..."></div><div class="fbtns"><button class="fsave" onclick="orgAddTask('${node.id}')">Qo'shish</button></div></div>` : ''}
-        <button class="fcancel" onclick="orgTasksOpen=null;orgTasksMenuOpen=null;renderOrg()">Yopish</button>
-      </div>` : ''}
-      ${menuOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
-        <div style="display:flex;gap:6px">
-          <button class="abtn" style="flex:1" onclick="orgEdit('${node.id}')">✏ Tahrirlash</button>
-          <button class="abtn abtn-red" style="flex:1" onclick="orgDel('${node.id}')">✕ O'chirish</button>
-        </div>
-        <button class="add-item-btn" style="margin-top:0" onclick="orgAddChild('${node.id}')">⬇ Pastiga qo'shish</button>
-        <div style="display:flex;gap:6px">
-          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','left')">⬅ Chapga qo'shish</button>
-          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','right')">O'ngga qo'shish ➡</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button onclick="orgSetColor('${node.id}','#7f1d1d')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#7f1d1d;color:white;cursor:pointer;font-size:12px;font-weight:600">Qizil</button>
-          <button onclick="orgSetColor('${node.id}','#713f12')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#713f12;color:white;cursor:pointer;font-size:12px;font-weight:600">Sariq</button>
-          <button onclick="orgSetColor('${node.id}','#1e3a5f')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1e3a5f;color:white;cursor:pointer;font-size:12px;font-weight:600">Ko'k</button>
-          ${node.color?`<button class="abtn" onclick="orgSetColor('${node.id}','')">✕</button>`:''}
-        </div>
-        <button class="fcancel" onclick="orgMenuOpen=null;renderOrg()">Yopish</button>
-      </div>` : ''}
       <div id="org-form-${node.id}"></div>
       <div id="org-children-${node.id}"></div>
     </div>`;
   }
 
+  function orgCloseModal(){
+    document.getElementById('org-modal-bg').style.display='none';
+    document.getElementById('org-modal').style.display='none';
+    document.getElementById('org-modal').innerHTML='';
+    orgMenuOpen=null; orgDetailOpen=null;
+    orgInfoOpen=null; orgInfoMenuOpen=null;
+    orgTasksOpen=null; orgTasksMenuOpen=null;
+  }
+  function orgShowModal(html){
+    document.getElementById('org-modal').innerHTML=html;
+    document.getElementById('org-modal').style.display='block';
+    document.getElementById('org-modal-bg').style.display='block';
+  }
   function orgToggleDetail(id){
-    orgDetailOpen = (orgDetailOpen === id) ? null : id;
-    orgMenuOpen = null;
-    orgInfoOpen = null; orgInfoMenuOpen = null;
-    orgTasksOpen = null; orgTasksMenuOpen = null;
-    renderOrg();
+    orgCloseModal();
+    var node=orgData.find(n=>n.id===id);
+    if(!node) return;
+    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
+        <div><span class="flbl">F.I.O</span><br><span style="color:var(--white-80)">${esc(node.fio||'—')}</span></div>
+        <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(node.tel||'—')}</span></div>
+        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(node.tg||'—')}</span></div>
+        <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>
+        <div><span class="flbl">Ishga kirgan sana</span><br><span style="color:var(--white-80)">${esc(node.startdate||'—')}</span></div>
+        <div><span class="flbl">Oylik</span><br><span style="color:var(--white-80)">${esc(node.salary||'—')}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
+        ${isAdmin?`<button class="add-item-btn" style="margin-top:0" onclick="orgShowEditModal('${id}')">Tahrirlash</button>`:''}
+        <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
+      </div>`;
+    orgShowModal(html);
   }
-
-  function orgShowInfo(id){
-    orgInfoOpen = id; orgInfoMenuOpen = null;
-    orgDetailOpen = null;
-    renderOrg();
+  function orgShowTasksModal(id){
+    var node=orgData.find(n=>n.id===id);
+    var tasksHtml=(node.tasks&&node.tasks.length)?node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
+      <span style="flex:1;color:var(--white-80)">${i+1}. ${esc(t)}</span>
+      ${isAdmin?`<button class="abtn abtn-red" onclick="orgDelTaskModal('${id}',${i})">x</button>`:''}
+    </div>`).join(''):'<div style="color:var(--white-50);padding:12px 0">Vazifalar yo\'q</div>';
+    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)} — Vazifalar</div>
+      <div style="margin-bottom:12px">${tasksHtml}</div>
+      ${isAdmin?`<div class="frow"><input class="fi" id="org-task-inp" placeholder="Yangi vazifa..."></div>
+      <div class="fbtns"><button class="fsave" onclick="orgAddTaskModal('${id}')">Qo'shish</button></div>`:''}
+      <button class="fcancel" style="margin-top:8px" onclick="orgCloseModal()">Yopish</button>`;
+    orgShowModal(html);
   }
-  function orgToggleInfoMenu(id){
-    orgInfoMenuOpen = (orgInfoMenuOpen===id) ? null : id;
-    renderOrg();
-  }
-
-  function orgShowTasks(id){
-    orgTasksOpen = id; orgTasksMenuOpen = null;
-    orgDetailOpen = null;
-    renderOrg();
-  }
-  function orgToggleTasksMenu(id){
-    orgTasksMenuOpen = (orgTasksMenuOpen===id) ? null : id;
-    renderOrg();
-  }
-  function orgAddTask(id){
-    var inp = document.getElementById('ot-input-'+id);
-    var val = inp.value.trim();
-    if(!val){ notify('Matn kiriting!'); return; }
-    var node = orgData.find(n=>n.id===id);
-    if(!node.tasks) node.tasks=[];
+  function orgAddTaskModal(id){
+    var inp=document.getElementById('org-task-inp');
+    var val=inp.value.trim(); if(!val){notify('Matn kiriting!');return;}
+    var node=orgData.find(n=>n.id===id);
+    if(!node.tasks)node.tasks=[];
     node.tasks.push(val);
-    orgSave(); renderOrg();
+    orgSave(); orgShowTasksModal(id);
   }
-  function orgDelTask(id, idx){
-    var node = orgData.find(n=>n.id===id);
+  function orgDelTaskModal(id,idx){
+    var node=orgData.find(n=>n.id===id);
     node.tasks.splice(idx,1);
-    orgSave(); renderOrg();
+    orgSave(); orgShowTasksModal(id);
   }
-
-  function orgToggleMenu(id){
-    orgMenuOpen = (orgMenuOpen === id) ? null : id;
-    renderOrg();
+  function orgOpenMenu(id){
+    var node=orgData.find(n=>n.id===id);
+    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <button class="abtn" style="flex:1;padding:10px" onclick="orgShowEditModal('${id}')">✏ Tahrirlash</button>
+          <button class="abtn abtn-red" style="flex:1;padding:10px" onclick="orgDelModal('${id}')">✕ O'chirish</button>
+        </div>
+        <button class="add-item-btn" style="margin-top:0" onclick="orgAddChildModal('${id}')">⬇ Pastiga qo'shish</button>
+        <div style="display:flex;gap:8px">
+          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSiblingModal('${id}','left')">⬅ Chapga</button>
+          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSiblingModal('${id}','right')">O'ngga ➡</button>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="orgSetColorModal('${id}','#7f1d1d')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#7f1d1d;color:white;cursor:pointer;font-weight:600">Qizil</button>
+          <button onclick="orgSetColorModal('${id}','#713f12')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#713f12;color:white;cursor:pointer;font-weight:600">Sariq</button>
+          <button onclick="orgSetColorModal('${id}','#1e3a5f')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#1e3a5f;color:white;cursor:pointer;font-weight:600">Ko'k</button>
+          ${node.color?`<button class="abtn" onclick="orgSetColorModal('${id}','')">✕</button>`:''}
+        </div>
+        <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
+      </div>`;
+    orgShowModal(html);
   }
-
-  function orgSetColor(id, color){
-    var node = orgData.find(n=>n.id===id);
-    if(color) node.color = color; else delete node.color;
-    orgSave(); renderOrg();
+  function orgShowEditModal(id){
+    var node=orgData.find(n=>n.id===id);
+    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Tahrirlash</div>
+      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oem-name" value="${esc(node.name)}"></div>
+      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oem-fio" value="${esc(node.fio||'')}"></div>
+      <div class="frow"><label class="flbl">Tel raqam</label><input class="fi" id="oem-tel" value="${esc(node.tel||'')}"></div>
+      <div class="frow"><label class="flbl">Telegram</label><input class="fi" id="oem-tg" value="${esc(node.tg||'')}"></div>
+      <div class="frow"><label class="flbl">Ish kunlari/vaqti</label><input class="fi" id="oem-workhours" value="${esc(node.workhours||'')}"></div>
+      <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="oem-startdate" value="${esc(node.startdate||'')}"></div>
+      <div class="frow"><label class="flbl">Oylik</label><input class="fi" id="oem-salary" value="${esc(node.salary||'')}"></div>
+      <div class="fbtns">
+        <button class="fsave" onclick="orgSaveEditModal('${id}')">Saqlash</button>
+        <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
+      </div>`;
+    orgShowModal(html);
   }
+  function orgSaveEditModal(id){
+    var node=orgData.find(n=>n.id===id);
+    var name=document.getElementById('oem-name').value.trim();
+    if(!name){notify('Nom kiriting!');return;}
+    node.name=name;
+    node.fio=document.getElementById('oem-fio').value.trim();
+    node.tel=document.getElementById('oem-tel').value.trim();
+    node.tg=document.getElementById('oem-tg').value.trim();
+    node.workhours=document.getElementById('oem-workhours').value.trim();
+    node.startdate=document.getElementById('oem-startdate').value.trim();
+    node.salary=document.getElementById('oem-salary').value.trim();
+    orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
+  }
+  function orgAddChildModal(id){
+    orgCloseModal();
+    var cont=document.getElementById('org-form-'+id);
+    if(!cont){renderOrg();setTimeout(()=>orgAddChildModal(id),100);return;}
+    cont.innerHTML=`<div class="form-box fade" style="width:240px;margin:8px auto">
+      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oa-name-${id}" placeholder="Lavozim nomi..."></div>
+      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oa-fio-${id}" placeholder="F.I.O..."></div>
+      <div class="fbtns"><button class="fsave" onclick="orgSaveAdd('${id}')">Saqlash</button><button class="fcancel" onclick="renderOrg()">Bekor</button></div>
+    </div>`;
+  }
+  function orgAddSiblingModal(id,dir){
+    orgCloseModal();
+    var ref=orgData.find(n=>n.id===id);
+    var pid=ref.parentId||'null';
+    var cont=document.getElementById('org-form-'+id);
+    if(!cont){renderOrg();setTimeout(()=>orgAddSiblingModal(id,dir),100);return;}
+    cont.innerHTML=`<div class="form-box fade" style="width:240px;margin:8px auto">
+      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="os-name-${id}" placeholder="Lavozim nomi..."></div>
+      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="os-fio-${id}" placeholder="F.I.O..."></div>
+      <div class="fbtns"><button class="fsave" onclick="orgSaveSibling('${id}','${dir}')">Saqlash</button><button class="fcancel" onclick="renderOrg()">Bekor</button></div>
+    </div>`;
+  }
+  function orgSaveAdd(parentId){
+    var name=document.getElementById('oa-name-'+parentId).value.trim();
+    var fio=document.getElementById('oa-fio-'+parentId).value.trim();
+    if(!name){notify('Nom kiriting!');return;}
+    orgData.push({id:'o'+Date.now(),name,fio,parentId:parentId==='null'?null:parentId});
+    orgSave();notify('Saqlandi ✓');renderOrg();
+  }
+  function orgSaveSibling(refId,dir){
+    var name=document.getElementById('os-name-'+refId).value.trim();
+    var fio=document.getElementById('os-fio-'+refId).value.trim();
+    if(!name){notify('Nom kiriting!');return;}
+    var ref=orgData.find(n=>n.id===refId);
+    var newNode={id:'o'+Date.now(),name,fio,parentId:ref.parentId};
+    var idx=orgData.indexOf(ref);
+    orgData.splice(dir==='left'?idx:idx+1,0,newNode);
+    orgSave();notify('Saqlandi ✓');renderOrg();
+  }
+  function orgDelModal(id){
+    orgCloseModal();
+    askConfirm("Lavozimni o'chirasizmi?",()=>{
+      function collect(pid){var ids=[pid];orgData.filter(n=>n.parentId===pid).forEach(c=>{ids=ids.concat(collect(c.id));});return ids;}
+      orgData=orgData.filter(n=>!collect(id).includes(n.id));
+      orgSave();renderOrg();notify("O'chirildi ✓");
+    });
+  }
+  function orgSetColorModal(id,color){
+    var node=orgData.find(n=>n.id===id);
+    if(color)node.color=color;else delete node.color;
+    orgSave();orgCloseModal();renderOrg();
+  }
+  function orgToggleMenu(id){ orgOpenMenu(id); }
+  function orgSetColor(id,color){ orgSetColorModal(id,color); }
 
   function orgRenderChildren(parentId, container){
     var children = orgData.filter(n=>n.parentId===parentId);
     if(!children.length){ container.innerHTML = ''; return; }
+    var cardW = 240; var gap = 24;
+    var count = children.length;
     var h = `<div style="width:1px;height:20px;background:var(--white-20);margin:0 auto"></div>`;
-    if(children.length>1){
-      h += `<div style="display:flex;justify-content:center;position:relative">`;
-      h += `<div style="position:absolute;top:0;left:50%;right:50%;height:1px;background:var(--white-20);width:calc(100% - 120px)"></div>`;
+    h += `<div style="display:flex;gap:${gap}px;justify-content:center;align-items:flex-start;position:relative">`;
+    if(count > 1){
+      var totalW = count * cardW + (count-1) * gap;
+      var lineLeft = cardW/2;
+      var lineWidth = totalW - cardW;
+      h += `<div style="position:absolute;top:0;left:${lineLeft}px;width:${lineWidth}px;height:1px;background:rgba(255,255,255,0.2)"></div>`;
     }
-    h += `<div style="display:flex;gap:24px;justify-content:center;margin-top:0">`;
     children.forEach(c=>{
-      h += `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-        <div style="width:1px;height:12px;background:var(--white-20)"></div>
+      h += `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:${cardW}px">
+        <div style="width:1px;height:20px;background:rgba(255,255,255,0.2)"></div>
         ${orgCard(c)}
       </div>`;
     });
     h += `</div>`;
-    if(children.length>1) h += `</div>`;
     container.innerHTML = h;
   }
 
@@ -442,78 +513,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     go(root);
   }
 
-  function orgShowForm(targetId, mode, node){
-    orgMenuOpen = null;
-    renderOrg();
-    var cont = document.getElementById('org-form-'+targetId);
-    var name = node ? node.name : '';
-    var fio = node ? (node.fio||'') : '';
-    var tel = node ? (node.tel||'') : '';
-    var tg = node ? (node.tg||'') : '';
-    var workhours = node ? (node.workhours||'') : '';
-    var startdate = node ? (node.startdate||'') : '';
-    var salary = node ? (node.salary||'') : '';
-    cont.innerHTML = `<div class="form-box fade" style="width:240px;margin:8px auto">
-      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="of-name" value="${esc(name)}" placeholder="Lavozim nomi..."></div>
-      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="of-fio" value="${esc(fio)}" placeholder="F.I.O..."></div>
-      <div class="frow"><label class="flbl">Tel raqam</label><input class="fi" id="of-tel" value="${esc(tel)}" placeholder="+998 90 123 45 67"></div>
-      <div class="frow"><label class="flbl">Telegram username</label><input class="fi" id="of-tg" value="${esc(tg)}" placeholder="@username"></div>
-      <div class="frow"><label class="flbl">Ish kunlari/vaqti</label><input class="fi" id="of-workhours" value="${esc(workhours)}" placeholder="Dush-Shan, 09:00-18:00"></div>
-      <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="of-startdate" value="${esc(startdate)}" placeholder="01.01.2025"></div>
-      <div class="frow"><label class="flbl">Oylik</label><input class="fi" id="of-salary" value="${esc(salary)}" placeholder="5 000 000"></div>
-      <div class="fbtns">
-        <button class="fsave" onclick="orgFormSave('${targetId}','${mode}')">Saqlash</button>
-        <button class="fcancel" onclick="renderOrg()">Bekor</button>
-      </div>
-    </div>`;
-  }
-
-  function orgFormSave(targetId, mode){
-    var name = document.getElementById('of-name').value.trim();
-    var fio = document.getElementById('of-fio').value.trim();
-    var tel = document.getElementById('of-tel').value.trim();
-    var tg = document.getElementById('of-tg').value.trim();
-    var workhours = document.getElementById('of-workhours').value.trim();
-    var startdate = document.getElementById('of-startdate').value.trim();
-    var salary = document.getElementById('of-salary').value.trim();
-    if(!name){ notify('Nom kiriting!'); return; }
-    var extra = {fio,tel,tg,workhours,startdate,salary};
-
-    if(mode === 'edit'){
-      var node = orgData.find(n=>n.id===targetId);
-      node.name = name; Object.assign(node, extra);
-    } else if(mode === 'child'){
-      orgData.push(Object.assign({id:'o'+Date.now(), name:name, parentId: targetId}, extra));
-    } else if(mode === 'left' || mode === 'right'){
-      var ref = orgData.find(n=>n.id===targetId);
-      var newNode = Object.assign({id:'o'+Date.now(), name:name, parentId: ref.parentId}, extra);
-      var idx = orgData.indexOf(ref);
-      var insertAt = mode==='left' ? idx : idx+1;
-      orgData.splice(insertAt, 0, newNode);
-    }
-    orgSave(); notify('Saqlandi ✓'); renderOrg();
-  }
-
-  function orgEdit(id){
-    var node = orgData.find(n=>n.id===id);
-    orgShowForm(id, 'edit', node);
-  }
-  function orgAddChild(id){
-    orgShowForm(id, 'child', null);
-  }
-  function orgAddSibling(id, dir){
-    orgShowForm(id, dir, null);
-  }
-
-  function orgDel(id){
-    askConfirm("Lavozimni (va bo'ysunuvchilarni) o'chirasizmi?", ()=>{
-      function collect(pid){ var ids=[pid]; orgData.filter(n=>n.parentId===pid).forEach(c=>{ids=ids.concat(collect(c.id));}); return ids; }
-      var toRemove = collect(id);
-      orgData = orgData.filter(n=>!toRemove.includes(n.id));
-      orgMenuOpen = null;
-      orgSave(); renderOrg(); notify("O'chirildi ✓");
-    });
-  }
+  function orgEdit(id){ orgShowEditModal(id); }
+  function orgAddChild(id){ orgAddChildModal(id); }
+  function orgAddSibling(id,dir){ orgAddSiblingModal(id,dir); }
+  function orgDel(id){ orgDelModal(id); }
 
   setTimeout(function(){ renderOrg(); }, 0);
 
@@ -601,6 +604,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 <div class="notif" id="notif"></div>
 
 <div class="confirm-bg" id="confirm-modal"><div class="confirm-box"><div class="confirm-msg" id="confirm-msg">O'chirasizmi?</div><div class="confirm-btns"><button class="confirm-yes" id="confirm-yes">O'chirish</button><button class="confirm-no" onclick="closeConfirm()">Bekor</button></div></div></div>
+
+<div id="org-modal-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150" onclick="orgCloseModal()"></div>
+<div id="org-modal" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--green-card);border-radius:20px 20px 0 0;padding:20px;z-index:151;max-height:80vh;overflow-y:auto"></div>
 </div>
 
 <script>
