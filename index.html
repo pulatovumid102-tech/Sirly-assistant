@@ -259,18 +259,29 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
   ];
   var orgMenuOpen = null;
+  var orgDetailOpen = null;
   function orgSave(){ localStorage.setItem('org_data', JSON.stringify(orgData)); }
 
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
+    var detailOpen = orgDetailOpen === node.id;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item" style="width:240px;flex-shrink:0;position:relative">
+      <div class="section-item" style="width:240px;flex-shrink:0;position:relative;cursor:pointer" onclick="orgToggleDetail('${node.id}')">
         <div style="flex:1;min-width:0">
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
         </div>
-        <button class="abtn" onclick="orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>
+        <button class="abtn" onclick="event.stopPropagation();orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>
       </div>
+      ${detailOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <div><span class="flbl">F.I.O</span><br>${esc(node.fio||'—')}</div>
+        <div><span class="flbl">Tel raqam</span><br>${esc(node.tel||'—')}</div>
+        <div><span class="flbl">Telegram</span><br>${esc(node.tg||'—')}</div>
+        <div><span class="flbl">Ish kunlari/vaqti</span><br>${esc(node.workhours||'—')}</div>
+        <div><span class="flbl">Ishga kirgan sana</span><br>${esc(node.startdate||'—')}</div>
+        <div><span class="flbl">Oylik</span><br>${esc(node.salary||'—')}</div>
+        <button class="fcancel" onclick="orgDetailOpen=null;renderOrg()">Yopish</button>
+      </div>` : ''}
       ${menuOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;gap:6px">
           <button class="abtn" style="flex:1" onclick="orgEdit('${node.id}')">✏ Tahrirlash</button>
@@ -286,6 +297,12 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div id="org-form-${node.id}"></div>
       <div id="org-children-${node.id}"></div>
     </div>`;
+  }
+
+  function orgToggleDetail(id){
+    orgDetailOpen = (orgDetailOpen === id) ? null : id;
+    orgMenuOpen = null;
+    renderOrg();
   }
 
   function orgToggleMenu(id){
@@ -334,9 +351,19 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var cont = document.getElementById('org-form-'+targetId);
     var name = node ? node.name : '';
     var fio = node ? (node.fio||'') : '';
+    var tel = node ? (node.tel||'') : '';
+    var tg = node ? (node.tg||'') : '';
+    var workhours = node ? (node.workhours||'') : '';
+    var startdate = node ? (node.startdate||'') : '';
+    var salary = node ? (node.salary||'') : '';
     cont.innerHTML = `<div class="form-box fade" style="width:240px;margin:8px auto">
       <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="of-name" value="${esc(name)}" placeholder="Lavozim nomi..."></div>
       <div class="frow"><label class="flbl">FIO</label><input class="fi" id="of-fio" value="${esc(fio)}" placeholder="F.I.O..."></div>
+      <div class="frow"><label class="flbl">Tel raqam</label><input class="fi" id="of-tel" value="${esc(tel)}" placeholder="+998 90 123 45 67"></div>
+      <div class="frow"><label class="flbl">Telegram username</label><input class="fi" id="of-tg" value="${esc(tg)}" placeholder="@username"></div>
+      <div class="frow"><label class="flbl">Ish kunlari/vaqti</label><input class="fi" id="of-workhours" value="${esc(workhours)}" placeholder="Dush-Shan, 09:00-18:00"></div>
+      <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="of-startdate" value="${esc(startdate)}" placeholder="01.01.2025"></div>
+      <div class="frow"><label class="flbl">Oylik</label><input class="fi" id="of-salary" value="${esc(salary)}" placeholder="5 000 000"></div>
       <div class="fbtns">
         <button class="fsave" onclick="orgFormSave('${targetId}','${mode}')">Saqlash</button>
         <button class="fcancel" onclick="renderOrg()">Bekor</button>
@@ -347,16 +374,22 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgFormSave(targetId, mode){
     var name = document.getElementById('of-name').value.trim();
     var fio = document.getElementById('of-fio').value.trim();
+    var tel = document.getElementById('of-tel').value.trim();
+    var tg = document.getElementById('of-tg').value.trim();
+    var workhours = document.getElementById('of-workhours').value.trim();
+    var startdate = document.getElementById('of-startdate').value.trim();
+    var salary = document.getElementById('of-salary').value.trim();
     if(!name){ notify('Nom kiriting!'); return; }
+    var extra = {fio,tel,tg,workhours,startdate,salary};
 
     if(mode === 'edit'){
       var node = orgData.find(n=>n.id===targetId);
-      node.name = name; node.fio = fio;
+      node.name = name; Object.assign(node, extra);
     } else if(mode === 'child'){
-      orgData.push({id:'o'+Date.now(), name:name, fio:fio, parentId: targetId});
+      orgData.push(Object.assign({id:'o'+Date.now(), name:name, parentId: targetId}, extra));
     } else if(mode === 'left' || mode === 'right'){
       var ref = orgData.find(n=>n.id===targetId);
-      var newNode = {id:'o'+Date.now(), name:name, fio:fio, parentId: ref.parentId};
+      var newNode = Object.assign({id:'o'+Date.now(), name:name, parentId: ref.parentId}, extra);
       var idx = orgData.indexOf(ref);
       var insertAt = mode==='left' ? idx : idx+1;
       orgData.splice(insertAt, 0, newNode);
