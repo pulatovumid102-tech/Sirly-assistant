@@ -270,16 +270,25 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     catch(e){localStorage.setItem('org_data',JSON.stringify(orgData));}
   }
   async function orgLoad(){
+    var localData = null;
+    try{ var d=localStorage.getItem('org_data'); if(d) localData=JSON.parse(d); }catch(e){}
     try{
       var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{headers:SB_H});
       var rows=await r.json();
       if(rows&&rows.length&&rows[0].data&&rows[0].data.length){ orgData=rows[0].data; }
-      else{
-        var d=localStorage.getItem('org_data'); if(d) orgData=JSON.parse(d);
+      else if(localData && localData.length){
+        orgData = localData;
         try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'org',data:orgData})});}catch(e2){}
       }
+      // one-time migration: if local has more nodes than server, push local up
+      if(localData && rows && rows.length && rows[0].data && localData.length > rows[0].data.length){
+        orgData = localData;
+        await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:orgData})});
+        notify("Eski ma'lumotlar serverga ko'chirildi ✓");
+      }
+      localStorage.removeItem('org_data');
     }catch(e){
-      var d=localStorage.getItem('org_data'); if(d) orgData=JSON.parse(d);
+      if(localData) orgData=localData;
     }
     renderOrg();
   }
