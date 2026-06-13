@@ -250,8 +250,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <span class="page-title">Org struktura</span>
     </div>
   </div>
-  <div class="org-pan-wrap" id="org-pan-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;width:100%;touch-action:pan-x pan-y;">
-    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;padding:8px 40px 80px 40px;min-width:100%;"></div>
+  <div id="org-pan-wrap" style="overflow:scroll;width:100%;height:calc(100vh - 120px);-webkit-overflow-scrolling:touch;">
+    <div id="org-tree" style="display:flex;flex-direction:column;align-items:center;min-width:max-content;padding:40px 200px 120px 200px;"></div>
   </div>
   <script>
   var orgData = [
@@ -259,6 +259,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
   ];
   var orgMenuOpen = null;
+  function orgIsAdmin(){ return !!(window && window.isAdmin); }
   var orgDetailOpen = null;
   var orgInfoOpen = null;
   var orgInfoMenuOpen = null;
@@ -302,7 +303,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
         </div>
-        ${isAdmin?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
+        ${orgIsAdmin()?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
       </div>
       <div id="org-form-${node.id}"></div>
       <div id="org-children-${node.id}"></div>
@@ -337,7 +338,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
-        ${isAdmin?`<button class="add-item-btn" style="margin-top:0" onclick="orgShowEditModal('${id}')">Tahrirlash</button>`:''}
+        ${orgIsAdmin()?`<button class="add-item-btn" style="margin-top:0" onclick="orgShowEditModal('${id}')">Tahrirlash</button>`:''}
         <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
       </div>`;
     orgShowModal(html);
@@ -346,11 +347,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var node=orgData.find(n=>n.id===id);
     var tasksHtml=(node.tasks&&node.tasks.length)?node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
       <span style="flex:1;color:var(--white-80)">${i+1}. ${esc(t)}</span>
-      ${isAdmin?`<button class="abtn abtn-red" onclick="orgDelTaskModal('${id}',${i})">x</button>`:''}
+      ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelTaskModal('${id}',${i})">x</button>`:''}
     </div>`).join(''):'<div style="color:var(--white-50);padding:12px 0">Vazifalar yo\'q</div>';
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)} — Vazifalar</div>
       <div style="margin-bottom:12px">${tasksHtml}</div>
-      ${isAdmin?`<div class="frow"><input class="fi" id="org-task-inp" placeholder="Yangi vazifa..."></div>
+      ${orgIsAdmin()?`<div class="frow"><input class="fi" id="org-task-inp" placeholder="Yangi vazifa..."></div>
       <div class="fbtns"><button class="fsave" onclick="orgAddTaskModal('${id}')">Qo'shish</button></div>`:''}
       <button class="fcancel" style="margin-top:8px" onclick="orgCloseModal()">Yopish</button>`;
     orgShowModal(html);
@@ -478,18 +479,15 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgRenderChildren(parentId, container){
     var children = orgData.filter(n=>n.parentId===parentId);
     if(!children.length){ container.innerHTML = ''; return; }
-    var cardW = 240; var gap = 24;
+    var gap = 24;
     var count = children.length;
     var h = `<div style="width:1px;height:20px;background:var(--white-20);margin:0 auto"></div>`;
     h += `<div style="display:flex;gap:${gap}px;justify-content:center;align-items:flex-start;position:relative">`;
     if(count > 1){
-      var totalW = count * cardW + (count-1) * gap;
-      var lineLeft = cardW/2;
-      var lineWidth = totalW - cardW;
-      h += `<div style="position:absolute;top:0;left:${lineLeft}px;width:${lineWidth}px;height:1px;background:rgba(255,255,255,0.2)"></div>`;
+      h += `<div style="position:absolute;top:0;left:0;right:0;height:1px;background:rgba(255,255,255,0.2)"></div>`;
     }
     children.forEach(c=>{
-      h += `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:${cardW}px">
+      h += `<div style="display:flex;flex-direction:column;align-items:center">
         <div style="width:1px;height:20px;background:rgba(255,255,255,0.2)"></div>
         ${orgCard(c)}
       </div>`;
@@ -518,28 +516,13 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgAddSibling(id,dir){ orgAddSiblingModal(id,dir); }
   function orgDel(id){ orgDelModal(id); }
 
-  setTimeout(function(){ renderOrg(); }, 0);
-
-  // Mouse drag-to-pan (desktop)
   setTimeout(function(){
-    var panEl = document.getElementById('org-pan-wrap');
-    if(!panEl) return;
-    var isDown=false, startX, startY, scrollLeft, scrollTop;
-    panEl.addEventListener('mousedown', function(e){
-      isDown=true; panEl.style.cursor='grabbing';
-      startX=e.pageX; startY=e.pageY;
-      scrollLeft=panEl.scrollLeft; scrollTop=panEl.scrollTop;
-    });
-    panEl.addEventListener('mouseleave', function(){ isDown=false; panEl.style.cursor='grab'; });
-    panEl.addEventListener('mouseup', function(){ isDown=false; panEl.style.cursor='grab'; });
-    panEl.addEventListener('mousemove', function(e){
-      if(!isDown) return;
-      e.preventDefault();
-      panEl.scrollLeft = scrollLeft - (e.pageX - startX);
-      panEl.scrollTop = scrollTop - (e.pageY - startY);
-    });
-    panEl.style.cursor='grab';
-  }, 50);
+    renderOrg();
+    setTimeout(function(){
+      var pan = document.getElementById('org-pan-wrap');
+      if(pan) pan.scrollLeft = (pan.scrollWidth - pan.clientWidth) / 2;
+    }, 100);
+  }, 0);
   </script>
 </div>
 
