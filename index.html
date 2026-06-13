@@ -234,7 +234,178 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-title" style="margin-top:4px">Bo'limlar</div>
       <div class="nav-card-arrow">→</div>
     </div>
+    <div class="nav-card" onclick="goTo('p-org')">
+      <div class="nav-card-title" style="margin-top:4px">Org struktura</div>
+      <div class="nav-card-arrow">→</div>
+    </div>
   </div>
+</div>
+
+<div class="page" id="p-org">
+  <div class="page-topbar">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
+      <span class="page-title">Org struktura</span>
+    </div>
+  </div>
+  <div class="org-pan-wrap" id="org-pan-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;width:100%;touch-action:pan-x pan-y;">
+    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;min-width:100%;padding:8px"></div>
+  </div>
+  <script>
+  var orgData = JSON.parse(localStorage.getItem('org_data')||'null') || [
+    {id:'o1', name:'Bosh direktor', fio:'', parentId:null},
+    {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
+  ];
+  var orgMenuOpen = null;
+  function orgSave(){ localStorage.setItem('org_data', JSON.stringify(orgData)); }
+
+  function orgCard(node){
+    var menuOpen = orgMenuOpen === node.id;
+    return `<div style="display:flex;flex-direction:column;align-items:center">
+      <div class="section-item" style="width:240px;position:relative">
+        <div style="flex:1;min-width:0">
+          <div class="section-name">${esc(node.name)}</div>
+          ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
+        </div>
+        <button class="abtn" onclick="orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>
+      </div>
+      ${menuOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:6px">
+          <button class="abtn" style="flex:1" onclick="orgEdit('${node.id}')">✏ Tahrirlash</button>
+          <button class="abtn abtn-red" style="flex:1" onclick="orgDel('${node.id}')">✕ O'chirish</button>
+        </div>
+        <button class="add-item-btn" style="margin-top:0" onclick="orgAddChild('${node.id}')">⬇ Pastiga qo'shish</button>
+        <div style="display:flex;gap:6px">
+          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','left')">⬅ Chapga qo'shish</button>
+          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','right')">O'ngga qo'shish ➡</button>
+        </div>
+        <button class="fcancel" onclick="orgMenuOpen=null;renderOrg()">Yopish</button>
+      </div>` : ''}
+      <div id="org-form-${node.id}"></div>
+      <div id="org-children-${node.id}"></div>
+    </div>`;
+  }
+
+  function orgToggleMenu(id){
+    orgMenuOpen = (orgMenuOpen === id) ? null : id;
+    renderOrg();
+  }
+
+  function orgRenderChildren(parentId, container){
+    var children = orgData.filter(n=>n.parentId===parentId);
+    if(!children.length){ container.innerHTML = ''; return; }
+    var h = `<div style="width:1px;height:20px;background:var(--white-20);margin:0 auto"></div>`;
+    if(children.length>1){
+      h += `<div style="display:flex;justify-content:center;position:relative">`;
+      h += `<div style="position:absolute;top:0;left:50%;right:50%;height:1px;background:var(--white-20);width:calc(100% - 120px)"></div>`;
+    }
+    h += `<div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:0">`;
+    children.forEach(c=>{
+      h += `<div style="display:flex;flex-direction:column;align-items:center">
+        <div style="width:1px;height:12px;background:var(--white-20)"></div>
+        ${orgCard(c)}
+      </div>`;
+    });
+    h += `</div>`;
+    if(children.length>1) h += `</div>`;
+    container.innerHTML = h;
+  }
+
+  function renderOrg(){
+    var root = orgData.find(n=>!n.parentId);
+    var wrap = document.getElementById('org-tree');
+    if(!root){ wrap.innerHTML = '<div style="text-align:center;padding:32px;color:var(--white-50)">Ma\'lumot yo\'q</div>'; return; }
+    wrap.innerHTML = orgCard(root);
+    function go(node){
+      var formCont = document.getElementById('org-form-'+node.id);
+      if(formCont) formCont.innerHTML='';
+      var cont = document.getElementById('org-children-'+node.id);
+      orgRenderChildren(node.id, cont);
+      orgData.filter(n=>n.parentId===node.id).forEach(go);
+    }
+    go(root);
+  }
+
+  function orgShowForm(targetId, mode, node){
+    orgMenuOpen = null;
+    renderOrg();
+    var cont = document.getElementById('org-form-'+targetId);
+    var name = node ? node.name : '';
+    var fio = node ? (node.fio||'') : '';
+    cont.innerHTML = `<div class="form-box fade" style="width:240px;margin:8px auto">
+      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="of-name" value="${esc(name)}" placeholder="Lavozim nomi..."></div>
+      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="of-fio" value="${esc(fio)}" placeholder="F.I.O..."></div>
+      <div class="fbtns">
+        <button class="fsave" onclick="orgFormSave('${targetId}','${mode}')">Saqlash</button>
+        <button class="fcancel" onclick="renderOrg()">Bekor</button>
+      </div>
+    </div>`;
+  }
+
+  function orgFormSave(targetId, mode){
+    var name = document.getElementById('of-name').value.trim();
+    var fio = document.getElementById('of-fio').value.trim();
+    if(!name){ notify('Nom kiriting!'); return; }
+
+    if(mode === 'edit'){
+      var node = orgData.find(n=>n.id===targetId);
+      node.name = name; node.fio = fio;
+    } else if(mode === 'child'){
+      orgData.push({id:'o'+Date.now(), name:name, fio:fio, parentId: targetId});
+    } else if(mode === 'left' || mode === 'right'){
+      var ref = orgData.find(n=>n.id===targetId);
+      var newNode = {id:'o'+Date.now(), name:name, fio:fio, parentId: ref.parentId};
+      var idx = orgData.indexOf(ref);
+      var insertAt = mode==='left' ? idx : idx+1;
+      orgData.splice(insertAt, 0, newNode);
+    }
+    orgSave(); notify('Saqlandi ✓'); renderOrg();
+  }
+
+  function orgEdit(id){
+    var node = orgData.find(n=>n.id===id);
+    orgShowForm(id, 'edit', node);
+  }
+  function orgAddChild(id){
+    orgShowForm(id, 'child', null);
+  }
+  function orgAddSibling(id, dir){
+    orgShowForm(id, dir, null);
+  }
+
+  function orgDel(id){
+    askConfirm("Lavozimni (va bo'ysunuvchilarni) o'chirasizmi?", ()=>{
+      function collect(pid){ var ids=[pid]; orgData.filter(n=>n.parentId===pid).forEach(c=>{ids=ids.concat(collect(c.id));}); return ids; }
+      var toRemove = collect(id);
+      orgData = orgData.filter(n=>!toRemove.includes(n.id));
+      orgMenuOpen = null;
+      orgSave(); renderOrg(); notify("O'chirildi ✓");
+    });
+  }
+
+  setTimeout(renderOrg, 0);
+
+  // Mouse drag-to-pan (desktop)
+  setTimeout(function(){
+    var panEl = document.getElementById('org-pan-wrap');
+    if(!panEl) return;
+    var isDown=false, startX, startY, scrollLeft, scrollTop;
+    panEl.addEventListener('mousedown', function(e){
+      isDown=true; panEl.style.cursor='grabbing';
+      startX=e.pageX; startY=e.pageY;
+      scrollLeft=panEl.scrollLeft; scrollTop=panEl.scrollTop;
+    });
+    panEl.addEventListener('mouseleave', function(){ isDown=false; panEl.style.cursor='grab'; });
+    panEl.addEventListener('mouseup', function(){ isDown=false; panEl.style.cursor='grab'; });
+    panEl.addEventListener('mousemove', function(e){
+      if(!isDown) return;
+      e.preventDefault();
+      panEl.scrollLeft = scrollLeft - (e.pageX - startX);
+      panEl.scrollTop = scrollTop - (e.pageY - startY);
+    });
+    panEl.style.cursor='grab';
+  }, 50);
+  </script>
 </div>
 
 <div class="page" id="p-entry2">
