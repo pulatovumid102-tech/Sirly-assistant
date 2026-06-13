@@ -302,7 +302,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
         </div>
-        <button class="abtn" onclick="event.stopPropagation();orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>
+        ${isAdmin?`<button class="abtn" onclick="event.stopPropagation();orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
       </div>
       ${detailOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
         <button class="add-item-btn" style="margin-top:0" onclick="orgShowInfo('${node.id}')">Ma'lumot</button>
@@ -310,7 +310,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <button class="fcancel" onclick="orgDetailOpen=null;renderOrg()">Yopish</button>
       </div>` : ''}
       ${orgInfoOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
-        <button class="abtn" onclick="orgToggleInfoMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>
+        ${isAdmin?`<button class="abtn" onclick="orgToggleInfoMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>`:''}
         <div style="padding-right:24px"><span class="flbl">F.I.O</span><br>${esc(node.fio||'—')}</div>
         <div><span class="flbl">Tel raqam</span><br>${esc(node.tel||'—')}</div>
         <div><span class="flbl">Telegram</span><br>${esc(node.tg||'—')}</div>
@@ -321,7 +321,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <button class="fcancel" onclick="orgInfoOpen=null;orgInfoMenuOpen=null;renderOrg()">Yopish</button>
       </div>` : ''}
       ${orgTasksOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
-        <button class="abtn" onclick="orgToggleTasksMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>
+        ${isAdmin?`<button class="abtn" onclick="orgToggleTasksMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>`:''}
         <div style="padding-right:24px;display:flex;flex-direction:column;gap:4px">
           ${(node.tasks&&node.tasks.length) ? node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:6px">
             <span style="flex:1">${i+1}. ${esc(t)}</span>
@@ -342,9 +342,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','right')">O'ngga qo'shish ➡</button>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <label class="flbl" style="flex:1">Rang</label>
-          <input type="color" value="${node.color||'#16573a'}" onchange="orgSetColor('${node.id}',this.value)" style="width:40px;height:28px;border:none;border-radius:6px;background:none;cursor:pointer">
-          ${node.color?`<button class="abtn" onclick="orgSetColor('${node.id}','')">Tozalash</button>`:''}
+          <button onclick="orgSetColor('${node.id}','#7f1d1d')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#7f1d1d;color:white;cursor:pointer;font-size:12px;font-weight:600">Qizil</button>
+          <button onclick="orgSetColor('${node.id}','#713f12')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#713f12;color:white;cursor:pointer;font-size:12px;font-weight:600">Sariq</button>
+          <button onclick="orgSetColor('${node.id}','#1e3a5f')" style="flex:1;padding:8px;border:none;border-radius:8px;background:#1e3a5f;color:white;cursor:pointer;font-size:12px;font-weight:600">Ko'k</button>
+          ${node.color?`<button class="abtn" onclick="orgSetColor('${node.id}','')">✕</button>`:''}
         </div>
         <button class="fcancel" onclick="orgMenuOpen=null;renderOrg()">Yopish</button>
       </div>` : ''}
