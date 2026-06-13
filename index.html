@@ -173,6 +173,14 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .org-pan-wrap{scrollbar-width:none;-ms-overflow-style:none}
 .org-pan-wrap::-webkit-scrollbar{display:none}
 .acad-content b{font-weight:700;color:var(--white)}
+.kaiten-col{flex-shrink:0;width:260px;background:var(--white-06);border:1px solid var(--white-10);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.kaiten-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--white-50);padding:4px 2px}
+.kaiten-col-list{display:flex;flex-direction:column;gap:8px}
+.kaiten-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.kaiten-card-text{font-size:13px;color:var(--white);line-height:1.4}
+.kaiten-card-meta{font-size:11px;color:var(--white-50)}
+.kaiten-card-deadline{font-size:11px;color:var(--lime);font-weight:600}
+.kaiten-card-btns{display:flex;gap:6px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -252,6 +260,21 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
       <span class="page-title">Kaiten</span>
+    </div>
+  </div>
+  <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;">
+    <div class="kaiten-col">
+      <div class="kaiten-col-title">Topshiriqlar</div>
+      <div class="kaiten-col-list" id="kaiten-list-todo"></div>
+      <div id="kaiten-add-form"></div>
+    </div>
+    <div class="kaiten-col">
+      <div class="kaiten-col-title">Jarayonda</div>
+      <div class="kaiten-col-list" id="kaiten-list-progress"></div>
+    </div>
+    <div class="kaiten-col">
+      <div class="kaiten-col-title">Bajarildi</div>
+      <div class="kaiten-col-list" id="kaiten-list-done"></div>
     </div>
   </div>
 </div>
@@ -1045,6 +1068,7 @@ function sirlyRender(p){
   else if(p==='p-acad-cats')renderAcadCats();
   else if(p==='p-acad-items')renderAcadItems();
   else if(p==='p-acad-detail')renderAcadDetail();
+  else if(p==='p-kaiten')renderKaiten();
   updateBc();
 }
 function updateBc(){
@@ -1129,6 +1153,136 @@ function saveAcadItem(secId,catId,itemId,inDetail){var sec=acadDb.sections.find(
 function delAcadItem(secId,catId,itemId){askConfirm("Mavzuni o'chirasizmi?",()=>{var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var cat=sec.cats.find(c=>c.id===catId);if(!cat)return;cat.items=cat.items.filter(i=>i.id!==itemId);acadSave();notify("O'chirildi ✓");renderAcadItems();});}
 function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=document.getElementById('nm-btn-'+id);if(!wrap)return;var collapsed=wrap.classList.contains('node-msg-collapsed');if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}}
 
+// =================== KAITEN ===================
+var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi"];
+var kaitenTasks = [];
+function kaitenNorm(s){ return String(s||'').toLowerCase().replace(/['’ʻ`]/g,'').replace(/\s+/g,' ').trim(); }
+async function kaitenSave(){
+  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:kaitenTasks})});}
+  catch(e){localStorage.setItem('kaiten_tasks',JSON.stringify(kaitenTasks));}
+}
+async function kaitenLoad(){
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{headers:SB_H});
+    var rows=await r.json();
+    if(rows&&rows.length&&rows[0].data){ kaitenTasks=rows[0].data; }
+    else{
+      var d=localStorage.getItem('kaiten_tasks'); kaitenTasks=d?JSON.parse(d):[];
+      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kaiten',data:kaitenTasks})});}catch(e2){}
+    }
+  }catch(e){
+    var d=localStorage.getItem('kaiten_tasks'); kaitenTasks=d?JSON.parse(d):[];
+  }
+}
+function kaitenGetEmployees(deptName){
+  var dept = orgData.find(n=>kaitenNorm(n.name)===kaitenNorm(deptName));
+  if(!dept) return [];
+  return orgData.filter(n=>n.parentId===dept.id && n.fio && n.fio.trim());
+}
+function kaitenShowAddForm(){
+  var deptOptions = KAITEN_DEPTS.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  document.getElementById('kaiten-add-form').innerHTML = `<div class="form-box fade">
+    <div class="frow"><label class="flbl">Bo'lim</label>
+      <select class="fi" id="kt-dept" onchange="kaitenUpdateEmpOptions()">
+        <option value="">— tanlang —</option>${deptOptions}
+      </select>
+    </div>
+    <div class="frow"><label class="flbl">Xodim</label>
+      <select class="fi" id="kt-emp"><option value="">— avval bo'limni tanlang —</option></select>
+    </div>
+    <div class="frow"><label class="flbl">Yakuniy muddat</label>
+      <input class="fi" type="datetime-local" id="kt-deadline">
+    </div>
+    <div class="frow"><label class="flbl">Vazifa matni</label>
+      <textarea class="fi" id="kt-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi..."></textarea>
+    </div>
+    <div class="fbtns">
+      <button class="fsave" onclick="kaitenAddTask()">Saqlash</button>
+      <button class="fcancel" onclick="document.getElementById('kaiten-add-form').innerHTML=''">Bekor</button>
+    </div>
+  </div>`;
+}
+function kaitenUpdateEmpOptions(){
+  var dept = document.getElementById('kt-dept').value;
+  var empSel = document.getElementById('kt-emp');
+  if(!dept){ empSel.innerHTML = '<option value="">— avval bo&#39;limni tanlang —</option>'; return; }
+  var emps = kaitenGetEmployees(dept);
+  if(!emps.length){ empSel.innerHTML = '<option value="">— xodim topilmadi —</option>'; return; }
+  empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(e=>`<option value="${esc(e.fio)}|${esc(e.name)}">${esc(e.fio)} (${esc(e.name)})</option>`).join('');
+}
+function kaitenAddTask(){
+  var dept = document.getElementById('kt-dept').value;
+  var empRaw = document.getElementById('kt-emp').value;
+  var deadline = document.getElementById('kt-deadline').value;
+  var text = document.getElementById('kt-text').value.trim();
+  if(!text){ notify('Vazifa matnini kiriting!'); return; }
+  var empFio='', empRole='';
+  if(empRaw){ var parts=empRaw.split('|'); empFio=parts[0]; empRole=parts[1]||''; }
+  kaitenTasks.push({
+    id:'kt'+Date.now(), text, dept, empFio, empRole, deadline, status:'todo'
+  });
+  kaitenSave(); notify('Saqlandi ✓');
+  document.getElementById('kaiten-add-form').innerHTML='';
+  renderKaiten();
+}
+function kaitenDelTask(id){
+  askConfirm("Vazifani o'chirasizmi?",()=>{
+    kaitenTasks = kaitenTasks.filter(t=>t.id!==id);
+    kaitenSave(); renderKaiten(); notify("O'chirildi ✓");
+  });
+}
+function kaitenMove(id, dir){
+  var order=['todo','progress','done'];
+  var t = kaitenTasks.find(x=>x.id===id);
+  if(!t) return;
+  var idx = order.indexOf(t.status);
+  var newIdx = idx + dir;
+  if(newIdx<0||newIdx>=order.length) return;
+  t.status = order[newIdx];
+  kaitenSave(); renderKaiten();
+}
+function kaitenFormatDeadline(dl){
+  if(!dl) return '';
+  try{
+    var d=new Date(dl);
+    var pad=n=>String(n).padStart(2,'0');
+    return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  }catch(e){ return dl; }
+}
+function kaitenCard(t){
+  var idx=['todo','progress','done'].indexOf(t.status);
+  var canLeft = idx>0, canRight = idx<2;
+  var meta = [t.dept, t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):''].filter(Boolean).join(' — ');
+  return `<div class="kaiten-card">
+    <div class="kaiten-card-text">${esc(t.text)}</div>
+    ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
+    ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
+    ${isAdmin?`<div class="kaiten-card-btns">
+      ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
+      ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
+      <button class="abtn abtn-red" style="margin-left:auto" onclick="kaitenDelTask('${t.id}')">✕</button>
+    </div>`:''}
+  </div>`;
+}
+function renderKaiten(){
+  var cols={todo:[],progress:[],done:[]};
+  kaitenTasks.forEach(t=>{ if(cols[t.status]) cols[t.status].push(t); });
+  ['todo','progress','done'].forEach(status=>{
+    var el=document.getElementById('kaiten-list-'+status);
+    if(!el) return;
+    if(!cols[status].length){ el.innerHTML='<div style="text-align:center;padding:16px;color:var(--white-50);font-size:12px">Vazifalar yo&#39;q</div>'; }
+    else el.innerHTML = cols[status].map(kaitenCard).join('');
+  });
+  var addFormEl = document.getElementById('kaiten-add-form');
+  if(isAdmin){
+    if(addFormEl && !addFormEl.innerHTML){
+      addFormEl.innerHTML = '<button class="add-item-btn" onclick="kaitenShowAddForm()">＋ Vazifa qo&#39;shish</button>';
+    }
+  } else if(addFormEl){
+    addFormEl.innerHTML='';
+  }
+}
+
 load().then(()=>{updateBc();});
 acadLoad().catch(()=>{});
 
@@ -1140,6 +1294,7 @@ function sirlyStart(role){
   load().then(function(){ updateBc(); });
   acadLoad().catch(function(){});
   orgLoad().catch(function(){ renderOrg(); });
+  kaitenLoad().catch(function(){}).then(function(){ if(document.getElementById('p-kaiten').classList.contains('active')) renderKaiten(); });
 }
 </script>
 </body>
