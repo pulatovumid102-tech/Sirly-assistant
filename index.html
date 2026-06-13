@@ -170,6 +170,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .acad-content{font-size:13px;line-height:1.85;color:var(--white-80)}
 .acad-content ul{padding-left:18px;margin:6px 0}
 .acad-content li{margin-bottom:4px}
+.org-pan-wrap{scrollbar-width:none;-ms-overflow-style:none}
+.org-pan-wrap::-webkit-scrollbar{display:none}
 .acad-content b{font-weight:700;color:var(--white)}
 </style>
 </head>
@@ -249,7 +251,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     </div>
   </div>
   <div class="org-pan-wrap" id="org-pan-wrap" style="overflow:auto;-webkit-overflow-scrolling:touch;width:100%;touch-action:pan-x pan-y;">
-    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;min-width:100%;padding:8px"></div>
+    <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;padding:8px"></div>
   </div>
   <script>
   var orgData = JSON.parse(localStorage.getItem('org_data')||'null') || [
@@ -261,8 +263,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
-    return `<div style="display:flex;flex-direction:column;align-items:center">
-      <div class="section-item" style="width:240px;position:relative">
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+      <div class="section-item" style="width:240px;flex-shrink:0;position:relative">
         <div style="flex:1;min-width:0">
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -299,9 +301,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       h += `<div style="display:flex;justify-content:center;position:relative">`;
       h += `<div style="position:absolute;top:0;left:50%;right:50%;height:1px;background:var(--white-20);width:calc(100% - 120px)"></div>`;
     }
-    h += `<div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:0">`;
+    h += `<div style="display:flex;gap:24px;justify-content:center;margin-top:0">`;
     children.forEach(c=>{
-      h += `<div style="display:flex;flex-direction:column;align-items:center">
+      h += `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
         <div style="width:1px;height:12px;background:var(--white-20)"></div>
         ${orgCard(c)}
       </div>`;
