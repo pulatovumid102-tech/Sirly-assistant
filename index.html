@@ -515,7 +515,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     });
   }
 
-  setTimeout(function(){ orgLoad(); }, 0);
+  setTimeout(function(){ renderOrg(); }, 0);
 
   // Mouse drag-to-pan (desktop)
   setTimeout(function(){
@@ -1095,6 +1095,7 @@ function sirlyStart(role){
   }
   load().then(function(){ updateBc(); });
   acadLoad().catch(function(){});
+  orgLoad().catch(function(){ renderOrg(); });
 }
 </script>
 </body>
