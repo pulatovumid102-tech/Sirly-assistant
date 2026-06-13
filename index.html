@@ -260,6 +260,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   ];
   var orgMenuOpen = null;
   var orgDetailOpen = null;
+  var orgInfoOpen = null;
+  var orgInfoMenuOpen = null;
+  var orgTasksOpen = null;
+  var orgTasksMenuOpen = null;
   function orgSave(){ localStorage.setItem('org_data', JSON.stringify(orgData)); }
 
   function orgCard(node){
@@ -273,14 +277,32 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         </div>
         <button class="abtn" onclick="event.stopPropagation();orgToggleMenu('${node.id}')" style="margin-left:6px">⋮</button>
       </div>
-      ${detailOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px">
-        <div><span class="flbl">F.I.O</span><br>${esc(node.fio||'—')}</div>
+      ${detailOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
+        <button class="add-item-btn" style="margin-top:0" onclick="orgShowInfo('${node.id}')">Ma'lumot</button>
+        <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasks('${node.id}')">Vazifalar ro'yxati</button>
+        <button class="fcancel" onclick="orgDetailOpen=null;renderOrg()">Yopish</button>
+      </div>` : ''}
+      ${orgInfoOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
+        <button class="abtn" onclick="orgToggleInfoMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>
+        <div style="padding-right:24px"><span class="flbl">F.I.O</span><br>${esc(node.fio||'—')}</div>
         <div><span class="flbl">Tel raqam</span><br>${esc(node.tel||'—')}</div>
         <div><span class="flbl">Telegram</span><br>${esc(node.tg||'—')}</div>
         <div><span class="flbl">Ish kunlari/vaqti</span><br>${esc(node.workhours||'—')}</div>
         <div><span class="flbl">Ishga kirgan sana</span><br>${esc(node.startdate||'—')}</div>
         <div><span class="flbl">Oylik</span><br>${esc(node.salary||'—')}</div>
-        <button class="fcancel" onclick="orgDetailOpen=null;renderOrg()">Yopish</button>
+        ${orgInfoMenuOpen===node.id ? `<button class="add-item-btn" style="margin-top:0" onclick="orgEdit('${node.id}')">Tahrirlash</button>` : ''}
+        <button class="fcancel" onclick="orgInfoOpen=null;orgInfoMenuOpen=null;renderOrg()">Yopish</button>
+      </div>` : ''}
+      ${orgTasksOpen===node.id ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:13px;position:relative">
+        <button class="abtn" onclick="orgToggleTasksMenu('${node.id}')" style="position:absolute;top:8px;right:8px">⋮</button>
+        <div style="padding-right:24px;display:flex;flex-direction:column;gap:4px">
+          ${(node.tasks&&node.tasks.length) ? node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:6px">
+            <span style="flex:1">${i+1}. ${esc(t)}</span>
+            ${orgTasksMenuOpen===node.id?`<button class="abtn abtn-red" onclick="orgDelTask('${node.id}',${i})">x</button>`:''}
+          </div>`).join('') : '<div style="color:var(--white-50)">Vazifalar yo&#39;q</div>'}
+        </div>
+        ${orgTasksMenuOpen===node.id ? `<div id="org-taskform-${node.id}"><div class="frow"><input class="fi" id="ot-input-${node.id}" placeholder="Vazifa matni..."></div><div class="fbtns"><button class="fsave" onclick="orgAddTask('${node.id}')">Qo'shish</button></div></div>` : ''}
+        <button class="fcancel" onclick="orgTasksOpen=null;orgTasksMenuOpen=null;renderOrg()">Yopish</button>
       </div>` : ''}
       ${menuOpen ? `<div class="form-box fade" style="width:240px;margin-top:6px;display:flex;flex-direction:column;gap:6px">
         <div style="display:flex;gap:6px">
@@ -302,7 +324,43 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgToggleDetail(id){
     orgDetailOpen = (orgDetailOpen === id) ? null : id;
     orgMenuOpen = null;
+    orgInfoOpen = null; orgInfoMenuOpen = null;
+    orgTasksOpen = null; orgTasksMenuOpen = null;
     renderOrg();
+  }
+
+  function orgShowInfo(id){
+    orgInfoOpen = id; orgInfoMenuOpen = null;
+    orgDetailOpen = null;
+    renderOrg();
+  }
+  function orgToggleInfoMenu(id){
+    orgInfoMenuOpen = (orgInfoMenuOpen===id) ? null : id;
+    renderOrg();
+  }
+
+  function orgShowTasks(id){
+    orgTasksOpen = id; orgTasksMenuOpen = null;
+    orgDetailOpen = null;
+    renderOrg();
+  }
+  function orgToggleTasksMenu(id){
+    orgTasksMenuOpen = (orgTasksMenuOpen===id) ? null : id;
+    renderOrg();
+  }
+  function orgAddTask(id){
+    var inp = document.getElementById('ot-input-'+id);
+    var val = inp.value.trim();
+    if(!val){ notify('Matn kiriting!'); return; }
+    var node = orgData.find(n=>n.id===id);
+    if(!node.tasks) node.tasks=[];
+    node.tasks.push(val);
+    orgSave(); renderOrg();
+  }
+  function orgDelTask(id, idx){
+    var node = orgData.find(n=>n.id===id);
+    node.tasks.splice(idx,1);
+    orgSave(); renderOrg();
   }
 
   function orgToggleMenu(id){
