@@ -254,7 +254,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div id="org-tree" style="display:inline-flex;flex-direction:column;align-items:center;padding:8px"></div>
   </div>
   <script>
-  var orgData = JSON.parse(localStorage.getItem('org_data')||'null') || [
+  var orgData = [
     {id:'o1', name:'Bosh direktor', fio:'', parentId:null},
     {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
   ];
@@ -264,13 +264,31 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   var orgInfoMenuOpen = null;
   var orgTasksOpen = null;
   var orgTasksMenuOpen = null;
-  function orgSave(){ localStorage.setItem('org_data', JSON.stringify(orgData)); }
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  async function orgSave(){
+    try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:orgData})});}
+    catch(e){localStorage.setItem('org_data',JSON.stringify(orgData));}
+  }
+  async function orgLoad(){
+    try{
+      var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{headers:SB_H});
+      var rows=await r.json();
+      if(rows&&rows.length&&rows[0].data&&rows[0].data.length){ orgData=rows[0].data; }
+      else{
+        var d=localStorage.getItem('org_data'); if(d) orgData=JSON.parse(d);
+        try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'org',data:orgData})});}catch(e2){}
+      }
+    }catch(e){
+      var d=localStorage.getItem('org_data'); if(d) orgData=JSON.parse(d);
+    }
+    renderOrg();
+  }
 
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
     var detailOpen = orgDetailOpen === node.id;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item" style="width:240px;flex-shrink:0;position:relative;cursor:pointer" onclick="orgToggleDetail('${node.id}')">
+      <div class="section-item" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color?`;background:${node.color}`:''}" onclick="orgToggleDetail('${node.id}')">
         <div style="flex:1;min-width:0">
           <div class="section-name">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -313,6 +331,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div style="display:flex;gap:6px">
           <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','left')">⬅ Chapga qo'shish</button>
           <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSibling('${node.id}','right')">O'ngga qo'shish ➡</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label class="flbl" style="flex:1">Rang</label>
+          <input type="color" value="${node.color||'#16573a'}" onchange="orgSetColor('${node.id}',this.value)" style="width:40px;height:28px;border:none;border-radius:6px;background:none;cursor:pointer">
+          ${node.color?`<button class="abtn" onclick="orgSetColor('${node.id}','')">Tozalash</button>`:''}
         </div>
         <button class="fcancel" onclick="orgMenuOpen=null;renderOrg()">Yopish</button>
       </div>` : ''}
@@ -366,6 +389,12 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgToggleMenu(id){
     orgMenuOpen = (orgMenuOpen === id) ? null : id;
     renderOrg();
+  }
+
+  function orgSetColor(id, color){
+    var node = orgData.find(n=>n.id===id);
+    if(color) node.color = color; else delete node.color;
+    orgSave(); renderOrg();
   }
 
   function orgRenderChildren(parentId, container){
@@ -476,7 +505,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     });
   }
 
-  setTimeout(renderOrg, 0);
+  setTimeout(function(){ orgLoad(); }, 0);
 
   // Mouse drag-to-pan (desktop)
   setTimeout(function(){
