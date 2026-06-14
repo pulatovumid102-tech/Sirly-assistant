@@ -1034,11 +1034,19 @@ async function adminSaveEditProfile(id){
     } else {
       patch.orgNodeId = null;
     }
-    await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
+    var patchResp = await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
       method:'PATCH',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(patch)
     });
+    if(!patchResp.ok){
+      var errBody2 = await patchResp.text();
+      errEl.textContent = 'Xatolik ('+patchResp.status+'): '+errBody2;
+      errEl.style.display='block';
+      document.getElementById('aep-save').textContent = 'Saqlash';
+      document.getElementById('aep-save').disabled = false;
+      return;
+    }
     document.getElementById('admin-edit-profile-form').innerHTML='';
     loadAdminList();
   }catch(e){
