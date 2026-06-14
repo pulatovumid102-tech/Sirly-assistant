@@ -1639,15 +1639,16 @@ function kaitenCard(t){
   </div>`;
 }
 var kaitenFilterDept = '';
-function kaitenSetFilter(dept){
-  kaitenFilterDept = dept;
+function kaitenSetFilter(idx){
+  kaitenFilterDept = (idx>=0 && idx<KAITEN_DEPTS.length) ? KAITEN_DEPTS[idx] : '';
   renderKaiten();
 }
 function renderKaitenFilter(){
   var el = document.getElementById('kaiten-filter');
   if(!el) return;
-  var chips = [{label:'Barchasi', val:''}].concat(KAITEN_DEPTS.map(d=>({label:d, val:d})));
-  el.innerHTML = chips.map(c=>`<button class="kaiten-filter-chip${kaitenFilterDept===c.val?' active':''}" onclick="kaitenSetFilter('${esc(c.val)}')">${esc(c.label)}</button>`).join('');
+  var h = `<button class="kaiten-filter-chip${kaitenFilterDept===''?' active':''}" onclick="kaitenSetFilter(-1)">Barchasi</button>`;
+  h += KAITEN_DEPTS.map((d,i)=>`<button class="kaiten-filter-chip${kaitenFilterDept===d?' active':''}" onclick="kaitenSetFilter(${i})">${esc(d)}</button>`).join('');
+  el.innerHTML = h;
 }
 function renderKaiten(){
   renderKaitenFilter();
