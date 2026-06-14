@@ -356,7 +356,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(node.tg||'—')}</span></div>
         <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>
         <div><span class="flbl">Ishga kirgan sana</span><br><span style="color:var(--white-80)">${esc(node.startdate||'—')}</span></div>
-        <div><span class="flbl">Oylik</span><br><span style="color:var(--white-80)">${esc(node.salary||'—')}</span></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
@@ -517,7 +516,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         </div>
       </div>
       <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="oem-startdate" value="${esc(node.startdate||'')}"></div>
-      <div class="frow"><label class="flbl">Oylik</label><input class="fi" id="oem-salary" value="${esc(node.salary||'')}"></div>
       <div class="fbtns">
         <button class="fsave" onclick="orgSaveEditModal('${id}')">Saqlash</button>
         <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
@@ -557,7 +555,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node.workhours = orgBuildWorkhoursText(node);
     delete node._tmpDays;
     node.startdate=document.getElementById('oem-startdate').value.trim();
-    node.salary=document.getElementById('oem-salary').value.trim();
     orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
   }
   function orgAddChildModal(id){
