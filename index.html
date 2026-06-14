@@ -225,19 +225,19 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div class="home-sub">Bo'limni tanlang</div>
   </div>
   <div class="cards-grid">
-    <div class="nav-card" onclick="goTo('p-entry2')">
+    <div class="nav-card" id="card-bolimlar" onclick="goTo('p-entry2')">
       <div class="nav-card-title" style="margin-top:4px">Bo'limlar</div>
       <div class="nav-card-arrow">→</div>
     </div>
-    <div class="nav-card" onclick="goTo('p-org')">
+    <div class="nav-card" id="card-org" onclick="goTo('p-org')">
       <div class="nav-card-title" style="margin-top:4px">Org struktura</div>
       <div class="nav-card-arrow">→</div>
     </div>
-    <div class="nav-card" onclick="goTo('p-kaiten')">
+    <div class="nav-card" id="card-kaiten" onclick="goTo('p-kaiten')">
       <div class="nav-card-title" style="margin-top:4px">Kaiten</div>
       <div class="nav-card-arrow">→</div>
     </div>
-    <div class="nav-card" onclick="goTo('p-hujjatlar')">
+    <div class="nav-card" id="card-hujjatlar" onclick="goTo('p-hujjatlar')">
       <div class="nav-card-title" style="margin-top:4px">Hujjatlar</div>
       <div class="nav-card-arrow">→</div>
     </div>
@@ -746,10 +746,28 @@ var CURRENT_APP = null;
 var USER_ID = 'guest';
 var CURRENT_USER_TG = '';
 var CURRENT_USER_ORG_ID = '';
+var USER_PERMS = null;
 var SIRLY_USERS = { 'umid': 'umid2025' };
 var ADMIN_LOGIN = 'admin';
 var ADMIN_PAROL = 'admin2025';
 var CURRENT_ADMIN_TAB = 'sirly';
+function hasPerm(key){
+  if(isAdmin) return true;
+  if(!USER_PERMS) return true;
+  return USER_PERMS[key]!==false;
+}
+function hasSectionPerm(secId){
+  if(isAdmin) return true;
+  if(!USER_PERMS || !USER_PERMS.sections) return true;
+  return USER_PERMS.sections.includes(secId);
+}
+function applyEntryCardPerms(){
+  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar'};
+  Object.keys(map).forEach(function(cid){
+    var el=document.getElementById(cid);
+    if(el) el.style.display = hasPerm(map[cid]) ? '' : 'none';
+  });
+}
 
 var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
@@ -815,6 +833,7 @@ async function showAdminPanel(){
   CURRENT_ADMIN_TAB = 'sirly';
   loadAdminList();
   orgLoad().catch(function(){});
+  load().catch(function(){});
 }
 document.getElementById('admin-new-profile-btn').addEventListener('click', adminShowNewProfileForm);
 function adminShowNewProfileForm(){
@@ -838,12 +857,43 @@ function adminShowNewProfileForm(){
     '<select id="anp-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
       '<option value="guest">👁 Guest</option><option value="editor">✏ Editor</option>'+
     '</select>'+
+    adminPermsHtml(null)+
     '<div id="anp-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
     '<button id="anp-save" style="width:100%;background:#558237;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
   '</div>';
   document.getElementById('anp-save').addEventListener('click', adminCreateProfile);
 }
 function escAdmin(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function adminPermsHtml(perms){
+  perms = perms || {};
+  var sections = (db.sections||[]);
+  var bolimlarChecked = perms.bolimlar!==false;
+  var secHtml = sections.map(function(s){
+    var checked = !perms.sections || perms.sections.includes(s.id);
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:4px 0 4px 18px;"><input type="checkbox" class="aperm-sec" value="'+escAdmin(s.id)+'" '+(checked?'checked':'')+'> '+escAdmin(s.title)+'</label>';
+  }).join('');
+  function chk(key,label,checked){
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:4px 0;font-weight:600;"><input type="checkbox" id="aperm-'+key+'" '+(checked?'checked':'')+(key==='bolimlar'?' onchange="document.getElementById(\'aperm-sections-wrap\').style.opacity=this.checked?1:.4;document.getElementById(\'aperm-sections-wrap\').style.pointerEvents=this.checked?\'\':\'none\'"':'')+'> '+label+'</label>';
+  }
+  return '<div style="border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:10px;">'+
+    '<div style="font-size:12px;color:#888;margin-bottom:4px;font-weight:700;">Ko&#39;rinadigan bo&#39;limlar</div>'+
+    chk('org','Org struktura', perms.org!==false)+
+    chk('kaiten','Kaiten', perms.kaiten!==false)+
+    chk('hujjatlar','Hujjatlar', perms.hujjatlar!==false)+
+    chk('bolimlar','Bo&#39;limlar', bolimlarChecked)+
+    '<div id="aperm-sections-wrap" style="'+(bolimlarChecked?'':'opacity:.4;pointer-events:none')+'">'+secHtml+'</div>'+
+  '</div>';
+}
+function adminReadPerms(){
+  var sections = [].slice.call(document.querySelectorAll('.aperm-sec:checked')).map(function(el){return el.value;});
+  return {
+    org: document.getElementById('aperm-org').checked,
+    kaiten: document.getElementById('aperm-kaiten').checked,
+    hujjatlar: document.getElementById('aperm-hujjatlar').checked,
+    bolimlar: document.getElementById('aperm-bolimlar').checked,
+    sections: sections
+  };
+}
 async function adminCreateProfile(){
   var empId = document.getElementById('anp-emp').value;
   var login = document.getElementById('anp-login').value.trim().toLowerCase();
@@ -886,7 +936,7 @@ async function adminCreateProfile(){
     var resp = await fetch(SB_URL+'/rest/v1/applications', {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({id:id, app:CURRENT_ADMIN_TAB, login:login, parol:parol, ism:node.fio, tg:tg, orgNodeId:node.id, role:role, status:'approved'})
+      body:JSON.stringify({id:id, app:CURRENT_ADMIN_TAB, login:login, parol:parol, ism:node.fio, tg:tg, orgNodeId:node.id, role:role, status:'approved', permissions:adminReadPerms()})
     });
     if(!resp.ok){
       var errBody = await resp.text();
@@ -930,6 +980,7 @@ function adminShowEditProfileForm(u){
       '<option value="guest"'+((u.role||'guest')==='guest'?' selected':'')+'>👁 Guest</option>'+
       '<option value="editor"'+(u.role==='editor'?' selected':'')+'>✏ Editor</option>'+
     '</select>'+
+    adminPermsHtml(u.permissions)+
     '<div id="aep-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
     '<div style="display:flex;gap:8px;">'+
     '<button id="aep-save" style="flex:1;background:#2563a8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
@@ -971,7 +1022,7 @@ async function adminSaveEditProfile(id){
       document.getElementById('aep-save').disabled = false;
       return;
     }
-    var patch = {login:login, role:role};
+    var patch = {login:login, role:role, permissions:adminReadPerms()};
     if(parol) patch.parol = parol;
     if(empId){
       var node = orgData.find(n=>n.id===empId);
@@ -1166,7 +1217,8 @@ async function doAppLogin(){
         var userRole = user.role || 'guest';
         CURRENT_USER_TG = user.tg || '';
         CURRENT_USER_ORG_ID = user.orgNodeId || '';
-        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG, orgNodeId:CURRENT_USER_ORG_ID}));
+        USER_PERMS = user.permissions || null;
+        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG, orgNodeId:CURRENT_USER_ORG_ID, permissions:USER_PERMS}));
         document.getElementById('login-screen').style.display = 'none';
         startApp(CURRENT_APP, userRole);
       } else if(user.status === 'pending'){
@@ -1207,6 +1259,7 @@ showLogin('sirly');
       STORAGE_KEY = 'umatizim_data_' + USER_ID;
       CURRENT_USER_TG = u.tg || '';
       CURRENT_USER_ORG_ID = u.orgNodeId || '';
+      USER_PERMS = u.permissions || null;
           startApp(u.app, u.role || 'guest');
     }
   }catch(e){ localStorage.removeItem('app_login'); }
@@ -1215,7 +1268,7 @@ showLogin('sirly');
 function doLogoutAll(){
   localStorage.removeItem('app_login');
   document.getElementById('sirly-app').style.display = 'none';
-  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = ''; CURRENT_USER_ORG_ID = '';
+  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = ''; CURRENT_USER_ORG_ID = ''; USER_PERMS = null;
   window.scrollTo(0,0);
   showLogin('sirly');
 }
@@ -1415,7 +1468,7 @@ function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){v
 
 function renderSections(){
   var g=document.getElementById('sections-grid');var h='';
-  var allCards=[...db.sections.map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
+  var allCards=[...db.sections.filter(s=>hasSectionPerm(s.id)).map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
   var savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');var ordered=allCards;
   if(savedOrder){var map=Object.fromEntries(allCards.map(s=>[s.id,s]));ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];}
   ordered.forEach(s=>{var isAcad=s._type==='academy';var onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;var editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;var delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''} ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="${editFn}">✏</button><button class="abtn abtn-red" onclick="${delFn}">✕</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div><div class="nav-card-arrow">→</div></div>`;});
@@ -1918,6 +1971,7 @@ function sirlyStart(role){
     isAdmin = true;
   }
   updateLogoutBtn('p-entry1');
+  applyEntryCardPerms();
   load().then(function(){ updateBc(); });
   acadLoad().catch(function(){});
   orgLoad().catch(function(){ renderOrg(); });
