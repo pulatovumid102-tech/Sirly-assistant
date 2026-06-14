@@ -197,33 +197,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <input id="parol-input" type="password" class="login-input" placeholder="parolni kiriting">
     <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
     <button id="login-btn" class="login-btn">Kirish</button>
-    <button id="register-btn" style="width:100%;padding:12px;border:1px solid currentColor;border-radius:10px;font-size:14px;cursor:pointer;margin-top:8px;font-family:inherit;background:transparent;">Ro'yxatdan o'tish</button>
-  </div>
-</div>
-<div id="register-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;">
-  <div class="login-box">
-    <div class="login-logo" id="reg-logo">🌿</div>
-    <div class="login-app-name" id="reg-app-name">Uma-tizim</div>
-    <div class="login-sub">Yangi hisob yaratish</div>
-    <label class="login-label">Ismingiz</label>
-    <input id="reg-ism" type="text" class="login-input" placeholder="Ism Familiya" autocomplete="off">
-    <label class="login-label">Login</label>
-    <input id="reg-login" type="text" class="login-input" placeholder="foydalanuvchi nomi" autocomplete="off" autocapitalize="none">
-    <label class="login-label">Telegram username</label>
-    <input id="reg-tg" type="text" class="login-input" placeholder="@username" autocomplete="off" autocapitalize="none">
-    <label class="login-label">Parol</label>
-    <input id="reg-parol" type="password" class="login-input" placeholder="parol o'ylab toping">
-    <div id="reg-error" style="font-size:13px;text-align:center;margin-bottom:10px;display:none;color:#c0392b;"></div>
-    <button id="reg-submit" class="login-btn">Ariza yuborish</button>
-    <button id="reg-back" class="login-back">← Orqaga</button>
-  </div>
-</div>
-<div id="pending-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;background:#f5f5f5;">
-  <div style="text-align:center;max-width:300px;">
-    <div style="font-size:64px;margin-bottom:16px;">⏳</div>
-    <div style="font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:8px;">Ariza yuborildi!</div>
-    <div style="font-size:14px;color:#888;line-height:1.6;margin-bottom:24px;">Arizangiz admin tomonidan ko'rib chiqilmoqda. Tasdiqlangandan so'ng kirish imkoniyatiga ega bo'lasiz.</div>
-    <button id="pending-back" style="background:#558237;color:white;border:none;padding:12px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Orqaga</button>
   </div>
 </div>
 <div id="admin-screen" style="display:none;min-height:100vh;background:#f5f5f5;font-family:-apple-system,sans-serif;">
@@ -807,87 +780,6 @@ function showLogin(app){
 document.getElementById('login-btn').addEventListener('click', doAppLogin);
 document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doAppLogin(); });
 
-document.getElementById('register-btn').addEventListener('click', function(){
-  var ls = document.getElementById('login-screen');
-  var rs = document.getElementById('register-screen');
-  rs.className = ls.className;
-  rs.style.display = 'flex';
-  ls.style.display = 'none';
-  document.getElementById('reg-logo').textContent = document.getElementById('login-logo').textContent;
-  document.getElementById('reg-app-name').textContent = document.getElementById('login-app-name').textContent;
-  document.getElementById('reg-ism').value = '';
-  document.getElementById('reg-login').value = '';
-  document.getElementById('reg-tg').value = '';
-  document.getElementById('reg-parol').value = '';
-  document.getElementById('reg-error').style.display = 'none';
-});
-
-document.getElementById('reg-back').addEventListener('click', function(){
-  document.getElementById('register-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-});
-
-document.getElementById('reg-submit').addEventListener('click', async function(){
-  var ism = document.getElementById('reg-ism').value.trim();
-  var login = document.getElementById('reg-login').value.trim().toLowerCase();
-  var tg = document.getElementById('reg-tg').value.trim().replace(/^@/,'');
-  var parol = document.getElementById('reg-parol').value;
-  var errEl = document.getElementById('reg-error');
-  
-  if(!ism || !login || !parol || !tg){
-    errEl.textContent = "Barcha maydonlarni to'ldiring";
-    errEl.style.display = 'block';
-    return;
-  }
-  if(parol.length < 4){
-    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
-    errEl.style.display = 'block';
-    return;
-  }
-  
-  document.getElementById('reg-submit').textContent = 'Yuborilmoqda...';
-  document.getElementById('reg-submit').disabled = true;
-  
-  try{
-    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_APP+'&login=eq.'+login, {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    var existing = await check.json();
-    if(existing && existing.length > 0){
-      errEl.textContent = "Bu login allaqachon band";
-      errEl.style.display = 'block';
-      document.getElementById('reg-submit').textContent = 'Ariza yuborish';
-      document.getElementById('reg-submit').disabled = false;
-      return;
-    }
-    
-    var id = 'app_' + Date.now();
-    var r = await fetch(SB_URL+'/rest/v1/applications', {
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({id:id, app:CURRENT_APP, login:login, parol:parol, ism:ism, tg:tg, status:'pending'})
-    });
-    
-    if(r.ok || r.status === 201){
-      document.getElementById('register-screen').style.display = 'none';
-      var ps = document.getElementById('pending-screen');
-      ps.style.display = 'flex';
-    } else {
-      errEl.textContent = "Xatolik yuz berdi, qayta urinib ko'ring";
-      errEl.style.display = 'block';
-    }
-  }catch(e){
-    errEl.textContent = 'Xatolik: ' + e.message;
-    errEl.style.display = 'block';
-  }
-  document.getElementById('reg-submit').textContent = 'Ariza yuborish';
-  document.getElementById('reg-submit').disabled = false;
-});
-
-document.getElementById('pending-back').addEventListener('click', function(){
-  document.getElementById('pending-screen').style.display = 'none';
-});
-
 document.getElementById('admin-logout').addEventListener('click', function(){
   document.getElementById('admin-screen').style.display = 'none';
 });
@@ -995,6 +887,98 @@ async function adminCreateProfile(){
   }
 }
 
+function adminShowEditProfileForm(u){
+  document.getElementById('admin-new-profile-form').innerHTML='';
+  var formEl = document.getElementById('admin-edit-profile-form');
+  if(!formEl){
+    formEl = document.createElement('div');
+    formEl.id = 'admin-edit-profile-form';
+    document.getElementById('admin-new-profile-form').parentNode.insertBefore(formEl, document.getElementById('admin-list'));
+  }
+  if(formEl.innerHTML){ formEl.innerHTML=''; return; }
+  var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
+  var options = emps.map(e=>'<option value="'+e.id+'"'+(e.id===u.orgNodeId?' selected':'')+'>'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
+  formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;border:2px solid #2563a8;">'+
+    '<div style="font-size:13px;font-weight:700;color:#2563a8;margin-bottom:10px;">Profilni tahrirlash</div>'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
+    '<select id="aep-emp" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;"><option value="">— bog&#39;lanmagan —</option>'+options+'</select>'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Login</label>'+
+    '<input id="aep-login" value="'+escAdmin(u.login)+'" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;" autocapitalize="none">'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Parol (bo&#39;sh qoldirsangiz o&#39;zgarmaydi)</label>'+
+    '<input id="aep-parol" type="text" placeholder="••••••" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Rol</label>'+
+    '<select id="aep-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
+      '<option value="guest"'+((u.role||'guest')==='guest'?' selected':'')+'>👁 Guest</option>'+
+      '<option value="editor"'+(u.role==='editor'?' selected':'')+'>✏ Editor</option>'+
+    '</select>'+
+    '<div id="aep-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
+    '<div style="display:flex;gap:8px;">'+
+    '<button id="aep-save" style="flex:1;background:#2563a8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
+    '<button id="aep-cancel" style="flex:1;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Bekor</button>'+
+    '</div>'+
+  '</div>';
+  document.getElementById('aep-cancel').addEventListener('click', function(){ formEl.innerHTML=''; });
+  document.getElementById('aep-save').addEventListener('click', function(){ adminSaveEditProfile(u.id); });
+  formEl.scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function adminSaveEditProfile(id){
+  var empId = document.getElementById('aep-emp').value;
+  var login = document.getElementById('aep-login').value.trim().toLowerCase();
+  var parol = document.getElementById('aep-parol').value.trim();
+  var role = document.getElementById('aep-role').value;
+  var errEl = document.getElementById('aep-error');
+  errEl.style.display='none';
+  if(!login){
+    errEl.textContent = "Loginni to'ldiring";
+    errEl.style.display='block';
+    return;
+  }
+  if(parol && parol.length < 4){
+    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
+    errEl.style.display='block';
+    return;
+  }
+  document.getElementById('aep-save').textContent = 'Saqlanmoqda...';
+  document.getElementById('aep-save').disabled = true;
+  try{
+    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&login=eq.'+login, {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    var existing = await check.json();
+    if(existing && existing.length && existing.some(function(r){return r.id!==id;})){
+      errEl.textContent = "Bu login allaqachon band";
+      errEl.style.display='block';
+      document.getElementById('aep-save').textContent = 'Saqlash';
+      document.getElementById('aep-save').disabled = false;
+      return;
+    }
+    var patch = {login:login, role:role};
+    if(parol) patch.parol = parol;
+    if(empId){
+      var node = orgData.find(n=>n.id===empId);
+      if(node){
+        patch.orgNodeId = node.id;
+        patch.ism = node.fio;
+        patch.tg = (node.tg||'').replace(/^@/,'');
+      }
+    } else {
+      patch.orgNodeId = null;
+    }
+    await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
+      method:'PATCH',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify(patch)
+    });
+    document.getElementById('admin-edit-profile-form').innerHTML='';
+    loadAdminList();
+  }catch(e){
+    errEl.textContent = 'Xatolik: '+e.message;
+    errEl.style.display='block';
+    document.getElementById('aep-save').textContent = 'Saqlash';
+    document.getElementById('aep-save').disabled = false;
+  }
+}
+
 async function loadAdminList(){
   var listEl = document.getElementById('admin-list');
   listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#888;">Yuklanmoqda...</div>';
@@ -1070,6 +1054,13 @@ async function loadAdminList(){
         loadAdminList();
       });
     });
+    listEl.querySelectorAll('[data-editprofile]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-editprofile');
+        var u = rows.find(function(r){ return r.id===id; });
+        if(u) adminShowEditProfileForm(u);
+      });
+    });
     
   }catch(e){
     listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#c0392b;">Xatolik: '+e.message+'<br><small>'+SB_URL+'</small></div>';
@@ -1092,6 +1083,7 @@ function adminCard(u){
     } else {
       btns = '<button data-editor="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✏ Editor qilish</button>';
     }
+    btns += '<button data-editprofile="'+u.id+'" style="background:#eef6fb;color:#2563a8;border:1px solid #b6d4ee;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✏ Tahrirlash</button>';
     btns += '<button data-delete="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑</button>';
   } else {
     btns = '<button data-delete="'+u.id+'" style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑 O\'chirish</button>';
