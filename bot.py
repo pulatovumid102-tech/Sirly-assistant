@@ -53,12 +53,17 @@ async def check_file_send_requests_job(context: ContextTypes.DEFAULT_TYPE):
             for row in rows:
                 rid = row.get("id")
                 chat_id = row.get("chat_id")
-                file_url = row.get("file_url")
-                file_name = row.get("file_name") or "fayl"
+                kind = row.get("kind") or "file"
                 try:
-                    fr = await c.get(file_url)
-                    fr.raise_for_status()
-                    await context.bot.send_document(chat_id=chat_id, document=fr.content, filename=file_name)
+                    if kind == "message":
+                        text = row.get("message_text") or ""
+                        await context.bot.send_message(chat_id=chat_id, text=text)
+                    else:
+                        file_url = row.get("file_url")
+                        file_name = row.get("file_name") or "fayl"
+                        fr = await c.get(file_url)
+                        fr.raise_for_status()
+                        await context.bot.send_document(chat_id=chat_id, document=fr.content, filename=file_name)
                     await c.patch(f"{SB_URL}/rest/v1/file_send_requests?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
                 except Exception as e:
                     logger.error(f"file_send error for {rid}: {e}")
