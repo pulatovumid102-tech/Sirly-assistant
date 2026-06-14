@@ -183,6 +183,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
 .kaiten-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.org-white-dots{background-image:radial-gradient(circle, rgba(22,87,58,0.15) 1px, transparent 1px)!important;background-size:14px 14px;background-color:#ffffff;}
 .kaiten-card-text{font-size:13px;color:var(--white);line-height:1.4}
 .kaiten-card-meta{font-size:13px;color:var(--white-80);font-weight:600}
 .kaiten-card-naz{font-size:11px;color:var(--white-50);font-weight:400}
@@ -358,7 +359,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var menuOpen = orgMenuOpen === node.id;
     var detailOpen = orgDetailOpen === node.id;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')">
+      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')">
         <div style="flex:1;min-width:0">
           <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -1736,6 +1737,7 @@ async function load(){
       var d=localStorage.getItem(DB_KEY+'_'+key);
       db=d?JSON.parse(d):{sections:[]};
       if(key==='main'&&!d){var old=localStorage.getItem(DB_KEY);if(old)db=JSON.parse(old);}
+      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:db})});}catch(e2){}
     }
   }catch(e){
     var d=localStorage.getItem(DB_KEY+'_'+key);
