@@ -5,7 +5,7 @@ import logging
 import os
 import asyncio
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -73,6 +73,38 @@ async def check_file_send_requests_job(context: ContextTypes.DEFAULT_TYPE):
                         pass
     except Exception as e:
         logger.error(f"check_file_send_requests_job error: {e}")
+
+# =========================
+# SEKRETAR -> uchrashuv eslatmalari
+# =========================
+
+async def check_bot_reminders_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/bot_reminders",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "remind_at": f"lte.{now_iso}", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                chat_id = row.get("chat_id")
+                text = row.get("text") or ""
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/bot_reminders?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"bot_reminder error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/bot_reminders?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_bot_reminders_job error: {e}")
 
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -3266,6 +3298,9 @@ def main():
 
     # Hujjatlar -> "Botga yuborish" navbati
     application.job_queue.run_repeating(check_file_send_requests_job, interval=1, first=1)
+
+    # Sekretar -> uchrashuv eslatmalari
+    application.job_queue.run_repeating(check_bot_reminders_job, interval=30, first=10)
 
     # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
     for time_key in CHECKLIST_TIMES:
