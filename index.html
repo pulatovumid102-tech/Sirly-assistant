@@ -1993,7 +1993,7 @@ function kaitenGetAllEmployees(){
 }
 function kaitenFieldsHtml(prefix, task){
   task = task || {};
-  var deptOptions = KAITEN_DEPTS.map(function(d){return `<option value="${esc(d)}">${esc(d)}</option>`;}).join('');
+  var dept = task.dept || kaitenFilterDept;
   var allEmps = kaitenGetAllEmployees();
   var nazOptions = allEmps.map(function(e){
     var val = e.fio+'|'+e.role+'|'+e.dept;
@@ -2006,9 +2006,8 @@ function kaitenFieldsHtml(prefix, task){
   }
   return `
     <div class="frow"><label class="flbl">Bo'lim</label>
-      <select class="fi" id="${prefix}-dept" onchange="kaitenUpdateEmpOptions('${prefix}')">
-        <option value="">— tanlang —</option>${deptOptions}
-      </select>
+      <input type="hidden" id="${prefix}-dept" value="${esc(dept)}">
+      <div class="fi" style="display:flex;align-items:center;cursor:default">${esc(dept)}</div>
     </div>
     <div class="frow"><label class="flbl">Xodim</label>
       <select class="fi" id="${prefix}-emp"><option value="">— avval bo&#39;limni tanlang —</option></select>
@@ -2045,6 +2044,7 @@ function kaitenShowAddForm(){
       <button class="fcancel" onclick="document.getElementById('kaiten-add-form').innerHTML=''">Bekor</button>
     </div>
   </div>`;
+  kaitenUpdateEmpOptions('kt');
 }
 function kaitenShowEditForm(id){
   var t = kaitenTasks.find(function(x){return x.id===id;});
