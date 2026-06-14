@@ -1497,12 +1497,24 @@ function renderSekretar(){
   document.getElementById('sekretar-form').innerHTML='';
   sekretarDraft=null; sekretarEditId=null;
 }
+var SEKRETAR_MONTHS=['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentyabr','Oktyabr','Noyabr','Dekabr'];
+var SEKRETAR_WEEKDAYS=['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba'];
+function sekretarFormatDateTime(date,time){
+  if(!date) return '';
+  var parts=date.split('-');
+  if(parts.length!==3) return date+(time?' Soat '+time:'');
+  var y=+parts[0], m=+parts[1], d=+parts[2];
+  var dt=new Date(y,m-1,d);
+  var s=d+' - '+SEKRETAR_MONTHS[m-1]+' ('+SEKRETAR_WEEKDAYS[dt.getDay()]+')';
+  if(time) s+=' Soat '+time;
+  return s;
+}
 function sekretarCard(it){
   var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
   var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
   return `<div class="kaiten-card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-      <div style="font-size:14px;font-weight:700;color:var(--lime)">📅 ${esc(it.date)} 🕐 ${esc(it.time)}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--lime)">📅 ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
       <button class="abtn" onclick="sekretarFinish('${it.id}')" title="Yakunlash">☐ Yakunlash</button>
     </div>
     ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
@@ -1527,7 +1539,7 @@ function sekretarArchiveCard(it){
   var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
   var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
   return `<div class="kaiten-card" style="opacity:.75">
-    <div style="font-size:14px;font-weight:700;color:var(--white-50)">✅ 📅 ${esc(it.date)} 🕐 ${esc(it.time)}</div>
+    <div style="font-size:14px;font-weight:700;color:var(--white-50)">✅ 📅 ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
     ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
     ${person?`<div style="font-size:13px;color:var(--white-80);margin-top:2px">👤 ${esc(person)}</div>`:''}
     ${it.purpose?`<div class="kaiten-card-text" style="margin-top:4px">🎯 ${esc(it.purpose)}</div>`:''}
