@@ -175,6 +175,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .acad-content b{font-weight:700;color:var(--white)}
 .kaiten-col{flex-shrink:0;width:260px;background:var(--white-06);border:1px solid var(--white-10);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
 .kaiten-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--white-50);padding:4px 2px}
+.kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
+.kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
 .kaiten-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
 .kaiten-card-text{font-size:13px;color:var(--white);line-height:1.4}
@@ -241,6 +243,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <span class="page-title">Kaiten</span>
     </div>
   </div>
+  <div id="kaiten-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch;"></div>
   <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;">
     <div class="kaiten-col">
       <div class="kaiten-col-title" id="kaiten-title-todo">Topshiriqlar</div>
@@ -1635,9 +1638,22 @@ function kaitenCard(t){
     ${chatHtml}
   </div>`;
 }
+var kaitenFilterDept = '';
+function kaitenSetFilter(dept){
+  kaitenFilterDept = dept;
+  renderKaiten();
+}
+function renderKaitenFilter(){
+  var el = document.getElementById('kaiten-filter');
+  if(!el) return;
+  var chips = [{label:'Barchasi', val:''}].concat(KAITEN_DEPTS.map(d=>({label:d, val:d})));
+  el.innerHTML = chips.map(c=>`<button class="kaiten-filter-chip${kaitenFilterDept===c.val?' active':''}" onclick="kaitenSetFilter('${esc(c.val)}')">${esc(c.label)}</button>`).join('');
+}
 function renderKaiten(){
+  renderKaitenFilter();
+  var visibleTasks = kaitenFilterDept ? kaitenTasks.filter(t=>t.dept===kaitenFilterDept) : kaitenTasks;
   var cols={todo:[],progress:[],done:[],accepted:[]};
-  kaitenTasks.forEach(t=>{ if(cols[t.status]) cols[t.status].push(t); });
+  visibleTasks.forEach(t=>{ if(cols[t.status]) cols[t.status].push(t); });
   var titles={todo:'Topshiriqlar',progress:'Jarayonda',done:'Bajarildi',accepted:'Qabul qilindi'};
   ['todo','progress','done','accepted'].forEach(status=>{
     var el=document.getElementById('kaiten-list-'+status);
