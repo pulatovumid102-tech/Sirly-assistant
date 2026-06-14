@@ -18,7 +18,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8935324683:AAFrVn1gszbbU5il0Us5dsMHWLLIHNHlVgw"
+TOKEN = "8935324683:AAFvaRkMnEy89ikySowTSLYRtaFqu_TDpyc"
 CHAT_ID = -1003914304171
 
 SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
@@ -38,6 +38,37 @@ async def sb_save_screenshot(username, time_key, status):
                 await c.post(f"{SB_URL}/rest/v1/screenshots", headers=SB_HEADERS, json=data)
     except Exception as e:
         logger.error(f"sb_save error: {e}")
+
+# =========================
+# HUJJATLAR -> "Botga yuborish" navbati
+# =========================
+
+async def check_file_send_requests_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{SB_URL}/rest/v1/file_send_requests?status=eq.pending&select=*", headers=SB_HEADERS)
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                chat_id = row.get("chat_id")
+                file_url = row.get("file_url")
+                file_name = row.get("file_name") or "fayl"
+                try:
+                    fr = await c.get(file_url)
+                    fr.raise_for_status()
+                    await context.bot.send_document(chat_id=chat_id, document=fr.content, filename=file_name)
+                    await c.patch(f"{SB_URL}/rest/v1/file_send_requests?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"file_send error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/file_send_requests?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_file_send_requests_job error: {e}")
+
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -3227,6 +3258,9 @@ def main():
 
     # Zadacha cleanup job
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
+
+    # Hujjatlar -> "Botga yuborish" navbati
+    application.job_queue.run_repeating(check_file_send_requests_job, interval=5, first=5)
 
     # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
     for time_key in CHECKLIST_TIMES:
