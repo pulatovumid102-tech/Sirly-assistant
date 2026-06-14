@@ -232,6 +232,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <button id="admin-logout" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">Chiqish</button>
   </div>
   <div style="padding:16px;">
+    <button id="admin-new-profile-btn" style="width:100%;background:#1e5927;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:16px;">＋ Yangi profil yaratish</button>
+    <div id="admin-new-profile-form"></div>
     <div id="admin-list"></div>
   </div>
 </div>
@@ -759,6 +761,7 @@ if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram
 var CURRENT_APP = null;
 var USER_ID = 'guest';
 var CURRENT_USER_TG = '';
+var CURRENT_USER_ORG_ID = '';
 var SIRLY_USERS = { 'umid': 'umid2025' };
 var ADMIN_LOGIN = 'admin';
 var ADMIN_PAROL = 'admin2025';
@@ -908,6 +911,88 @@ async function showAdminPanel(){
   document.getElementById('admin-screen').style.display = 'block';
   CURRENT_ADMIN_TAB = 'sirly';
   loadAdminList();
+  orgLoad().catch(function(){});
+}
+document.getElementById('admin-new-profile-btn').addEventListener('click', adminShowNewProfileForm);
+function adminShowNewProfileForm(){
+  var formEl = document.getElementById('admin-new-profile-form');
+  if(formEl.innerHTML){ formEl.innerHTML=''; return; }
+  var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
+  if(!emps.length){
+    formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;color:#888;font-size:13px;text-align:center;">Org strukturada FIO to&#39;ldirilgan xodimlar topilmadi</div>';
+    return;
+  }
+  var options = emps.map(e=>'<option value="'+e.id+'">'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
+  formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;">'+
+    '<div style="font-size:13px;font-weight:700;color:#1e5927;margin-bottom:10px;">Yangi profil</div>'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
+    '<select id="anp-emp" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+options+'</select>'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Login</label>'+
+    '<input id="anp-login" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;" autocapitalize="none">'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Parol</label>'+
+    '<input id="anp-parol" type="text" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+
+    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Rol</label>'+
+    '<select id="anp-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
+      '<option value="guest">👁 Guest</option><option value="editor">✏ Editor</option>'+
+    '</select>'+
+    '<div id="anp-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
+    '<button id="anp-save" style="width:100%;background:#558237;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
+  '</div>';
+  document.getElementById('anp-save').addEventListener('click', adminCreateProfile);
+}
+function escAdmin(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function adminCreateProfile(){
+  var empId = document.getElementById('anp-emp').value;
+  var login = document.getElementById('anp-login').value.trim().toLowerCase();
+  var parol = document.getElementById('anp-parol').value.trim();
+  var role = document.getElementById('anp-role').value;
+  var errEl = document.getElementById('anp-error');
+  errEl.style.display='none';
+  if(!login || !parol){
+    errEl.textContent = "Login va parolni to'ldiring";
+    errEl.style.display='block';
+    return;
+  }
+  if(parol.length < 4){
+    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
+    errEl.style.display='block';
+    return;
+  }
+  var node = orgData.find(n=>n.id===empId);
+  if(!node){
+    errEl.textContent = "Xodim topilmadi";
+    errEl.style.display='block';
+    return;
+  }
+  document.getElementById('anp-save').textContent = 'Saqlanmoqda...';
+  document.getElementById('anp-save').disabled = true;
+  try{
+    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&login=eq.'+login, {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    var existing = await check.json();
+    if(existing && existing.length){
+      errEl.textContent = "Bu login allaqachon band";
+      errEl.style.display='block';
+      document.getElementById('anp-save').textContent = 'Saqlash';
+      document.getElementById('anp-save').disabled = false;
+      return;
+    }
+    var id = 'app_' + Date.now();
+    var tg = (node.tg||'').replace(/^@/,'');
+    await fetch(SB_URL+'/rest/v1/applications', {
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({id:id, app:CURRENT_ADMIN_TAB, login:login, parol:parol, ism:node.fio, tg:tg, orgNodeId:node.id, role:role, status:'approved'})
+    });
+    document.getElementById('admin-new-profile-form').innerHTML='';
+    loadAdminList();
+  }catch(e){
+    errEl.textContent = 'Xatolik: '+e.message;
+    errEl.style.display='block';
+    document.getElementById('anp-save').textContent = 'Saqlash';
+    document.getElementById('anp-save').disabled = false;
+  }
 }
 
 async function loadAdminList(){
@@ -1069,7 +1154,8 @@ async function doAppLogin(){
         STORAGE_KEY = 'umatizim_data_' + USER_ID;
         var userRole = user.role || 'guest';
         CURRENT_USER_TG = user.tg || '';
-        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG}));
+        CURRENT_USER_ORG_ID = user.orgNodeId || '';
+        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG, orgNodeId:CURRENT_USER_ORG_ID}));
         document.getElementById('login-screen').style.display = 'none';
         startApp(CURRENT_APP, userRole);
       } else if(user.status === 'pending'){
@@ -1109,6 +1195,7 @@ showLogin('sirly');
       USER_ID = u.app + '_' + u.login;
       STORAGE_KEY = 'umatizim_data_' + USER_ID;
       CURRENT_USER_TG = u.tg || '';
+      CURRENT_USER_ORG_ID = u.orgNodeId || '';
           startApp(u.app, u.role || 'guest');
     }
   }catch(e){ localStorage.removeItem('app_login'); }
@@ -1117,7 +1204,7 @@ showLogin('sirly');
 function doLogoutAll(){
   localStorage.removeItem('app_login');
   document.getElementById('sirly-app').style.display = 'none';
-  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = '';
+  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = ''; CURRENT_USER_ORG_ID = '';
   window.scrollTo(0,0);
   showLogin('sirly');
 }
@@ -1252,6 +1339,10 @@ function kaitenToggleChat(id){
   renderKaiten();
 }
 function kaitenMyFio(){
+  if(CURRENT_USER_ORG_ID){
+    var byId = orgData.find(n => n.id === CURRENT_USER_ORG_ID);
+    if(byId) return byId.fio;
+  }
   if(!CURRENT_USER_TG) return null;
   var norm = kaitenNorm(CURRENT_USER_TG.replace(/^@/,''));
   if(!norm) return null;
