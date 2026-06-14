@@ -209,6 +209,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <input id="reg-ism" type="text" class="login-input" placeholder="Ism Familiya" autocomplete="off">
     <label class="login-label">Login</label>
     <input id="reg-login" type="text" class="login-input" placeholder="foydalanuvchi nomi" autocomplete="off" autocapitalize="none">
+    <label class="login-label">Telegram username</label>
+    <input id="reg-tg" type="text" class="login-input" placeholder="@username" autocomplete="off" autocapitalize="none">
     <label class="login-label">Parol</label>
     <input id="reg-parol" type="password" class="login-input" placeholder="parol o'ylab toping">
     <div id="reg-error" style="font-size:13px;text-align:center;margin-bottom:10px;display:none;color:#c0392b;"></div>
@@ -756,6 +758,7 @@ if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram
 
 var CURRENT_APP = null;
 var USER_ID = 'guest';
+var CURRENT_USER_TG = '';
 var SIRLY_USERS = { 'umid': 'umid2025' };
 var ADMIN_LOGIN = 'admin';
 var ADMIN_PAROL = 'admin2025';
@@ -811,6 +814,7 @@ document.getElementById('register-btn').addEventListener('click', function(){
   document.getElementById('reg-app-name').textContent = document.getElementById('login-app-name').textContent;
   document.getElementById('reg-ism').value = '';
   document.getElementById('reg-login').value = '';
+  document.getElementById('reg-tg').value = '';
   document.getElementById('reg-parol').value = '';
   document.getElementById('reg-error').style.display = 'none';
 });
@@ -823,10 +827,11 @@ document.getElementById('reg-back').addEventListener('click', function(){
 document.getElementById('reg-submit').addEventListener('click', async function(){
   var ism = document.getElementById('reg-ism').value.trim();
   var login = document.getElementById('reg-login').value.trim().toLowerCase();
+  var tg = document.getElementById('reg-tg').value.trim().replace(/^@/,'');
   var parol = document.getElementById('reg-parol').value;
   var errEl = document.getElementById('reg-error');
   
-  if(!ism || !login || !parol){
+  if(!ism || !login || !parol || !tg){
     errEl.textContent = "Barcha maydonlarni to'ldiring";
     errEl.style.display = 'block';
     return;
@@ -857,7 +862,7 @@ document.getElementById('reg-submit').addEventListener('click', async function()
     var r = await fetch(SB_URL+'/rest/v1/applications', {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({id:id, app:CURRENT_APP, login:login, parol:parol, ism:ism, status:'pending'})
+      body:JSON.stringify({id:id, app:CURRENT_APP, login:login, parol:parol, ism:ism, tg:tg, status:'pending'})
     });
     
     if(r.ok || r.status === 201){
@@ -1063,7 +1068,8 @@ async function doAppLogin(){
         USER_ID = CURRENT_APP + '_' + login;
         STORAGE_KEY = 'umatizim_data_' + USER_ID;
         var userRole = user.role || 'guest';
-        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole}));
+        CURRENT_USER_TG = user.tg || '';
+        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG}));
         document.getElementById('login-screen').style.display = 'none';
         startApp(CURRENT_APP, userRole);
       } else if(user.status === 'pending'){
@@ -1102,6 +1108,7 @@ showLogin('sirly');
       CURRENT_APP = u.app;
       USER_ID = u.app + '_' + u.login;
       STORAGE_KEY = 'umatizim_data_' + USER_ID;
+      CURRENT_USER_TG = u.tg || '';
           startApp(u.app, u.role || 'guest');
     }
   }catch(e){ localStorage.removeItem('app_login'); }
@@ -1110,7 +1117,7 @@ showLogin('sirly');
 function doLogoutAll(){
   localStorage.removeItem('app_login');
   document.getElementById('sirly-app').style.display = 'none';
-  USER_ID = 'guest'; CURRENT_APP = null;
+  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = '';
   window.scrollTo(0,0);
   showLogin('sirly');
 }
@@ -1238,20 +1245,34 @@ function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=d
 
 // =================== KAITEN ===================
 var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi"];
-var KAITEN_ROLE_LABELS = {ijrochi:'Ijrochi', nazoratchi:'Nazoratchi', other:'Boshqa'};
+var KAITEN_ROLE_LABELS = {ijrochi:'Ijrochi', nazoratchi:'Nazoratchi', yaratuvchi:'Yaratuvchi', other:'Boshqa'};
 var kaitenChatOpen = null;
 function kaitenToggleChat(id){
   kaitenChatOpen = (kaitenChatOpen===id) ? null : id;
   renderKaiten();
 }
+function kaitenMyFio(){
+  if(!CURRENT_USER_TG) return null;
+  var norm = kaitenNorm(CURRENT_USER_TG.replace(/^@/,''));
+  if(!norm) return null;
+  var node = orgData.find(n => n.tg && kaitenNorm(n.tg.replace(/^@/,'')) === norm);
+  return node ? node.fio : null;
+}
+function kaitenMyRoleForTask(t){
+  var myFio = kaitenMyFio();
+  if(myFio){
+    if(t.empFio && kaitenNorm(t.empFio)===kaitenNorm(myFio)) return 'ijrochi';
+    if(t.nazFio && kaitenNorm(t.nazFio)===kaitenNorm(myFio)) return 'nazoratchi';
+  }
+  return isAdmin ? 'yaratuvchi' : 'other';
+}
 function kaitenAddComment(id){
-  var roleSel=document.getElementById('kc-role-'+id);
   var inp=document.getElementById('kc-text-'+id);
   var text=inp.value.trim();
   if(!text){ notify('Matn kiriting!'); return; }
   var t=kaitenTasks.find(x=>x.id===id);
   if(!t.comments)t.comments=[];
-  t.comments.push({role:roleSel.value, text, time:new Date().toISOString()});
+  t.comments.push({role:kaitenMyRoleForTask(t), text, time:new Date().toISOString()});
   kaitenSave(); renderKaiten();
 }
 function kaitenDelComment(id, idx){
@@ -1464,15 +1485,10 @@ function kaitenCard(t){
       </div>`).join('') : '<div style="color:var(--white-50);font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
     chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--white-10)">
       ${msgsHtml}
-      ${isAdmin?`<div style="display:flex;gap:6px;margin-top:6px">
-        <select class="fi" id="kc-role-${t.id}" style="margin-top:0;flex-shrink:0;width:auto;font-size:11px;padding:6px">
-          <option value="ijrochi">Ijrochi</option>
-          <option value="nazoratchi">Nazoratchi</option>
-          <option value="other">Boshqa</option>
-        </select>
+      <div style="display:flex;gap:6px;margin-top:6px">
         <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px">
         <button class="fsave" style="margin-top:0;padding:8px 10px" onclick="kaitenAddComment('${t.id}')">➤</button>
-      </div>`:''}
+      </div>
     </div>`;
   }
   return `<div class="kaiten-card">
