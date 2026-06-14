@@ -1303,12 +1303,20 @@ function saveHujjatDetail(){
   it.link=document.getElementById('hj-link').value.trim();
   hujjatSave(); notify('Saqlandi ✓'); renderHujjatDetail();
 }
+function hujjatSafeFilename(name){
+  var dot = name.lastIndexOf('.');
+  var base = dot>0 ? name.slice(0,dot) : name;
+  var ext = dot>0 ? name.slice(dot).replace(/[^a-zA-Z0-9.]/g,'') : '';
+  base = base.replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'');
+  if(!base) base='file';
+  return base+ext;
+}
 async function hujjatUploadFile(input){
   var file=input.files[0]; if(!file) return;
   var it=getHujjat(); if(!it) return;
   notify('Yuklanmoqda...');
   try{
-    var path=it.id+'/'+Date.now()+'_'+encodeURIComponent(file.name);
+    var path=it.id+'/'+Date.now()+'_'+hujjatSafeFilename(file.name);
     var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream'},
