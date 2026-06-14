@@ -782,6 +782,7 @@ function hasPerm(key){
 }
 function hasSectionPerm(secId){
   if(isAdmin) return true;
+  if(curBolim!==0) return true;
   if(!USER_PERMS || !USER_PERMS.sections) return true;
   return USER_PERMS.sections.includes(secId);
 }
@@ -1786,9 +1787,10 @@ function saveBolimTitle(i){
 function openBolim(i){
   curBolim=i;
   db={sections:[]};
+  acadDb={sections:[]};
   var th=document.getElementById('p-home-title');
   if(th) th.textContent=bolimTitles[i];
-  load().then(function(){
+  Promise.all([load(), acadLoad()]).then(function(){
     goTo('p-home');
     renderSections();
     updateBc();
@@ -1799,7 +1801,10 @@ function goTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remov
 function goBack(p){while(navStack[navStack.length-1]!==p&&navStack.length>1)navStack.pop();document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active');sirlyRender(p);updateLogoutBtn(p);window.scrollTo(0,0);}
 function updateLogoutBtn(p){document.getElementById('logout-btn').style.display=(p==='p-entry1')?'block':'none';}
 function sirlyRender(p){
-  if(p==='p-entry2')renderBolimCards();
+  if(p==='p-entry2'){
+    renderBolimCards();
+    bolimTitlesLoad().catch(function(){}).then(renderBolimCards);
+  }
   else if(p==='p-home')renderSections();
   else if(p==='p-section')renderCats();
   else if(p==='p-cat')renderFlows();
@@ -1875,11 +1880,33 @@ function closeImg(){document.getElementById('img-modal').classList.remove('open'
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function notify(m){var n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
 
+var ACAD_IDS=['academy','academy2','academy3'];
 var ACAD_KEY='academy_db_v1';
 var curAcadSec=null,curAcadCat=null,curAcadItem=null;
 
-async function acadSave(){try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:acadDb})});}catch(e){localStorage.setItem(ACAD_KEY,JSON.stringify(acadDb));}}
-async function acadLoad(){try{var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.academy',{headers:SB_H});var rows=await r.json();if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){acadDb=rows[0].data;}else{var d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'academy',data:acadDb})});}catch(e2){}}}catch(e){var d=localStorage.getItem(ACAD_KEY);if(d)acadDb=JSON.parse(d);}}
+async function acadSave(){
+  var key=ACAD_IDS[curBolim];
+  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:acadDb})});}
+  catch(e){localStorage.setItem(ACAD_KEY+'_'+key,JSON.stringify(acadDb));}
+}
+async function acadLoad(){
+  var key=ACAD_IDS[curBolim];
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
+    var rows=await r.json();
+    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){acadDb=rows[0].data;}
+    else{
+      var d=localStorage.getItem(ACAD_KEY+'_'+key);
+      acadDb=d?JSON.parse(d):{sections:[]};
+      if(key==='academy'&&!d){var old=localStorage.getItem(ACAD_KEY);if(old)acadDb=JSON.parse(old);}
+      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:acadDb})});}catch(e2){}
+    }
+  }catch(e){
+    var d=localStorage.getItem(ACAD_KEY+'_'+key);
+    acadDb=d?JSON.parse(d):{sections:[]};
+    if(key==='academy'&&!d){var old=localStorage.getItem(ACAD_KEY);if(old)acadDb=JSON.parse(old);}
+  }
+}
 
 function formatAcadText(t){if(!t)return '';var s=esc(t);s=s.split('**').map((p,i)=>i%2===1?'<b>'+p+'</b>':p).join('');var lines=s.split('\n');var out=[],inList=false;lines.forEach(line=>{if(line.startsWith('* ')){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+line.slice(2)+'</li>');}else{if(inList){out.push('</ul>');inList=false;}out.push(line?(line+'<br>'):'<br>');}});if(inList)out.push('</ul>');return out.join('');}
 function openAcadSection(id){curAcadSec=id;curAcadCat=null;curAcadItem=null;goTo('p-acad-cats');}
