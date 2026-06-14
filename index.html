@@ -872,11 +872,19 @@ async function adminCreateProfile(){
     }
     var id = 'app_' + Date.now();
     var tg = (node.tg||'').replace(/^@/,'');
-    await fetch(SB_URL+'/rest/v1/applications', {
+    var resp = await fetch(SB_URL+'/rest/v1/applications', {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({id:id, app:CURRENT_ADMIN_TAB, login:login, parol:parol, ism:node.fio, tg:tg, orgNodeId:node.id, role:role, status:'approved'})
     });
+    if(!resp.ok){
+      var errBody = await resp.text();
+      errEl.textContent = 'Xatolik ('+resp.status+'): '+errBody;
+      errEl.style.display='block';
+      document.getElementById('anp-save').textContent = 'Saqlash';
+      document.getElementById('anp-save').disabled = false;
+      return;
+    }
     document.getElementById('admin-new-profile-form').innerHTML='';
     loadAdminList();
   }catch(e){
