@@ -1828,13 +1828,14 @@ function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){v
 
 function renderSections(){
   var g=document.getElementById('sections-grid');var h='';
+  var ordKey='cards_order_'+BOLIM_IDS[curBolim];
   var allCards=[...db.sections.filter(s=>hasSectionPerm(s.id)).map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
-  var savedOrder=JSON.parse(localStorage.getItem('cards_order')||'null');var ordered=allCards;
+  var savedOrder=JSON.parse(localStorage.getItem(ordKey)||'null');var ordered=allCards;
   if(savedOrder){var map=Object.fromEntries(allCards.map(s=>[s.id,s]));ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];}
   ordered.forEach(s=>{var isAcad=s._type==='academy';var onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;var editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;var delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''} ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="${editFn}">✏</button><button class="abtn abtn-red" onclick="${delFn}">✕</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div><div class="nav-card-arrow">→</div></div>`;});
   if(isAdmin)h+=`<button class="add-btn" onclick="showSecForm()" style="grid-column:1/-1">＋ Jarayon bo'limi</button><button class="add-btn" onclick="showAcadSecForm()" style="grid-column:1/-1;margin-top:0">＋ Akademiya bo'limi</button>`;
   g.innerHTML=h;document.getElementById('section-form').innerHTML='';
-  if(isAdmin){initDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();});initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem('cards_order',JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');}
+  if(isAdmin){initDrag(g,()=>ordered,arr=>{localStorage.setItem(ordKey,JSON.stringify(arr.map(s=>s.id)));renderSections();});initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem(ordKey,JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');}
 }
 function openSection(id){curSection=id;goTo('p-section')}
 function showSecForm(id){var sec=id?db.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div><div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('sf-title').focus();}
