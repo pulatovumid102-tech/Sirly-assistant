@@ -237,6 +237,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-title" style="margin-top:4px">Kaiten</div>
       <div class="nav-card-arrow">→</div>
     </div>
+    <div class="nav-card" onclick="goTo('p-hujjatlar')">
+      <div class="nav-card-title" style="margin-top:4px">Hujjatlar</div>
+      <div class="nav-card-arrow">→</div>
+    </div>
   </div>
 </div>
 
@@ -249,6 +253,27 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   </div>
   <div id="kaiten-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch;"></div>
   <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;"></div>
+</div>
+
+<div class="page" id="p-hujjatlar">
+  <div class="page-topbar">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
+      <span class="page-title">Hujjatlar</span>
+    </div>
+  </div>
+  <div class="search-wrap"><input class="search-inp" id="search-hujjat" placeholder="🔍 Qidirish..." oninput="renderHujjatlar()"></div>
+  <div id="hujjat-list" class="section-list"></div><div id="hujjat-form"></div>
+</div>
+
+<div class="page" id="p-hujjat-detail">
+  <div class="page-topbar">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-hujjatlar')">← Orqaga</button>
+      <span class="page-title" id="hujjat-detail-title">Hujjat</span>
+    </div>
+  </div>
+  <div id="hujjat-detail-body"></div>
 </div>
 
 <div class="page" id="p-org">
@@ -1196,6 +1221,115 @@ function doLogoutAll(){
 }
 
 var acadDb={sections:[]};
+var hujjatDb={items:[]};
+var curHujjat=null;
+var HUJJAT_KEY='hujjatlar_db_v1';
+var HUJJAT_BUCKET='hujjatlar';
+async function hujjatSave(){try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.hujjatlar',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:hujjatDb})});}catch(e){localStorage.setItem(HUJJAT_KEY,JSON.stringify(hujjatDb));}}
+async function hujjatLoad(){try{var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.hujjatlar',{headers:SB_H});var rows=await r.json();if(rows&&rows.length&&rows[0].data&&rows[0].data.items){hujjatDb=rows[0].data;}else{var d=localStorage.getItem(HUJJAT_KEY);if(d)hujjatDb=JSON.parse(d);try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'hujjatlar',data:hujjatDb})});}catch(e2){}}}catch(e){var d=localStorage.getItem(HUJJAT_KEY);if(d)hujjatDb=JSON.parse(d);}}
+function renderHujjatlar(){
+  var q=(document.getElementById('search-hujjat')?.value||'').trim().toLowerCase();
+  var filtered=q?hujjatDb.items.filter(it=>it.title.toLowerCase().includes(q)):hujjatDb.items;
+  var h='';
+  filtered.forEach((it,i)=>{
+    h+=`<div class="section-item" onclick="openHujjat('${it.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div class="section-name">${esc(it.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editHujjat('${it.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delHujjat('${it.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;
+  });
+  if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':"Hujjatlar yo'q"}</div>`;
+  document.getElementById('hujjat-list').innerHTML=h;
+  if(isAdmin){
+    document.getElementById('hujjat-form').innerHTML=`<button class="add-item-btn" onclick="showHujjatForm()">＋ Hujjat qo'shish</button>`;
+    if(!q){
+      var listEl=document.getElementById('hujjat-list');
+      initDrag(listEl,()=>hujjatDb.items,arr=>{hujjatDb.items=arr;hujjatSave();renderHujjatlar();});
+      initTouchDrag(listEl,()=>hujjatDb.items,arr=>{hujjatDb.items=arr;hujjatSave();renderHujjatlar();});
+    }
+  }else document.getElementById('hujjat-form').innerHTML='';
+}
+function showHujjatForm(id){
+  var it=id?hujjatDb.items.find(x=>x.id===id):null;
+  document.getElementById('hujjat-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="hf-title" value="${esc(it?.title||'')}" placeholder="Masalan: Bank rekvizitlari"></div><div class="fbtns"><button class="fsave" onclick="saveHujjat('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderHujjatlar()">Bekor</button></div></div>`;
+  document.getElementById('hf-title').focus();
+}
+function editHujjat(id){ showHujjatForm(id); }
+function saveHujjat(id){
+  var title=document.getElementById('hf-title').value.trim();
+  if(!title){ notify('Nom kiriting!'); return; }
+  if(id){ var it=hujjatDb.items.find(x=>x.id===id); if(it) it.title=title; }
+  else hujjatDb.items.push({id:'hj'+Date.now(), title, text:'', link:'', files:[]});
+  hujjatSave(); notify('Saqlandi ✓'); renderHujjatlar();
+}
+function delHujjat(id){
+  askConfirm("Hujjatni o'chirasizmi?",()=>{
+    hujjatDb.items=hujjatDb.items.filter(x=>x.id!==id);
+    hujjatSave(); renderHujjatlar(); notify("O'chirildi ✓");
+  });
+}
+function openHujjat(id){ curHujjat=id; goTo('p-hujjat-detail'); }
+function getHujjat(){ return hujjatDb.items.find(x=>x.id===curHujjat); }
+function renderHujjatDetail(){
+  var it=getHujjat(); if(!it) return;
+  document.getElementById('hujjat-detail-title').textContent=it.title;
+  var filesHtml = (it.files||[]).map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
+      <a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:13px;text-decoration:none">📎 ${esc(f.name)}</a>
+      ${isAdmin?`<button class="abtn abtn-red" onclick="hujjatDelFile(${i})">✕</button>`:''}
+    </div>`).join('');
+  if(!filesHtml) filesHtml=`<div style="color:var(--white-50);font-size:12px;padding:8px 0">Fayllar yo&#39;q</div>`;
+  var html = `
+    <div class="form-box" style="margin-top:10px">
+      <div class="flbl" style="margin-bottom:6px">Ma'lumot</div>
+      <div id="hujjat-text-view" style="font-size:13px;color:var(--white-80);white-space:pre-wrap;line-height:1.6;${it.text?'':'opacity:.5'}">${it.text?esc(it.text):"Ma'lumot kiritilmagan"}</div>
+      ${isAdmin?`<button class="abtn" style="margin-top:10px" onclick="showHujjatEditForm()">✏ Tahrirlash</button>`:''}
+      <div id="hujjat-edit-form"></div>
+    </div>
+    <div class="form-box" style="margin-top:10px">
+      <div class="flbl" style="margin-bottom:6px">Link</div>
+      ${it.link?`<a href="${esc(it.link)}" target="_blank" style="color:var(--lime);font-size:13px;word-break:break-all">${esc(it.link)}</a>`:`<div style="color:var(--white-50);font-size:12px">Link yo&#39;q</div>`}
+    </div>
+    <div class="form-box" style="margin-top:10px">
+      <div class="flbl" style="margin-bottom:6px">Fayllar</div>
+      ${filesHtml}
+      ${isAdmin?`<label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ Fayl yuklash<input type="file" style="display:none" onchange="hujjatUploadFile(this)"></label>`:''}
+    </div>
+  `;
+  document.getElementById('hujjat-detail-body').innerHTML=html;
+}
+function showHujjatEditForm(){
+  var it=getHujjat(); if(!it) return;
+  document.getElementById('hujjat-edit-form').innerHTML=`<div class="frow"><label class="flbl">Ma'lumot</label><textarea class="fi" id="hj-text" style="min-height:120px;resize:vertical">${esc(it.text||'')}</textarea></div><div class="frow"><label class="flbl">Link</label><input class="fi" id="hj-link" value="${esc(it.link||'')}" placeholder="https://..."></div><div class="fbtns"><button class="fsave" onclick="saveHujjatDetail()">Saqlash</button><button class="fcancel" onclick="renderHujjatDetail()">Bekor</button></div>`;
+}
+function saveHujjatDetail(){
+  var it=getHujjat(); if(!it) return;
+  it.text=document.getElementById('hj-text').value;
+  it.link=document.getElementById('hj-link').value.trim();
+  hujjatSave(); notify('Saqlandi ✓'); renderHujjatDetail();
+}
+async function hujjatUploadFile(input){
+  var file=input.files[0]; if(!file) return;
+  var it=getHujjat(); if(!it) return;
+  notify('Yuklanmoqda...');
+  try{
+    var path=it.id+'/'+Date.now()+'_'+encodeURIComponent(file.name);
+    var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream'},
+      body:file
+    });
+    if(!r.ok){ var err=await r.text(); notify('Xatolik: '+err); return; }
+    var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
+    if(!it.files) it.files=[];
+    it.files.push({name:file.name, url, path});
+    hujjatSave(); notify('Yuklandi ✓'); renderHujjatDetail();
+  }catch(e){ notify('Xatolik: '+e.message); }
+}
+async function hujjatDelFile(idx){
+  var it=getHujjat(); if(!it) return;
+  var f=it.files[idx]; if(!f) return;
+  askConfirm("Faylni o'chirasizmi?",async()=>{
+    try{ await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+f.path,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}); }catch(e){}
+    it.files.splice(idx,1);
+    hujjatSave(); renderHujjatDetail(); notify("O'chirildi ✓");
+  });
+}
 document.getElementById('logout-btn').addEventListener('click', function(){
   doLogoutAll();
 });
@@ -1232,6 +1366,8 @@ function sirlyRender(p){
   else if(p==='p-acad-items')renderAcadItems();
   else if(p==='p-acad-detail')renderAcadDetail();
   else if(p==='p-kaiten')renderKaiten();
+  else if(p==='p-hujjatlar')renderHujjatlar();
+  else if(p==='p-hujjat-detail')renderHujjatDetail();
   updateBc();
 }
 function updateBc(){
@@ -1744,6 +1880,7 @@ setInterval(function(){
 
 load().then(()=>{updateBc();});
 acadLoad().catch(()=>{});
+hujjatLoad().catch(()=>{});
 
 function sirlyStart(role){
   if(role === 'editor'){
