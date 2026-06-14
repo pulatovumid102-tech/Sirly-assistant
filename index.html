@@ -1545,7 +1545,7 @@ function delAcadItem(secId,catId,itemId){askConfirm("Mavzuni o'chirasizmi?",()=>
 function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=document.getElementById('nm-btn-'+id);if(!wrap)return;var collapsed=wrap.classList.contains('node-msg-collapsed');if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}}
 
 // =================== KAITEN ===================
-var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi"];
+var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi","Yuridik bo'limi"];
 var KAITEN_ROLE_LABELS = {ijrochi:'Ijrochi', nazoratchi:'Nazoratchi', yaratuvchi:'Yaratuvchi', other:'Boshqa'};
 var kaitenChatOpen = null;
 function kaitenToggleChat(id){
@@ -1853,16 +1853,15 @@ function kaitenCard(t){
     ${chatHtml}
   </div>`;
 }
-var kaitenFilterDept = '';
+var kaitenFilterDept = KAITEN_DEPTS[0];
 function kaitenSetFilter(idx){
-  kaitenFilterDept = (idx>=0 && idx<KAITEN_DEPTS.length) ? KAITEN_DEPTS[idx] : '';
+  kaitenFilterDept = (idx>=0 && idx<KAITEN_DEPTS.length) ? KAITEN_DEPTS[idx] : KAITEN_DEPTS[0];
   renderKaiten();
 }
 function renderKaitenFilter(){
   var el = document.getElementById('kaiten-filter');
   if(!el) return;
-  var h = `<button class="kaiten-filter-chip${kaitenFilterDept===''?' active':''}" onclick="kaitenSetFilter(-1)">Barchasi</button>`;
-  h += KAITEN_DEPTS.map((d,i)=>`<button class="kaiten-filter-chip${kaitenFilterDept===d?' active':''}" onclick="kaitenSetFilter(${i})">${esc(d)}</button>`).join('');
+  var h = KAITEN_DEPTS.map((d,i)=>`<button class="kaiten-filter-chip${kaitenFilterDept===d?' active':''}" onclick="kaitenSetFilter(${i})">${esc(d)}</button>`).join('');
   el.innerHTML = h;
 }
 function kaitenRenderBoardStructure(){
