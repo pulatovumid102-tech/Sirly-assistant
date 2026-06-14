@@ -3260,7 +3260,7 @@ def main():
     application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
 
     # Hujjatlar -> "Botga yuborish" navbati
-    application.job_queue.run_repeating(check_file_send_requests_job, interval=5, first=5)
+    application.job_queue.run_repeating(check_file_send_requests_job, interval=1, first=1)
 
     # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
     for time_key in CHECKLIST_TIMES:
