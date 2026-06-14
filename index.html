@@ -1238,6 +1238,29 @@ function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=d
 
 // =================== KAITEN ===================
 var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi"];
+var KAITEN_ROLE_LABELS = {ijrochi:'Ijrochi', nazoratchi:'Nazoratchi', other:'Boshqa'};
+var kaitenChatOpen = null;
+function kaitenToggleChat(id){
+  kaitenChatOpen = (kaitenChatOpen===id) ? null : id;
+  renderKaiten();
+}
+function kaitenAddComment(id){
+  var roleSel=document.getElementById('kc-role-'+id);
+  var inp=document.getElementById('kc-text-'+id);
+  var text=inp.value.trim();
+  if(!text){ notify('Matn kiriting!'); return; }
+  var t=kaitenTasks.find(x=>x.id===id);
+  if(!t.comments)t.comments=[];
+  t.comments.push({role:roleSel.value, text, time:new Date().toISOString()});
+  kaitenSave(); renderKaiten();
+}
+function kaitenDelComment(id, idx){
+  askConfirm("Xabarni o'chirasizmi?",()=>{
+    var t=kaitenTasks.find(x=>x.id===id);
+    t.comments.splice(idx,1);
+    kaitenSave(); renderKaiten();
+  });
+}
 var kaitenTasks = [];
 function kaitenNorm(s){ return String(s||'').toLowerCase().replace(/['’ʻ`]/g,'').replace(/\s+/g,' ').trim(); }
 async function kaitenSave(){
@@ -1428,18 +1451,48 @@ function kaitenCard(t){
   var meta = [t.dept, t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):''].filter(Boolean).join(' — ');
   var nazText = t.nazFio ? `Nazoratchi: ${t.nazFio}${t.nazRole?' ('+t.nazRole+')':''}` : '';
   var tl = kaitenTimeLeft(t.deadline);
+  var comments = t.comments||[];
+  var chatOpen = kaitenChatOpen===t.id;
+  var chatHtml='';
+  if(chatOpen){
+    var msgsHtml = comments.length ? comments.map((c,i)=>`<div style="padding:6px 0;border-bottom:1px solid var(--white-10)">
+        <div style="font-size:11px;font-weight:700;color:var(--lime)">${esc(KAITEN_ROLE_LABELS[c.role]||c.role)}
+          <span style="color:var(--white-50);font-weight:400">• ${esc(kaitenFormatDeadline(c.time))}</span>
+          ${isAdmin?`<button class="abtn abtn-red" style="float:right;padding:2px 6px" onclick="kaitenDelComment('${t.id}',${i})">x</button>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--white-80);margin-top:2px">${esc(c.text)}</div>
+      </div>`).join('') : '<div style="color:var(--white-50);font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
+    chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--white-10)">
+      ${msgsHtml}
+      ${isAdmin?`<div style="display:flex;gap:6px;margin-top:6px">
+        <select class="fi" id="kc-role-${t.id}" style="margin-top:0;flex-shrink:0;width:auto;font-size:11px;padding:6px">
+          <option value="ijrochi">Ijrochi</option>
+          <option value="nazoratchi">Nazoratchi</option>
+          <option value="other">Boshqa</option>
+        </select>
+        <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px">
+        <button class="fsave" style="margin-top:0;padding:8px 10px" onclick="kaitenAddComment('${t.id}')">➤</button>
+      </div>`:''}
+    </div>`;
+  }
   return `<div class="kaiten-card">
     <div class="kaiten-card-text">${esc(t.text)}</div>
     ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
     ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
     ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
     ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#ff7070':'var(--lime)'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
-    ${isAdmin?`<div class="kaiten-card-btns">
+    <div class="kaiten-card-btns">
+      ${isAdmin?`
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
-      <button class="abtn" style="margin-left:auto" onclick="kaitenShowEditForm('${t.id}')">✏</button>
+      `:''}
+      <button class="abtn" style="${isAdmin?'margin-left:auto':''}" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}</button>
+      ${isAdmin?`
+      <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
       <button class="abtn abtn-red" onclick="kaitenDelTask('${t.id}')">✕</button>
-    </div>`:''}
+      `:''}
+    </div>
+    ${chatHtml}
   </div>`;
 }
 function renderKaiten(){
