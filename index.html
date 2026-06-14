@@ -1271,6 +1271,7 @@ function renderHujjatDetail(){
   document.getElementById('hujjat-detail-title').textContent=it.title;
   var filesHtml = (it.files||[]).map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
       <a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:13px;text-decoration:none">📎 ${esc(f.name)}</a>
+      <button class="abtn" onclick="hujjatSendToBot(${i})">📤</button>
       ${isAdmin?`<button class="abtn abtn-red" onclick="hujjatDelFile(${i})">✕</button>`:''}
     </div>`).join('');
   if(!filesHtml) filesHtml=`<div style="color:var(--white-50);font-size:12px;padding:8px 0">Fayllar yo&#39;q</div>`;
@@ -1319,6 +1320,17 @@ async function hujjatUploadFile(input){
     if(!it.files) it.files=[];
     it.files.push({name:file.name, url, path});
     hujjatSave(); notify('Yuklandi ✓'); renderHujjatDetail();
+  }catch(e){ notify('Xatolik: '+e.message); }
+}
+async function hujjatSendToBot(idx){
+  var it=getHujjat(); if(!it) return;
+  var f=it.files[idx]; if(!f) return;
+  var tgUser = window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user;
+  if(!tgUser || !tgUser.id){ notify("Bu funksiya faqat Telegram ilovasida ishlaydi"); return; }
+  notify('Yuborilmoqda...');
+  try{
+    await fetch(SB_URL+'/rest/v1/file_send_requests',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'fsr'+Date.now(), chat_id:tgUser.id, file_url:f.url, file_name:f.name, status:'pending'})});
+    notify('Yuborildi ✓ botdan kuting');
   }catch(e){ notify('Xatolik: '+e.message); }
 }
 async function hujjatDelFile(idx){
