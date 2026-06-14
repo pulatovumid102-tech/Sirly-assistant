@@ -424,7 +424,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       var daysStr=(c.days||[]).map(d=>{var f=ORG_CL_DAY_LABELS.find(x=>x[0]===d);return f?f[1]:d;}).join(', ');
       return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
         <div style="flex:1">
-          <div style="color:var(--white-80)">${esc(c.text)}</div>
+          <div style="color:var(--white-80)">${i+1}. ${esc(c.text)}</div>
           <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.start||'')}-${esc(c.end||'')} • ${esc(daysStr)}</div>
         </div>
         ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelChecklistModal('${id}',${i})">x</button>`:''}
@@ -482,9 +482,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     orgShowChecklistModal(id);
   }
   function orgDelChecklistModal(id, idx){
-    var node=orgData.find(n=>n.id===id);
-    node.checklist.splice(idx,1);
-    orgSave(); orgShowChecklistModal(id);
+    askConfirm("Cheklist punktini o'chirasizmi?",()=>{
+      var node=orgData.find(n=>n.id===id);
+      node.checklist.splice(idx,1);
+      orgSave(); orgShowChecklistModal(id);
+    });
   }
   function orgOpenMenu(id){
     var node=orgData.find(n=>n.id===id);
