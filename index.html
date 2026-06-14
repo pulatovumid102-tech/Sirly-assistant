@@ -241,6 +241,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-title" style="margin-top:4px">Hujjatlar</div>
       <div class="nav-card-arrow">→</div>
     </div>
+    <div class="nav-card" id="card-sekretar" onclick="goTo('p-sekretar')">
+      <div class="nav-card-title" style="margin-top:4px">Sekretar</div>
+      <div class="nav-card-arrow">→</div>
+    </div>
   </div>
 </div>
 
@@ -274,6 +278,29 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     </div>
   </div>
   <div id="hujjat-detail-body"></div>
+</div>
+
+<div class="page" id="p-sekretar">
+  <div class="page-topbar">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
+      <span class="page-title">Sekretar</span>
+      <button class="back-btn" style="margin-left:auto" onclick="goTo('p-sekretar-arxiv')">🗄 Arxiv</button>
+    </div>
+  </div>
+  <div id="sekretar-list" class="section-list"></div>
+  <div id="sekretar-form"></div>
+  <button class="add-item-btn" onclick="showSekretarForm()">＋ Vazifa qo'shish</button>
+</div>
+
+<div class="page" id="p-sekretar-arxiv">
+  <div class="page-topbar">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBack('p-sekretar')">← Orqaga</button>
+      <span class="page-title">Arxiv</span>
+    </div>
+  </div>
+  <div id="sekretar-archive-list" class="section-list"></div>
 </div>
 
 <div class="page" id="p-org">
@@ -762,7 +789,7 @@ function hasSectionPerm(secId){
   return USER_PERMS.sections.includes(secId);
 }
 function applyEntryCardPerms(){
-  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar'};
+  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar','card-sekretar':'sekretar'};
   Object.keys(map).forEach(function(cid){
     var el=document.getElementById(cid);
     if(el) el.style.display = hasPerm(map[cid]) ? '' : 'none';
@@ -880,6 +907,7 @@ function adminPermsHtml(perms){
     chk('org','Org struktura', perms.org!==false)+
     chk('kaiten','Kaiten', perms.kaiten!==false)+
     chk('hujjatlar','Hujjatlar', perms.hujjatlar!==false)+
+    chk('sekretar','Sekretar', perms.sekretar!==false)+
     chk('bolimlar','Bo&#39;limlar', bolimlarChecked)+
     '<div id="aperm-sections-wrap" style="'+(bolimlarChecked?'':'opacity:.4;pointer-events:none')+'">'+secHtml+'</div>'+
   '</div>';
@@ -890,6 +918,7 @@ function adminReadPerms(){
     org: document.getElementById('aperm-org').checked,
     kaiten: document.getElementById('aperm-kaiten').checked,
     hujjatlar: document.getElementById('aperm-hujjatlar').checked,
+    sekretar: document.getElementById('aperm-sekretar').checked,
     bolimlar: document.getElementById('aperm-bolimlar').checked,
     sections: sections
   };
@@ -1422,6 +1451,249 @@ async function hujjatDelFile(idx){
     hujjatSave(); renderHujjatDetail(); notify("O'chirildi ✓");
   });
 }
+
+// =========================
+// SEKRETAR
+// =========================
+
+var sekretarDb={items:[],archive:[]};
+var sekretarDraft=null;
+var sekretarEditId=null;
+function sekretarKey(){ return 'sekretar_'+USER_ID; }
+async function sekretarSave(){
+  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+sekretarKey(),{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:sekretarDb})});}
+  catch(e){localStorage.setItem(sekretarKey(),JSON.stringify(sekretarDb));}
+}
+async function sekretarLoad(){
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+sekretarKey(),{headers:SB_H});
+    var rows=await r.json();
+    if(rows&&rows.length&&rows[0].data){
+      sekretarDb=rows[0].data;
+      if(!sekretarDb.items) sekretarDb.items=[];
+      if(!sekretarDb.archive) sekretarDb.archive=[];
+    }else{
+      var d=localStorage.getItem(sekretarKey());
+      sekretarDb=d?JSON.parse(d):{items:[],archive:[]};
+      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:sekretarKey(),data:sekretarDb})});}catch(e2){}
+    }
+  }catch(e){
+    var d=localStorage.getItem(sekretarKey());
+    sekretarDb=d?JSON.parse(d):{items:[],archive:[]};
+  }
+}
+function sekretarSortKey(it){
+  return (it.date||'9999-99-99')+'T'+(it.time||'99:99');
+}
+function renderSekretar(){
+  var items=(sekretarDb.items||[]).slice().sort(function(a,b){
+    var ka=sekretarSortKey(a), kb=sekretarSortKey(b);
+    return ka<kb?-1:(ka>kb?1:0);
+  });
+  var h=items.map(sekretarCard).join('');
+  if(!h) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Vazifalar yo&#39;q</div>';
+  document.getElementById('sekretar-list').innerHTML=h;
+  document.getElementById('sekretar-form').innerHTML='';
+  sekretarDraft=null; sekretarEditId=null;
+}
+function sekretarCard(it){
+  var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
+  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
+  return `<div class="kaiten-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div style="font-size:14px;font-weight:700;color:var(--lime)">📅 ${esc(it.date)} 🕐 ${esc(it.time)}</div>
+      <button class="abtn" onclick="sekretarFinish('${it.id}')" title="Yakunlash">☐ Yakunlash</button>
+    </div>
+    ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
+    ${person?`<div style="font-size:13px;color:var(--white-80);margin-top:2px">👤 ${esc(person)}</div>`:''}
+    ${it.purpose?`<div class="kaiten-card-text" style="margin-top:4px">🎯 ${esc(it.purpose)}</div>`:''}
+    ${it.link?`<a href="${esc(it.link)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:4px;word-break:break-all;text-decoration:none">🔗 ${esc(it.link)}</a>`:''}
+    ${filesHtml}
+    ${it.note?`<div style="font-size:12px;color:var(--white-50);margin-top:4px">📝 ${esc(it.note)}</div>`:''}
+    <div class="kaiten-card-btns">
+      <button class="abtn" onclick="showSekretarForm('${it.id}')">✏</button>
+      <button class="abtn abtn-red" onclick="sekretarDelete('${it.id}')">✕</button>
+    </div>
+  </div>`;
+}
+function renderSekretarArchive(){
+  var items=(sekretarDb.archive||[]);
+  var h=items.map(sekretarArchiveCard).join('');
+  if(!h) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Arxiv bo&#39;sh</div>';
+  document.getElementById('sekretar-archive-list').innerHTML=h;
+}
+function sekretarArchiveCard(it){
+  var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
+  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
+  return `<div class="kaiten-card" style="opacity:.75">
+    <div style="font-size:14px;font-weight:700;color:var(--white-50)">✅ 📅 ${esc(it.date)} 🕐 ${esc(it.time)}</div>
+    ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
+    ${person?`<div style="font-size:13px;color:var(--white-80);margin-top:2px">👤 ${esc(person)}</div>`:''}
+    ${it.purpose?`<div class="kaiten-card-text" style="margin-top:4px">🎯 ${esc(it.purpose)}</div>`:''}
+    ${it.link?`<a href="${esc(it.link)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:4px;word-break:break-all;text-decoration:none">🔗 ${esc(it.link)}</a>`:''}
+    ${filesHtml}
+    ${it.note?`<div style="font-size:12px;color:var(--white-50);margin-top:4px">📝 ${esc(it.note)}</div>`:''}
+    <div class="kaiten-card-btns">
+      <button class="abtn abtn-red" onclick="sekretarDeleteFromArchive('${it.id}')">✕</button>
+    </div>
+  </div>`;
+}
+function sekretarFinish(id){
+  var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Uchrashuv yakunlandimi?</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="fsave" onclick="sekretarArchiveItem('${id}')">✅ Bajarildi</button>
+      <button class="abtn-red" style="padding:10px;border-radius:10px;border:none;color:#fff;background:#e53935;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit" onclick="sekretarDeleteItem('${id}')">❌ Bekor bo'ldi</button>
+      <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
+    </div>`;
+  orgShowModal(html);
+}
+function sekretarArchiveItem(id){
+  var idx=sekretarDb.items.findIndex(x=>x.id===id);
+  if(idx<0) return;
+  var item=sekretarDb.items.splice(idx,1)[0];
+  if(!sekretarDb.archive) sekretarDb.archive=[];
+  sekretarDb.archive.unshift(item);
+  sekretarCancelReminder(item);
+  sekretarSave(); orgCloseModal(); renderSekretar(); notify("Arxivga ko'chirildi ✓");
+}
+function sekretarDeleteItem(id){
+  var item=sekretarDb.items.find(x=>x.id===id);
+  sekretarDb.items=sekretarDb.items.filter(x=>x.id!==id);
+  if(item) sekretarCancelReminder(item);
+  sekretarSave(); orgCloseModal(); renderSekretar(); notify("O'chirildi ✓");
+}
+function sekretarDelete(id){
+  askConfirm("Vazifani o'chirasizmi?",function(){
+    var item=sekretarDb.items.find(x=>x.id===id);
+    sekretarDb.items=sekretarDb.items.filter(x=>x.id!==id);
+    if(item) sekretarCancelReminder(item);
+    sekretarSave(); renderSekretar(); notify("O'chirildi ✓");
+  });
+}
+function sekretarDeleteFromArchive(id){
+  askConfirm("Arxivdan butunlay o'chirilsinmi?",function(){
+    sekretarDb.archive=sekretarDb.archive.filter(x=>x.id!==id);
+    sekretarSave(); renderSekretarArchive(); notify("O'chirildi ✓");
+  });
+}
+function showSekretarForm(id){
+  if(id){
+    var it=sekretarDb.items.find(x=>x.id===id);
+    if(!it) return;
+    sekretarDraft=JSON.parse(JSON.stringify(it));
+    sekretarEditId=id;
+  }else{
+    sekretarDraft={id:'sk'+Date.now(), files:[]};
+    sekretarEditId=null;
+  }
+  sekretarRefreshForm();
+  document.getElementById('sekretar-form').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function sekretarRefreshForm(){
+  document.getElementById('sekretar-form').innerHTML=`<div class="form-box fade">${sekretarFieldsHtml(sekretarDraft)}</div>`;
+}
+function sekretarFieldsHtml(d){
+  var filesHtml=(d.files||[]).map(function(f,i){
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--white-10)"><a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:12px;text-decoration:none">📎 ${esc(f.name)}</a><button class="abtn abtn-red" onclick="sekretarDelFile(${i})">✕</button></div>`;
+  }).join('');
+  return `
+    <div class="frow"><label class="flbl">Sana</label><input type="date" class="fi" id="sk-date" value="${esc(d.date||'')}"></div>
+    <div class="frow"><label class="flbl">Vaqt</label><input type="time" class="fi" id="sk-time" value="${esc(d.time||'')}"></div>
+    <div class="frow"><label class="flbl">Joy</label><input class="fi" id="sk-place" value="${esc(d.place||'')}" placeholder="Manzil..."></div>
+    <div class="frow"><label class="flbl">Kishi — ismi</label><input class="fi" id="sk-pname" value="${esc(d.personName||'')}"></div>
+    <div class="frow"><label class="flbl">Kishi — lavozimi</label><input class="fi" id="sk-prole" value="${esc(d.personRole||'')}"></div>
+    <div class="frow"><label class="flbl">Kishi — tel raqami</label><input class="fi" id="sk-pphone" value="${esc(d.personPhone||'')}"></div>
+    <div class="frow"><label class="flbl">Maqsad</label><textarea class="fi" id="sk-purpose" style="min-height:60px;resize:vertical">${esc(d.purpose||'')}</textarea></div>
+    <div class="frow"><label class="flbl">Link</label><input class="fi" id="sk-link" value="${esc(d.link||'')}" placeholder="https://..."></div>
+    <div class="frow"><label class="flbl">Eslatma</label><textarea class="fi" id="sk-note" style="min-height:50px;resize:vertical">${esc(d.note||'')}</textarea></div>
+    <div class="frow">
+      <label class="flbl">Fayllar</label>
+      ${filesHtml||'<div style="color:var(--white-50);font-size:12px;padding:6px 0">Fayl yo&#39;q</div>'}
+      <label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ ${(d.files&&d.files.length?d.files.length+1:1)}-faylni yuklang<input type="file" style="display:none" onchange="sekretarUploadFile(this)"></label>
+    </div>
+    <div class="fbtns"><button class="fsave" onclick="saveSekretarForm()">Saqlash</button><button class="fcancel" onclick="sekretarCancelForm()">Bekor</button></div>
+  `;
+}
+function sekretarSyncDraftFromForm(){
+  if(!sekretarDraft) return;
+  sekretarDraft.date=document.getElementById('sk-date').value;
+  sekretarDraft.time=document.getElementById('sk-time').value;
+  sekretarDraft.place=document.getElementById('sk-place').value.trim();
+  sekretarDraft.personName=document.getElementById('sk-pname').value.trim();
+  sekretarDraft.personRole=document.getElementById('sk-prole').value.trim();
+  sekretarDraft.personPhone=document.getElementById('sk-pphone').value.trim();
+  sekretarDraft.purpose=document.getElementById('sk-purpose').value.trim();
+  sekretarDraft.link=document.getElementById('sk-link').value.trim();
+  sekretarDraft.note=document.getElementById('sk-note').value;
+}
+function sekretarCancelForm(){
+  sekretarDraft=null; sekretarEditId=null;
+  document.getElementById('sekretar-form').innerHTML='';
+}
+async function sekretarUploadFile(input){
+  var file=input.files[0]; if(!file) return;
+  if(!sekretarDraft) return;
+  sekretarSyncDraftFromForm();
+  notify('Yuklanmoqda...');
+  try{
+    var path='sekretar/'+sekretarDraft.id+'/'+Date.now()+'_'+hujjatSafeFilename(file.name);
+    var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream'},
+      body:file
+    });
+    if(!r.ok){ var err=await r.text(); notify('Xatolik: '+err); return; }
+    var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
+    if(!sekretarDraft.files) sekretarDraft.files=[];
+    sekretarDraft.files.push({name:file.name, url, path});
+    notify('Yuklandi ✓');
+    sekretarRefreshForm();
+  }catch(e){ notify('Xatolik: '+e.message); }
+}
+function sekretarDelFile(i){
+  if(!sekretarDraft) return;
+  sekretarSyncDraftFromForm();
+  var f=sekretarDraft.files[i];
+  if(f){
+    fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+f.path,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).catch(function(){});
+    sekretarDraft.files.splice(i,1);
+  }
+  sekretarRefreshForm();
+}
+async function saveSekretarForm(){
+  if(!sekretarDraft) return;
+  sekretarSyncDraftFromForm();
+  if(!sekretarDraft.date || !sekretarDraft.time){ notify('Sana va vaqtni kiriting!'); return; }
+  if(!sekretarDraft.personName){ notify('Kishi ismini kiriting!'); return; }
+  if(!sekretarDraft.purpose){ notify('Maqsadni kiriting!'); return; }
+  if(sekretarEditId){
+    var idx=sekretarDb.items.findIndex(x=>x.id===sekretarEditId);
+    if(idx>=0) sekretarDb.items[idx]=sekretarDraft;
+  }else{
+    sekretarDb.items.push(sekretarDraft);
+  }
+  sekretarSave();
+  sekretarScheduleReminder(sekretarDraft);
+  notify('Saqlandi ✓');
+  renderSekretar();
+}
+async function sekretarScheduleReminder(it){
+  var tgUser=hujjatGetTgUser();
+  if(!tgUser || !tgUser.id) return;
+  try{
+    var iso=new Date(it.date+'T'+it.time+':00').toISOString();
+    var lines=['🔔 Eslatma: uchrashuv vaqti yetdi!','','📅 '+it.date+' 🕐 '+it.time];
+    if(it.place) lines.push('📍 '+it.place);
+    var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
+    if(person) lines.push('👤 '+person);
+    if(it.purpose) lines.push('🎯 '+it.purpose);
+    if(it.link) lines.push('🔗 '+it.link);
+    await fetch(SB_URL+'/rest/v1/bot_reminders?on_conflict=id',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal,resolution=merge-duplicates'},body:JSON.stringify({id:'rem_'+it.id, chat_id:tgUser.id, text:lines.join(String.fromCharCode(10)), remind_at:iso, status:'pending'})});
+  }catch(e){}
+}
+function sekretarCancelReminder(it){
+  fetch(SB_URL+'/rest/v1/bot_reminders?id=eq.rem_'+it.id,{method:'DELETE',headers:SB_H}).catch(function(){});
+}
 document.getElementById('logout-btn').addEventListener('click', function(){
   doLogoutAll();
 });
@@ -1460,6 +1732,8 @@ function sirlyRender(p){
   else if(p==='p-kaiten')renderKaiten();
   else if(p==='p-hujjatlar')renderHujjatlar();
   else if(p==='p-hujjat-detail')renderHujjatDetail();
+  else if(p==='p-sekretar')renderSekretar();
+  else if(p==='p-sekretar-arxiv')renderSekretarArchive();
   updateBc();
 }
 function updateBc(){
@@ -1983,6 +2257,7 @@ function sirlyStart(role){
   acadLoad().catch(function(){});
   orgLoad().catch(function(){ renderOrg(); });
   kaitenLoad().catch(function(){}).then(function(){ if(document.getElementById('p-kaiten').classList.contains('active')) renderKaiten(); });
+  sekretarLoad().catch(function(){});
 }
 </script>
 </body>
