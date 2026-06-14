@@ -1232,7 +1232,7 @@ function renderHujjatlar(){
   var filtered=q?hujjatDb.items.filter(it=>it.title.toLowerCase().includes(q)):hujjatDb.items;
   var h='';
   filtered.forEach((it,i)=>{
-    h+=`<div class="section-item" onclick="openHujjat('${it.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div class="section-name">${esc(it.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${(it.files&&it.files.length)?`<button class="abtn" onclick="event.stopPropagation();hujjatSendAllToBot('${it.id}')">📤</button>`:''}${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editHujjat('${it.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delHujjat('${it.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;
+    h+=`<div class="section-item" onclick="openHujjat('${it.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div class="section-name">${esc(it.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${`<button class="abtn" onclick="event.stopPropagation();hujjatSendAllToBot('${it.id}')">📤</button>`}${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editHujjat('${it.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delHujjat('${it.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;
   });
   if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':"Hujjatlar yo'q"}</div>`;
   document.getElementById('hujjat-list').innerHTML=h;
@@ -1271,7 +1271,6 @@ function renderHujjatDetail(){
   document.getElementById('hujjat-detail-title').textContent=it.title;
   var filesHtml = (it.files||[]).map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
       <a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:13px;text-decoration:none">📎 ${esc(f.name)}</a>
-      <button class="abtn" onclick="hujjatSendToBot(${i})">📤</button>
       ${isAdmin?`<button class="abtn abtn-red" onclick="hujjatDelFile(${i})">✕</button>`:''}
     </div>`).join('');
   if(!filesHtml) filesHtml=`<div style="color:var(--white-50);font-size:12px;padding:8px 0">Fayllar yo&#39;q</div>`;
@@ -1325,28 +1324,23 @@ async function hujjatUploadFile(input){
 function hujjatGetTgUser(){
   return window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user;
 }
-async function hujjatSendFileToBot(chatId, f){
-  await fetch(SB_URL+'/rest/v1/file_send_requests',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'fsr'+Date.now()+'_'+Math.random().toString(36).slice(2,7), chat_id:chatId, file_url:f.url, file_name:f.name, status:'pending'})});
-}
-async function hujjatSendToBot(idx){
-  var it=getHujjat(); if(!it) return;
-  var f=it.files[idx]; if(!f) return;
-  var tgUser = hujjatGetTgUser();
-  if(!tgUser || !tgUser.id){ notify("Bu funksiya faqat Telegram ilovasida ishlaydi"); return; }
-  notify('Yuborilmoqda...');
-  try{
-    await hujjatSendFileToBot(tgUser.id, f);
-    notify('Yuborildi ✓');
-  }catch(e){ notify('Xatolik: '+e.message); }
+async function hujjatPostSendRequest(payload){
+  await fetch(SB_URL+'/rest/v1/file_send_requests',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'fsr'+Date.now()+'_'+Math.random().toString(36).slice(2,7), status:'pending', ...payload})});
 }
 async function hujjatSendAllToBot(id){
   var it=hujjatDb.items.find(x=>x.id===id); if(!it) return;
-  var files=it.files||[]; if(!files.length){ notify("Fayl yo'q"); return; }
   var tgUser = hujjatGetTgUser();
   if(!tgUser || !tgUser.id){ notify("Bu funksiya faqat Telegram ilovasida ishlaydi"); return; }
   notify('Yuborilmoqda...');
   try{
-    for(var i=0;i<files.length;i++){ await hujjatSendFileToBot(tgUser.id, files[i]); }
+    var lines=['📄 '+it.title];
+    if(it.text && it.text.trim()){ lines.push(''); lines.push(it.text.trim()); }
+    if(it.link && it.link.trim()){ lines.push(''); lines.push('🔗 '+it.link.trim()); }
+    await hujjatPostSendRequest({chat_id:tgUser.id, kind:'message', message_text:lines.join('\n')});
+    var files=it.files||[];
+    for(var i=0;i<files.length;i++){
+      await hujjatPostSendRequest({chat_id:tgUser.id, kind:'file', file_url:files[i].url, file_name:files[i].name});
+    }
     notify('Yuborildi ✓');
   }catch(e){ notify('Xatolik: '+e.message); }
 }
