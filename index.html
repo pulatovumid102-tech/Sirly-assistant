@@ -1288,7 +1288,7 @@ function renderHujjatDetail(){
     <div class="form-box" style="margin-top:10px">
       <div class="flbl" style="margin-bottom:6px">Fayllar</div>
       ${filesHtml}
-      ${isAdmin?`<label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ Fayl yuklash<input type="file" style="display:none" onchange="hujjatUploadFile(this)"></label>`:''}
+      ${isAdmin?`<label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ ${(it.files&&it.files.length?it.files.length+1:1)}-faylni yuklang<input type="file" style="display:none" onchange="hujjatUploadFile(this)"></label>`:''}
     </div>
   `;
   document.getElementById('hujjat-detail-body').innerHTML=html;
