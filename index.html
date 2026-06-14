@@ -174,7 +174,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .org-pan-wrap::-webkit-scrollbar{display:none}
 .acad-content b{font-weight:700;color:var(--white)}
 .kaiten-col{flex-shrink:0;width:260px;background:var(--white-06);border:1px solid var(--white-10);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
-.kaiten-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--white-50);padding:4px 2px}
+.kaiten-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--white-50);padding:4px 2px;display:flex;align-items:center;gap:6px}
+.kaiten-col-title-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kaiten-col-edit-btn{flex-shrink:0;width:20px;height:20px;border:none;background:var(--white-06);border-radius:6px;color:var(--white-50);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.kaiten-add-col{flex-shrink:0;width:60px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
+.kaiten-add-col-btn{width:36px;height:36px;border-radius:50%;border:1.5px dashed var(--white-20);background:var(--white-06);color:var(--white-50);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
 .kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
@@ -244,25 +248,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     </div>
   </div>
   <div id="kaiten-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch;"></div>
-  <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;">
-    <div class="kaiten-col">
-      <div class="kaiten-col-title" id="kaiten-title-todo">Topshiriqlar</div>
-      <div class="kaiten-col-list" id="kaiten-list-todo"></div>
-      <div id="kaiten-add-form"></div>
-    </div>
-    <div class="kaiten-col">
-      <div class="kaiten-col-title" id="kaiten-title-progress">Jarayonda</div>
-      <div class="kaiten-col-list" id="kaiten-list-progress"></div>
-    </div>
-    <div class="kaiten-col">
-      <div class="kaiten-col-title" id="kaiten-title-done">Bajarildi</div>
-      <div class="kaiten-col-list" id="kaiten-list-done"></div>
-    </div>
-    <div class="kaiten-col">
-      <div class="kaiten-col-title" id="kaiten-title-accepted">Qabul qilindi</div>
-      <div class="kaiten-col-list" id="kaiten-list-accepted"></div>
-    </div>
-  </div>
+  <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;"></div>
 </div>
 
 <div class="page" id="p-org">
@@ -1374,23 +1360,39 @@ function kaitenDelComment(id, idx){
   });
 }
 var kaitenTasks = [];
+var kaitenColumns = [
+  {id:'todo', title:'Topshiriqlar'},
+  {id:'progress', title:'Jarayonda'},
+  {id:'done', title:'Bajarildi'},
+  {id:'accepted', title:'Qabul qilindi'}
+];
 function kaitenNorm(s){ return String(s||'').toLowerCase().replace(/['’ʻ`]/g,'').replace(/\s+/g,' ').trim(); }
 async function kaitenSave(){
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:kaitenTasks})});}
-  catch(e){localStorage.setItem('kaiten_tasks',JSON.stringify(kaitenTasks));}
+  var payload = {tasks:kaitenTasks, columns:kaitenColumns};
+  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:payload})});}
+  catch(e){localStorage.setItem('kaiten_tasks',JSON.stringify(payload));}
 }
 async function kaitenLoad(){
   try{
     var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{headers:SB_H});
     var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data){ kaitenTasks=rows[0].data; }
-    else{
-      var d=localStorage.getItem('kaiten_tasks'); kaitenTasks=d?JSON.parse(d):[];
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kaiten',data:kaitenTasks})});}catch(e2){}
+    if(rows&&rows.length&&rows[0].data){
+      kaitenApplyData(rows[0].data);
+    }else{
+      var d=localStorage.getItem('kaiten_tasks');
+      kaitenApplyData(d?JSON.parse(d):null);
+      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kaiten',data:{tasks:kaitenTasks, columns:kaitenColumns}})});}catch(e2){}
     }
   }catch(e){
-    var d=localStorage.getItem('kaiten_tasks'); kaitenTasks=d?JSON.parse(d):[];
+    var d=localStorage.getItem('kaiten_tasks');
+    kaitenApplyData(d?JSON.parse(d):null);
   }
+}
+function kaitenApplyData(data){
+  if(!data){ kaitenTasks=[]; return; }
+  if(Array.isArray(data)){ kaitenTasks=data; return; } // legacy format: plain tasks array
+  kaitenTasks = data.tasks || [];
+  if(data.columns && data.columns.length) kaitenColumns = data.columns;
 }
 function kaitenGetEmployees(deptName){
   var dept = orgData.find(n=>kaitenNorm(n.name)===kaitenNorm(deptName));
@@ -1511,12 +1513,6 @@ function kaitenCanEditTask(t){
   if(isAdmin) return true;
   return t.createdBy && t.createdBy === kaitenMyId();
 }
-function kaitenMoveRange(t){
-  // returns max index (inclusive) this user can move the task to
-  if(isAdmin) return 3;
-  var role = kaitenMyRoleForTask(t);
-  return role==='nazoratchi' ? 3 : 2;
-}
 function kaitenAddTask(){
   var f = kaitenReadFields('kt');
   if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
@@ -1548,13 +1544,13 @@ function kaitenDelTask(id){
   });
 }
 function kaitenMove(id, dir){
-  var order=['todo','progress','done','accepted'];
+  var order=kaitenColumns.map(c=>c.id);
   var t = kaitenTasks.find(x=>x.id===id);
   if(!t) return;
   var idx = order.indexOf(t.status);
+  if(idx<0) idx=0;
   var newIdx = idx + dir;
   if(newIdx<0||newIdx>=order.length) return;
-  if(newIdx > kaitenMoveRange(t)){ notify("Bu ustunga o'tkazish huquqingiz yo'q"); return; }
   if(t.status==='progress' && order[newIdx]==='done'){
     askConfirm("Bajargan vazifangiz chala emasmi? To'liq to'g'ri bajarganizga ishonchingiz komilmi?",()=>{
       t.status = 'done';
@@ -1589,9 +1585,10 @@ function kaitenTimeLeft(dl){
   return {text: parts.join(' ')+' qoldi', overdue:false};
 }
 function kaitenCard(t){
-  var idx=['todo','progress','done','accepted'].indexOf(t.status);
-  var maxIdx = kaitenMoveRange(t);
-  var canLeft = idx>0, canRight = idx<3 && idx<maxIdx;
+  var order = kaitenColumns.map(c=>c.id);
+  var idx = order.indexOf(t.status);
+  if(idx<0) idx=0;
+  var canLeft = idx>0, canRight = idx<order.length-1;
   var canEdit = kaitenCanEditTask(t);
   var meta = [t.dept, t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):''].filter(Boolean).join(' — ');
   var nazText = t.nazFio ? `Nazoratchi: ${t.nazFio}${t.nazRole?' ('+t.nazRole+')':''}` : '';
@@ -1647,19 +1644,100 @@ function renderKaitenFilter(){
   h += KAITEN_DEPTS.map((d,i)=>`<button class="kaiten-filter-chip${kaitenFilterDept===d?' active':''}" onclick="kaitenSetFilter(${i})">${esc(d)}</button>`).join('');
   el.innerHTML = h;
 }
+function kaitenRenderBoardStructure(){
+  var boardEl = document.getElementById('kaiten-board');
+  if(!boardEl) return;
+  var existingAddForm = document.getElementById('kaiten-add-form');
+  var savedAddForm = existingAddForm ? existingAddForm.innerHTML : '';
+  var h = kaitenColumns.map((col,i)=>`<div class="kaiten-col">
+      <div class="kaiten-col-title">
+        <span class="kaiten-col-title-text" id="kaiten-title-${col.id}"></span>
+        ${isAdmin?`<button class="kaiten-col-edit-btn" onclick="kaitenRenameColumn('${col.id}')">✏</button>`:''}
+      </div>
+      <div class="kaiten-col-list" id="kaiten-list-${col.id}"></div>
+      ${i===0?'<div id="kaiten-add-form"></div>':''}
+    </div>`).join('');
+  if(isAdmin){
+    h += `<div class="kaiten-add-col"><button class="kaiten-add-col-btn" onclick="kaitenAddColumn()">+</button></div>`;
+  }
+  boardEl.innerHTML = h;
+  var newAddForm = document.getElementById('kaiten-add-form');
+  if(newAddForm && savedAddForm) newAddForm.innerHTML = savedAddForm;
+}
+function kaitenRenameColumn(id){
+  var col = kaitenColumns.find(c=>c.id===id);
+  if(!col) return;
+  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Ustun nomini o'zgartirish</div>
+    <div class="frow"><input class="fi" id="kcol-rename-inp" value="${esc(col.title)}"></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="kaitenSaveColumnRename('${id}')">Saqlash</button>
+      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
+    </div>
+    ${kaitenColumns.length>1?`<button class="abtn abtn-red" style="width:100%;margin-top:8px;padding:10px" onclick="kaitenDeleteColumn('${id}')">✕ Ustunni o'chirish</button>`:''}`;
+  orgShowModal(html);
+}
+function kaitenSaveColumnRename(id){
+  var val = document.getElementById('kcol-rename-inp').value.trim();
+  if(!val){ notify('Nom kiriting!'); return; }
+  var col = kaitenColumns.find(c=>c.id===id);
+  if(col) col.title = val;
+  kaitenSave(); orgCloseModal(); renderKaiten();
+}
+function kaitenDeleteColumn(id){
+  if(kaitenColumns.length<=1) return;
+  var col = kaitenColumns.find(c=>c.id===id);
+  if(!col) return;
+  var taskCount = kaitenTasks.filter(t=>t.status===id).length;
+  var msg = taskCount
+    ? `"${col.title}" ustunini o'chirasizmi? Undagi ${taskCount} ta vazifa birinchi ustunga ko'chiriladi.`
+    : `"${col.title}" ustunini o'chirasizmi?`;
+  askConfirm(msg, ()=>{
+    kaitenColumns = kaitenColumns.filter(c=>c.id!==id);
+    var fallbackId = kaitenColumns[0].id;
+    kaitenTasks.forEach(t=>{ if(t.status===id) t.status = fallbackId; });
+    kaitenSave(); orgCloseModal(); renderKaiten(); notify("O'chirildi ✓");
+  }, "O'chirish", 'Bekor');
+}
+function kaitenAddColumn(){
+  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Yangi ustun</div>
+    <div class="frow"><input class="fi" id="kcol-new-inp" placeholder="Ustun nomi..."></div>
+    <div class="fbtns">
+      <button class="fsave" onclick="kaitenSaveNewColumn()">Qo'shish</button>
+      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
+    </div>`;
+  orgShowModal(html);
+}
+function kaitenSaveNewColumn(){
+  var val = document.getElementById('kcol-new-inp').value.trim();
+  if(!val){ notify('Nom kiriting!'); return; }
+  kaitenColumns.push({id:'col'+Date.now(), title:val});
+  kaitenSave(); orgCloseModal();
+  renderKaiten();
+}
 function renderKaiten(){
   renderKaitenFilter();
+  var boardEl = document.getElementById('kaiten-board');
+  if(boardEl){
+    var colEls = boardEl.querySelectorAll('.kaiten-col');
+    var hasAddBtn = !!boardEl.querySelector('.kaiten-add-col');
+    if(colEls.length !== kaitenColumns.length || hasAddBtn !== !!isAdmin){
+      kaitenRenderBoardStructure();
+    }
+  }
   var visibleTasks = kaitenFilterDept ? kaitenTasks.filter(t=>t.dept===kaitenFilterDept) : kaitenTasks;
-  var cols={todo:[],progress:[],done:[],accepted:[]};
-  visibleTasks.forEach(t=>{ if(cols[t.status]) cols[t.status].push(t); });
-  var titles={todo:'Topshiriqlar',progress:'Jarayonda',done:'Bajarildi',accepted:'Qabul qilindi'};
-  ['todo','progress','done','accepted'].forEach(status=>{
-    var el=document.getElementById('kaiten-list-'+status);
-    var titleEl=document.getElementById('kaiten-title-'+status);
-    if(titleEl) titleEl.textContent = titles[status]+' — '+cols[status].length+' ta';
+  var cols={};
+  kaitenColumns.forEach(c=>cols[c.id]=[]);
+  visibleTasks.forEach(t=>{
+    if(cols[t.status]) cols[t.status].push(t);
+    else if(kaitenColumns.length) cols[kaitenColumns[0].id].push(t);
+  });
+  kaitenColumns.forEach(col=>{
+    var el=document.getElementById('kaiten-list-'+col.id);
+    var titleEl=document.getElementById('kaiten-title-'+col.id);
+    if(titleEl) titleEl.textContent = col.title+' — '+cols[col.id].length+' ta';
     if(!el) return;
-    if(!cols[status].length){ el.innerHTML='<div style="text-align:center;padding:16px;color:var(--white-50);font-size:12px">Vazifalar yo&#39;q</div>'; }
-    else el.innerHTML = cols[status].map(kaitenCard).join('');
+    if(!cols[col.id].length){ el.innerHTML='<div style="text-align:center;padding:16px;color:var(--white-50);font-size:12px">Vazifalar yo&#39;q</div>'; }
+    else el.innerHTML = cols[col.id].map(kaitenCard).join('');
   });
   var addFormEl = document.getElementById('kaiten-add-form');
   if(addFormEl && !addFormEl.innerHTML){
