@@ -1501,10 +1501,27 @@ function kaitenReadFields(prefix){
   if(nazRaw){ var np=nazRaw.split('|'); nazFio=np[0]; nazRole=np[1]||''; nazDept=np[2]||''; }
   return {dept,empFio,empRole,nazFio,nazRole,nazDept,deadline,text};
 }
+function kaitenMyId(){
+  // Unique identity key for "who created/owns" a task — prefers org link, falls back to login
+  var fio = kaitenMyFio();
+  if(fio) return 'fio:'+kaitenNorm(fio);
+  return 'user:'+USER_ID;
+}
+function kaitenCanEditTask(t){
+  if(isAdmin) return true;
+  return t.createdBy && t.createdBy === kaitenMyId();
+}
+function kaitenMoveRange(t){
+  // returns max index (inclusive) this user can move the task to
+  if(isAdmin) return 3;
+  var role = kaitenMyRoleForTask(t);
+  return role==='nazoratchi' ? 3 : 2;
+}
 function kaitenAddTask(){
   var f = kaitenReadFields('kt');
   if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
   f.id='kt'+Date.now(); f.status='todo';
+  f.createdBy = kaitenMyId();
   kaitenTasks.push(f);
   kaitenSave(); notify('Saqlandi ✓');
   document.getElementById('kaiten-add-form').innerHTML='';
@@ -1513,12 +1530,16 @@ function kaitenAddTask(){
 function kaitenSaveEdit(id){
   var t = kaitenTasks.find(function(x){return x.id===id;});
   if(!t) return;
+  if(!kaitenCanEditTask(t)){ notify("Bu vazifani tahrirlash huquqingiz yo'q"); return; }
   var f = kaitenReadFields('ke');
   if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
   Object.assign(t, f);
   kaitenSave(); notify('Saqlandi ✓'); orgCloseModal(); renderKaiten();
 }
 function kaitenDelTask(id){
+  var t = kaitenTasks.find(x=>x.id===id);
+  if(!t) return;
+  if(!kaitenCanEditTask(t)){ notify("Bu vazifani o'chirish huquqingiz yo'q"); return; }
   askConfirm("Vazifani o'chirasizmi?",()=>{
     kaitenTasks = kaitenTasks.filter(t=>t.id!==id);
     kaitenSave(); renderKaiten(); notify("O'chirildi ✓");
@@ -1531,6 +1552,7 @@ function kaitenMove(id, dir){
   var idx = order.indexOf(t.status);
   var newIdx = idx + dir;
   if(newIdx<0||newIdx>=order.length) return;
+  if(newIdx > kaitenMoveRange(t)){ notify("Bu ustunga o'tkazish huquqingiz yo'q"); return; }
   t.status = order[newIdx];
   kaitenSave(); renderKaiten();
 }
@@ -1559,7 +1581,9 @@ function kaitenTimeLeft(dl){
 }
 function kaitenCard(t){
   var idx=['todo','progress','done','accepted'].indexOf(t.status);
-  var canLeft = idx>0, canRight = idx<3;
+  var maxIdx = kaitenMoveRange(t);
+  var canLeft = idx>0, canRight = idx<3 && idx<maxIdx;
+  var canEdit = kaitenCanEditTask(t);
   var meta = [t.dept, t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):''].filter(Boolean).join(' — ');
   var nazText = t.nazFio ? `Nazoratchi: ${t.nazFio}${t.nazRole?' ('+t.nazRole+')':''}` : '';
   var tl = kaitenTimeLeft(t.deadline);
@@ -1589,15 +1613,15 @@ function kaitenCard(t){
     ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
     ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#ff7070':'var(--lime)'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
     <div class="kaiten-card-btns">
-      ${isAdmin?`
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
-      `:''}
-      <button class="abtn" style="${isAdmin?'margin-left:auto':''}" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}</button>
-      ${isAdmin?`
+      <button class="abtn" style="${(canLeft||canRight)?'':'margin-right:auto'}" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}</button>
+      <div style="margin-left:auto;display:flex;gap:6px">
+      ${canEdit?`
       <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
       <button class="abtn abtn-red" onclick="kaitenDelTask('${t.id}')">✕</button>
       `:''}
+      </div>
     </div>
     ${chatHtml}
   </div>`;
@@ -1615,12 +1639,8 @@ function renderKaiten(){
     else el.innerHTML = cols[status].map(kaitenCard).join('');
   });
   var addFormEl = document.getElementById('kaiten-add-form');
-  if(isAdmin){
-    if(addFormEl && !addFormEl.innerHTML){
-      addFormEl.innerHTML = '<button class="add-item-btn" onclick="kaitenShowAddForm()">＋ Vazifa qo&#39;shish</button>';
-    }
-  } else if(addFormEl){
-    addFormEl.innerHTML='';
+  if(addFormEl && !addFormEl.innerHTML){
+    addFormEl.innerHTML = '<button class="add-item-btn" onclick="kaitenShowAddForm()">＋ Vazifa qo&#39;shish</button>';
   }
 }
 setInterval(function(){
