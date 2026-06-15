@@ -107,6 +107,77 @@ async def check_bot_reminders_job(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_bot_reminders_job error: {e}")
 
 # =========================
+# KAITEN -> kunlik statistika (10:00 va 20:00)
+# =========================
+
+async def kaiten_daily_stats_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        time_label = context.job.data.get("label", "")
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/biznes_data",
+                headers=SB_HEADERS,
+                params={"id": "eq.kaiten", "select": "data"}
+            )
+            rows = r.json()
+            if not rows or not isinstance(rows, list) or not rows[0].get("data"):
+                return
+            data = rows[0]["data"]
+            tasks = data.get("tasks", [])
+            columns = data.get("columns", [
+                {"id": "todo", "title": "Topshiriqlar"},
+                {"id": "progress", "title": "Jarayonda"},
+                {"id": "done", "title": "Bajarildi"},
+                {"id": "accepted", "title": "Qabul qilindi"},
+            ])
+            now = datetime.now(TIMEZONE)
+            date_str = now.strftime("%d.%m.%Y")
+            lines = [f"📊 Vazifalar holati — {date_str} ({time_label})",""]
+            # Group by dept
+            dept_tasks = {}
+            for t in tasks:
+                dept = t.get("dept") or "Boshqa"
+                if dept not in dept_tasks:
+                    dept_tasks[dept] = []
+                dept_tasks[dept].append(t)
+            if not dept_tasks:
+                lines.append("Hozircha vazifalar yo'q")
+            else:
+                col_emojis = {"todo":"📋","progress":"▶️","done":"✅","accepted":"🏆"}
+                for dept, dtasks in dept_tasks.items():
+                    lines.append(f"📁 {dept}")
+                    for col in columns:
+                        count = sum(1 for t in dtasks if t.get("status") == col["id"])
+                        emoji = col_emojis.get(col["id"], "•")
+                        lines.append(f"  {emoji} {col['title']}: {count} ta")
+                    lines.append("")
+            text = "\n".join(lines).strip()
+            await context.bot.send_message(chat_id=CHAT_ID, text=text)
+    except Exception as e:
+        logger.error(f"kaiten_daily_stats_job error: {e}")
+
+async def schedule_daily_stats(application):
+    for hour, label in [(10, "Ertalab"), (20, "Kechki")]:
+        secs = seconds_until_time(hour, 0)
+        application.job_queue.run_once(
+            _daily_stats_once,
+            when=secs,
+            name=f"kaiten_stats_{hour}",
+            data={"hour": hour, "label": label}
+        )
+
+async def _daily_stats_once(context: ContextTypes.DEFAULT_TYPE):
+    await kaiten_daily_stats_job(context)
+    hour = context.job.data["hour"]
+    label = context.job.data["label"]
+    context.application.job_queue.run_once(
+        _daily_stats_once,
+        when=86400,
+        name=f"kaiten_stats_{hour}",
+        data={"hour": hour, "label": label}
+    )
+
+# =========================
 # KAITEN -> guruhga vazifa xabari
 # =========================
 
@@ -3291,6 +3362,15 @@ def main():
 
     # Kaiten -> guruhga vazifa xabari
     application.job_queue.run_repeating(check_group_messages_job, interval=2, first=2)
+
+    # Kaiten -> kunlik statistika (10:00 va 20:00)
+    for _hour, _label in [(10, "Ertalab"), (20, "Kechki")]:
+        application.job_queue.run_once(
+            _daily_stats_once,
+            when=seconds_until_time(_hour, 0),
+            name=f"kaiten_stats_{_hour}",
+            data={"hour": _hour, "label": _label}
+        )
 
     # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
     for time_key in CHECKLIST_TIMES:
