@@ -367,7 +367,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
         </div>
-        ${orgIsAdmin()?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px">⋮</button>`:''}
+        ${orgIsAdmin()?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px${node.color==='#ffffff'?';border-color:rgba(22,87,58,0.15);background:rgba(22,87,58,0.06);color:#16573a':''}">⋮</button>`:''}
       </div>
       <div id="org-form-${node.id}"></div>
       <div id="org-children-${node.id}"></div>
@@ -2027,30 +2027,130 @@ function kaitenFieldsHtml(prefix, task){
   var allEmps = kaitenGetAllEmployees();
   var nazOptions = allEmps.map(function(e){
     var val = e.fio+'|'+e.role+'|'+e.dept;
-    return `<option value="${esc(val)}">${esc(e.fio)} (${esc(e.role)} — ${esc(e.dept)})</option>`;
+    return '<option value="'+esc(val)+'">'+esc(e.fio)+' ('+esc(e.role)+' \u2014 '+esc(e.dept)+')</option>';
   }).join('');
   var dateVal='', timeVal='';
   if(task.deadline){
     var parts = task.deadline.split('T');
     dateVal = parts[0]||''; timeVal=(parts[1]||'').slice(0,5);
   }
-  return `
-    <input type="hidden" id="${prefix}-dept" value="${esc(dept)}">
-    <div class="frow"><label class="flbl">Xodim</label>
-      <select class="fi" id="${prefix}-emp"><option value="">— avval bo&#39;limni tanlang —</option></select>
-    </div>
-    <div class="frow"><label class="flbl">Nazoratchi xodim</label>
-      <select class="fi" id="${prefix}-naz"><option value="">— tanlanmagan —</option>${nazOptions}</select>
-    </div>
-    <div class="frow"><label class="flbl">Yakuniy muddat</label>
-      <div style="display:flex;gap:8px;margin-top:5px">
-        <input class="fi" type="date" id="${prefix}-deadline-date" value="${esc(dateVal)}" style="margin-top:0">
-        <input class="fi" type="time" id="${prefix}-deadline-time" value="${esc(timeVal)}" style="margin-top:0">
-      </div>
-    </div>
-    <div class="frow"><label class="flbl">Vazifa matni</label>
-      <textarea class="fi" id="${prefix}-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi...">${esc(task.text||'')}</textarea>
-    </div>`;
+  var links = task.links||[''];
+  var linksHtml = links.map(function(l,i){
+    return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
+      +'<input class="fi" type="url" id="'+prefix+'-link-'+i+'" value="'+esc(l)+'" placeholder="https://..." style="margin-top:0;flex:1">'
+      +(i>0?'<button class="abtn abtn-red" onclick="kaitenRemoveLink(\''+prefix+'\','+i+')" style="margin-top:0">\u2715</button>':'')
+      +'</div>';
+  }).join('');
+  var contacts = task.contacts||[{name:'',role:'',tel:''}];
+  var contactsHtml = contacts.map(function(c,i){
+    return '<div class="kaiten-contact-row" id="'+prefix+'-contact-'+i+'" style="border:1px solid var(--white-10);border-radius:8px;padding:8px;margin-top:'+(i===0?'5':'4')+'px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:11px;color:var(--white-50)">'+(i+1)+'-kontakt</span>'
+      +(i>0?'<button class="abtn abtn-red" onclick="kaitenRemoveContact(\''+prefix+'\','+i+')" style="padding:2px 6px">\u2715</button>':'')
+      +'</div>'
+      +'<input class="fi" id="'+prefix+'-cname-'+i+'" value="'+esc(c.name||'')+'" placeholder="Ismi" style="margin-top:0;margin-bottom:4px">'
+      +'<input class="fi" id="'+prefix+'-crole-'+i+'" value="'+esc(c.role||'')+'" placeholder="Lavozimi" style="margin-top:0;margin-bottom:4px">'
+      +'<input class="fi" id="'+prefix+'-ctel-'+i+'" value="'+esc(c.tel||'')+'" placeholder="Tel raqami" style="margin-top:0">'
+      +'</div>';
+  }).join('');
+  var files = task.files||[];
+  var filesHtml = files.map(function(f,i){
+    return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+      +'<a href="'+esc(f.url)+'" target="_blank" style="font-size:12px;color:var(--lime);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\ud83d\udcce '+esc(f.name)+'</a>'
+      +'<button class="abtn abtn-red" onclick="kaitenRemoveExistingFile(\''+prefix+'\','+i+')" style="padding:2px 6px">\u2715</button>'
+      +'</div>';
+  }).join('');
+  return ''
+    +'<input type="hidden" id="'+prefix+'-dept" value="'+esc(dept)+'">'
+    +'<input type="hidden" id="'+prefix+'-link-count" value="'+links.length+'">'
+    +'<input type="hidden" id="'+prefix+'-contact-count" value="'+contacts.length+'">'
+    +'<div class="frow"><label class="flbl">Vazifa matni <span style="color:#ff7070">*</span></label>'
+    +'<textarea class="fi" id="'+prefix+'-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi...">'+esc(task.text||'')+'</textarea></div>'
+    +'<div class="frow"><label class="flbl">Xodim <span style="color:#ff7070">*</span></label>'
+    +'<select class="fi" id="'+prefix+'-emp"><option value="">\u2014 tanlang \u2014</option></select></div>'
+    +'<div class="frow"><label class="flbl">Yakuniy muddat <span style="color:#ff7070">*</span></label>'
+    +'<div style="display:flex;gap:8px;margin-top:5px">'
+    +'<input class="fi" type="date" id="'+prefix+'-deadline-date" value="'+esc(dateVal)+'" style="margin-top:0">'
+    +'<input class="fi" type="time" id="'+prefix+'-deadline-time" value="'+esc(timeVal)+'" style="margin-top:0">'
+    +'</div></div>'
+    +'<div class="frow"><label class="flbl">Nazoratchi xodim</label>'
+    +'<select class="fi" id="'+prefix+'-naz"><option value="">\u2014 tanlanmagan \u2014</option>'+nazOptions+'</select></div>'
+    +'<div class="frow"><label class="flbl">Linklar</label>'
+    +'<div id="'+prefix+'-links-wrap">'+linksHtml+'</div>'
+    +'<button class="abtn" style="margin-top:6px" onclick="kaitenAddLink(\''+prefix+'\')">+ Link qo\'shish</button></div>'
+    +'<div class="frow"><label class="flbl">Fayllar</label>'
+    +'<div id="'+prefix+'-files-list">'+filesHtml+'</div>'
+    +'<input type="file" id="'+prefix+'-file-inp" multiple style="display:none" onchange="kaitenUploadFiles(\''+prefix+'\')">'
+    +'<button class="abtn" style="margin-top:6px" onclick="document.getElementById(\''+prefix+'-file-inp\').click()">+ Fayl yuklash</button>'
+    +'<div id="'+prefix+'-file-status" style="font-size:11px;color:var(--lime);margin-top:4px"></div></div>'
+    +'<div class="frow"><label class="flbl">Kontaktlar</label>'
+    +'<div id="'+prefix+'-contacts-wrap">'+contactsHtml+'</div>'
+    +'<button class="abtn" style="margin-top:6px" onclick="kaitenAddContact(\''+prefix+'\')">+ Kontakt qo\'shish</button></div>';
+}
+function kaitenAddLink(prefix){
+  var wrap=document.getElementById(prefix+'-links-wrap');
+  var countEl=document.getElementById(prefix+'-link-count');
+  var i=parseInt(countEl.value); countEl.value=i+1;
+  var div=document.createElement('div');
+  div.style.cssText='display:flex;gap:6px;margin-top:4px';
+  div.innerHTML='<input class="fi" type="url" id="'+prefix+'-link-'+i+'" placeholder="https://..." style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">\u2715</button>';
+  wrap.appendChild(div);
+}
+function kaitenRemoveLink(prefix,i){
+  var el=document.getElementById(prefix+'-link-'+i);
+  if(el&&el.parentNode) el.parentNode.remove();
+}
+function kaitenAddContact(prefix){
+  var wrap=document.getElementById(prefix+'-contacts-wrap');
+  var countEl=document.getElementById(prefix+'-contact-count');
+  var i=parseInt(countEl.value); countEl.value=i+1;
+  var div=document.createElement('div');
+  div.id=prefix+'-contact-'+i;
+  div.style.cssText='border:1px solid var(--white-10);border-radius:8px;padding:8px;margin-top:4px';
+  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;color:var(--white-50)">'+(i+1)+'-kontakt</span><button class="abtn abtn-red" onclick="this.closest(\'[id]\').remove()" style="padding:2px 6px">\u2715</button></div>'
+    +'<input class="fi" id="'+prefix+'-cname-'+i+'" placeholder="Ismi" style="margin-top:0;margin-bottom:4px">'
+    +'<input class="fi" id="'+prefix+'-crole-'+i+'" placeholder="Lavozimi" style="margin-top:0;margin-bottom:4px">'
+    +'<input class="fi" id="'+prefix+'-ctel-'+i+'" placeholder="Tel raqami" style="margin-top:0">';
+  wrap.appendChild(div);
+}
+function kaitenRemoveContact(prefix,i){
+  var el=document.getElementById(prefix+'-contact-'+i);
+  if(el) el.remove();
+}
+var kaitenUploadedFiles={};
+async function kaitenUploadFiles(prefix){
+  var inp=document.getElementById(prefix+'-file-inp');
+  var status=document.getElementById(prefix+'-file-status');
+  var list=document.getElementById(prefix+'-files-list');
+  if(!inp||!inp.files.length) return;
+  if(!kaitenUploadedFiles[prefix]) kaitenUploadedFiles[prefix]=[];
+  status.textContent='Yuklanmoqda...';
+  for(var f of inp.files){
+    try{
+      var safeName=hujjatSafeFilename(f.name);
+      var path='kaiten/'+Date.now()+'_'+safeName;
+      var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},body:f});
+      if(r.ok){
+        var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
+        kaitenUploadedFiles[prefix].push({name:f.name,url:url});
+        var idx2=kaitenUploadedFiles[prefix].length-1;
+        var div=document.createElement('div');
+        div.style.cssText='display:flex;align-items:center;gap:6px;margin-top:4px';
+        div.innerHTML='<a href="'+url+'" target="_blank" style="font-size:12px;color:var(--lime);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\ud83d\udcce '+f.name+'</a><button class="abtn abtn-red" onclick="kaitenRemoveUploadedFile(\''+prefix+'\','+idx2+',this.parentNode)" style="padding:2px 6px">\u2715</button>';
+        list.appendChild(div);
+      }
+    }catch(e){}
+  }
+  status.textContent='Yuklandi \u2713';
+  inp.value='';
+}
+function kaitenRemoveExistingFile(prefix,i){
+  var list=document.getElementById(prefix+'-files-list');
+  if(list&&list.children[i]) list.children[i].remove();
+}
+function kaitenRemoveUploadedFile(prefix,i,el){
+  if(kaitenUploadedFiles[prefix]) kaitenUploadedFiles[prefix].splice(i,1);
+  if(el) el.remove();
 }
 function kaitenFillFormValues(prefix, task){
   task = task || {};
@@ -2109,7 +2209,17 @@ function kaitenReadFields(prefix){
   if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; empTg=p[2]||''; }
   var nazFio='', nazRole='', nazDept='';
   if(nazRaw){ var np=nazRaw.split('|'); nazFio=np[0]; nazRole=np[1]||''; nazDept=np[2]||''; }
-  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text};
+  // Links
+  var links=[];
+  var linkWrap=document.getElementById(prefix+'-links-wrap');
+  if(linkWrap){ Array.from(linkWrap.querySelectorAll('input[type=url]')).forEach(function(el){ if(el.value.trim()) links.push(el.value.trim()); }); }
+  // Contacts
+  var contacts=[];
+  var contactWrap=document.getElementById(prefix+'-contacts-wrap');
+  if(contactWrap){ var rows=contactWrap.querySelectorAll('.kaiten-contact-row,[id^="'+prefix+'-contact-"]'); rows.forEach(function(row,i){ var nameEl=row.querySelector('[id$="-cname-'+i+'"],input[id*="cname"]'); var roleEl=row.querySelector('[id$="-crole-'+i+'"],input[id*="crole"]'); var telEl=row.querySelector('[id$="-ctel-'+i+'"],input[id*="ctel"]'); var name=(nameEl&&nameEl.value.trim())||''; var role=(roleEl&&roleEl.value.trim())||''; var tel=(telEl&&telEl.value.trim())||''; if(name||role||tel) contacts.push({name,role,tel}); }); }
+  // Files — existing + newly uploaded
+  var files = kaitenUploadedFiles[prefix]||[];
+  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text,links,contacts,files};
 }
 function kaitenMyId(){
   // Unique identity key for "who created/owns" a task — prefers org link, falls back to login
@@ -2124,10 +2234,13 @@ function kaitenCanEditTask(t){
 function kaitenAddTask(){
   var f = kaitenReadFields('kt');
   if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
+  if(!f.empFio){ notify('Xodimni tanlang!'); return; }
+  if(!f.deadline){ notify('Yakuniy muddatni kiriting!'); return; }
   askConfirm("Vazifani aniq tushunarli qilib berdingizmi? Esdan chiqmadimi hech narsa?",()=>{
     f.id='kt'+Date.now(); f.status='todo';
     f.createdBy = kaitenMyId();
     kaitenTasks.push(f);
+    kaitenUploadedFiles['kt']=[];
     kaitenSave(); notify('Saqlandi ✓');
     kaitenNotifyGroup(f);
     document.getElementById('kaiten-add-form').innerHTML='';
@@ -2173,7 +2286,19 @@ function kaitenMove(id, dir){
   var newIdx = idx + dir;
   if(newIdx<0||newIdx>=order.length) return;
   t.status = order[newIdx];
+  var colTitle = kaitenColumns[newIdx]?.title || t.status;
   kaitenSave(); renderKaiten();
+  kaitenNotifyMove(t, colTitle);
+}
+function kaitenNotifyMove(t, colTitle){
+  try{
+    var lines=[
+      '📋 Vazifa "'+colTitle+'" ustuniga o\'tkazildi',
+      '👤 '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':''),
+      '🎯 '+t.text
+    ];
+    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text:lines.join(String.fromCharCode(10)),status:'pending'})}).catch(function(){});
+  }catch(e){}
 }
 function kaitenFormatDeadline(dl){
   if(!dl) return '';
@@ -2226,12 +2351,16 @@ function kaitenCard(t){
       </div>
     </div>`;
   }
+  var linksHtml = (t.links&&t.links.length)?t.links.map(function(l){ return `<a href="${esc(l)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">🔗 ${esc(l)}</a>`; }).join(''):'';
+  var filesHtml = (t.files&&t.files.length)?t.files.map(function(f){ return `<a href="${esc(f.url)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">📎 ${esc(f.name)}</a>`; }).join(''):'';
+  var contactsHtml = (t.contacts&&t.contacts.length)?t.contacts.map(function(c){ return `<div style="font-size:11px;color:#16573a99;margin-top:2px">👤 ${esc(c.name)}${c.role?' · '+esc(c.role):''}${c.tel?' · '+esc(c.tel):''}</div>`; }).join(''):'';
   return `<div class="kaiten-card">
     <div class="kaiten-card-text">${esc(t.text)}</div>
     ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
     ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
     ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
     ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#d32f2f':'#1e7a4a'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
+    ${linksHtml}${filesHtml}${contactsHtml}
     <div class="kaiten-card-btns">
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
