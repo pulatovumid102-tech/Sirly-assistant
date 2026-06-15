@@ -182,14 +182,17 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
-.kaiten-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.kaiten-card{background:#ffffff;border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
 .org-white-dots{background-image:radial-gradient(circle, rgba(22,87,58,0.15) 1px, transparent 1px)!important;background-size:14px 14px;background-color:#ffffff;}
-.kaiten-card-text{font-size:13px;color:var(--white);line-height:1.4}
-.kaiten-card-meta{font-size:13px;color:var(--white-80);font-weight:600}
-.kaiten-card-naz{font-size:11px;color:var(--white-50);font-weight:400}
+.kaiten-card-text{font-size:13px;color:#16573a;line-height:1.4}
+.kaiten-card-meta{font-size:13px;color:#16573a;font-weight:600}
+.kaiten-card-naz{font-size:11px;color:#16573a99;font-weight:400}
 .kaiten-card-timer{font-size:11px;font-weight:700}
-.kaiten-card-deadline{font-size:11px;color:var(--lime);font-weight:600}
+.kaiten-card-deadline{font-size:11px;color:#1e7a4a;font-weight:600}
 .kaiten-card-btns{display:flex;gap:6px;margin-top:4px}
+.kaiten-card .abtn{border-color:rgba(22,87,58,0.15);background:rgba(22,87,58,0.06);color:#16573a}
+.kaiten-card .abtn:active{background:rgba(22,87,58,0.18)}
+.kaiten-card .abtn-red{border-color:rgba(211,47,47,.25);color:#d32f2f}
 </style>
 </head>
 <body>
@@ -2013,7 +2016,7 @@ function kaitenGetAllEmployees(){
     var dept=orgData.find(function(n){return kaitenNorm(n.name)===kaitenNorm(deptName);});
     if(!dept) return;
     orgData.filter(function(n){return n.parentId===dept.id && n.fio && n.fio.trim();}).forEach(function(e){
-      result.push({fio:e.fio, role:e.name, dept:deptName});
+      result.push({fio:e.fio, role:e.name, dept:deptName, tg:e.tg||''});
     });
   });
   return result;
@@ -2032,10 +2035,7 @@ function kaitenFieldsHtml(prefix, task){
     dateVal = parts[0]||''; timeVal=(parts[1]||'').slice(0,5);
   }
   return `
-    <div class="frow"><label class="flbl">Bo'lim</label>
-      <input type="hidden" id="${prefix}-dept" value="${esc(dept)}">
-      <div class="fi" style="display:flex;align-items:center;cursor:default">${esc(dept)}</div>
-    </div>
+    <input type="hidden" id="${prefix}-dept" value="${esc(dept)}">
     <div class="frow"><label class="flbl">Xodim</label>
       <select class="fi" id="${prefix}-emp"><option value="">— avval bo&#39;limni tanlang —</option></select>
     </div>
@@ -2092,8 +2092,8 @@ function kaitenUpdateEmpOptions(prefix, presetVal){
   var emps = kaitenGetEmployees(dept);
   if(!emps.length){ empSel.innerHTML = '<option value="">— xodim topilmadi —</option>'; return; }
   empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(function(e){
-    var val = e.fio+'|'+e.name;
-    var sel = (presetVal && presetVal===val) ? 'selected' : '';
+    var val = e.fio+'|'+e.name+'|'+(e.tg||'');
+    var sel = (presetVal && presetVal.split('|').slice(0,2).join('|')===val.split('|').slice(0,2).join('|')) ? 'selected' : '';
     return `<option value="${esc(val)}" ${sel}>${esc(e.fio)} (${esc(e.name)})</option>`;
   }).join('');
 }
@@ -2105,11 +2105,11 @@ function kaitenReadFields(prefix){
   var deadlineTime = document.getElementById(prefix+'-deadline-time').value;
   var deadline = deadlineDate ? (deadlineDate + 'T' + (deadlineTime||'00:00')) : '';
   var text = document.getElementById(prefix+'-text').value.trim();
-  var empFio='', empRole='';
-  if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; }
+  var empFio='', empRole='', empTg='';
+  if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; empTg=p[2]||''; }
   var nazFio='', nazRole='', nazDept='';
   if(nazRaw){ var np=nazRaw.split('|'); nazFio=np[0]; nazRole=np[1]||''; nazDept=np[2]||''; }
-  return {dept,empFio,empRole,nazFio,nazRole,nazDept,deadline,text};
+  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text};
 }
 function kaitenMyId(){
   // Unique identity key for "who created/owns" a task — prefers org link, falls back to login
@@ -2129,9 +2129,22 @@ function kaitenAddTask(){
     f.createdBy = kaitenMyId();
     kaitenTasks.push(f);
     kaitenSave(); notify('Saqlandi ✓');
+    kaitenNotifyGroup(f);
     document.getElementById('kaiten-add-form').innerHTML='';
     renderKaiten();
   }, 'Ha', "Yo'q");
+}
+function kaitenNotifyGroup(t){
+  try{
+    var lines=['🆕 Yangi vazifa — '+t.dept,''];
+    var empLine='👤 Xodim: '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':'');
+    if(t.empTg) empLine+=' — @'+t.empTg.replace(/^@/,'');
+    lines.push(empLine);
+    if(t.nazFio) lines.push('🧭 Nazoratchi: '+t.nazFio+(t.nazRole?' ('+t.nazRole+')':''));
+    lines.push('🎯 '+t.text);
+    if(t.deadline) lines.push('⏰ Muddat: '+kaitenFormatDeadline(t.deadline));
+    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
+  }catch(e){}
 }
 function kaitenSaveEdit(id){
   var t = kaitenTasks.find(function(x){return x.id===id;});
@@ -2198,17 +2211,17 @@ function kaitenCard(t){
   var chatOpen = kaitenChatOpen===t.id;
   var chatHtml='';
   if(chatOpen){
-    var msgsHtml = comments.length ? comments.map((c,i)=>`<div style="padding:6px 0;border-bottom:1px solid var(--white-10)">
-        <div style="font-size:11px;font-weight:700;color:var(--lime)">${esc(KAITEN_ROLE_LABELS[c.role]||c.role)}
-          <span style="color:var(--white-50);font-weight:400">• ${esc(kaitenFormatDeadline(c.time))}</span>
+    var msgsHtml = comments.length ? comments.map((c,i)=>`<div style="padding:6px 0;border-bottom:1px solid rgba(22,87,58,0.12)">
+        <div style="font-size:11px;font-weight:700;color:#1e7a4a">${esc(KAITEN_ROLE_LABELS[c.role]||c.role)}
+          <span style="color:#16573a99;font-weight:400">• ${esc(kaitenFormatDeadline(c.time))}</span>
           ${isAdmin?`<button class="abtn abtn-red" style="float:right;padding:2px 6px" onclick="kaitenDelComment('${t.id}',${i})">x</button>`:''}
         </div>
-        <div style="font-size:12px;color:var(--white-80);margin-top:2px">${esc(c.text)}</div>
-      </div>`).join('') : '<div style="color:var(--white-50);font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
-    chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--white-10)">
+        <div style="font-size:12px;color:#16573a;margin-top:2px">${esc(c.text)}</div>
+      </div>`).join('') : '<div style="color:#16573a99;font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
+    chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(22,87,58,0.12)">
       ${msgsHtml}
       <div style="display:flex;gap:6px;margin-top:6px">
-        <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px">
+        <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px;background:rgba(22,87,58,0.06);color:#16573a;border-color:rgba(22,87,58,0.15)">
         <button class="fsave" style="margin-top:0;padding:8px 10px" onclick="kaitenAddComment('${t.id}')">➤</button>
       </div>
     </div>`;
@@ -2218,7 +2231,7 @@ function kaitenCard(t){
     ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
     ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
     ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
-    ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#ff7070':'var(--lime)'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
+    ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#d32f2f':'#1e7a4a'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
     <div class="kaiten-card-btns">
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
