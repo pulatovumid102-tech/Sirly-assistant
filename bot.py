@@ -18,7 +18,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8935324683:AAFrVn1gszbbU5il0Us5dsMHWLLIHNHlVgw"
+TOKEN = "8935324683:AAFvaRkMnEy89ikySowTSLYRtaFqu_TDpyc"
 CHAT_ID = -1003914304171
 
 SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
@@ -105,6 +105,36 @@ async def check_bot_reminders_job(context: ContextTypes.DEFAULT_TYPE):
                         pass
     except Exception as e:
         logger.error(f"check_bot_reminders_job error: {e}")
+
+# =========================
+# KAITEN -> guruhga vazifa xabari
+# =========================
+
+async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/bot_group_messages",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                text = row.get("text") or ""
+                try:
+                    await context.bot.send_message(chat_id=CHAT_ID, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"group_message error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_group_messages_job error: {e}")
 
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -3251,56 +3281,16 @@ async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def main():
     application = Application.builder().token(TOKEN).build()
-    load_tasks()
     state["cycle_id"] += 1
-
-    # Restart dan keyin zadacha joblarini qayta schedule qilish
-    now_startup = datetime.now(TIMEZONE)
-    for tid, task in zadacha_tasks.items():
-        if all_accepted(task):
-            continue
-        # Accept reminder
-        all_users = task["targets"] + task.get("supervisor", [])
-        earliest = 300
-        for u in all_users:
-            if is_agent_working_now(u):
-                earliest = 300
-                break
-            secs = seconds_until_agent_works(u)
-            if secs < earliest:
-                earliest = max(secs, 60)
-        application.job_queue.run_once(
-            zadacha_accept_reminder_job,
-            when=earliest,
-            name=f"zaccrem_{tid}",
-            data={"task_id": tid}
-        )
-        # Deadline jobs
-        dl = task["deadline"]
-        if dl > now_startup:
-            application.job_queue.run_once(
-                zadacha_deadline_job,
-                when=(dl - now_startup).total_seconds(),
-                name=f"zdue_{tid}",
-                data={"task_id": tid}
-            )
-            remind_time = dl - timedelta(minutes=30)
-            if remind_time > now_startup:
-                application.job_queue.run_once(
-                    zadacha_pre_deadline_job,
-                    when=(remind_time - now_startup).total_seconds(),
-                    name=f"zpre_{tid}",
-                    data={"task_id": tid}
-                )
-
-    # Zadacha cleanup job
-    application.job_queue.run_repeating(zadacha_cleanup_job, interval=300, first=300)
 
     # Hujjatlar -> "Botga yuborish" navbati
     application.job_queue.run_repeating(check_file_send_requests_job, interval=1, first=1)
 
     # Sekretar -> uchrashuv eslatmalari
     application.job_queue.run_repeating(check_bot_reminders_job, interval=30, first=10)
+
+    # Kaiten -> guruhga vazifa xabari
+    application.job_queue.run_repeating(check_group_messages_job, interval=2, first=2)
 
     # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
     for time_key in CHECKLIST_TIMES:
@@ -3339,8 +3329,6 @@ def main():
     application.add_handler(CommandHandler("umidstop", umidstop_command))
     application.add_handler(CommandHandler("checklist", checklist_command))
     application.add_handler(CommandHandler("cheklistyaratish", cheklistyaratish_command))
-    application.add_handler(CommandHandler("zadacha", zadacha_command))
-    application.add_handler(CommandHandler("zadachi", zadachi_command))
     application.add_handler(CommandHandler("addagent", addagent_command))
     application.add_handler(CommandHandler("editagent", editagent_command))
     application.add_handler(CommandHandler("delagent", delagent_command))
@@ -3350,7 +3338,6 @@ def main():
     application.add_handler(CallbackQueryHandler(addagent_callback, pattern="^(addday_|adddays_done|addconfirm_yes|add_cancel)"))
     application.add_handler(CallbackQueryHandler(editagent_callback, pattern="^(edit_)"))
     application.add_handler(CallbackQueryHandler(delagent_callback, pattern="^(delagent_)"))
-    application.add_handler(CallbackQueryHandler(zadacha_callback, pattern="^(zt_|ze_|zs_|zd_|ztime_|zback_|zconfirm_)"))
     application.add_handler(CallbackQueryHandler(cheklistyaratish_callback, pattern="^ccl_new_"))
     application.add_handler(CallbackQueryHandler(cheklistyaratish_confirm_callback, pattern="^ccl_new_confirm$"))
     application.add_handler(CallbackQueryHandler(ccl_button_callback, pattern="^ccl_"))
