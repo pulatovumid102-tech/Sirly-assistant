@@ -18,7 +18,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = "8935324683:AAFvaRkMnEy89ikySowTSLYRtaFqu_TDpyc"
+TOKEN = "8935324683:AAFrVn1gszbbU5il0Us5dsMHWLLIHNHlVgw"
 CHAT_ID = -1003914304171
 
 SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
