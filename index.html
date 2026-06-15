@@ -391,11 +391,13 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     orgCloseModal();
     var node=orgData.find(n=>n.id===id);
     if(!node) return;
+    var telDisplay = (node.tels&&node.tels.length)?node.tels.join(', '):(node.tel||'—');
+    var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
       <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
         <div><span class="flbl">F.I.O</span><br><span style="color:var(--white-80)">${esc(node.fio||'—')}</span></div>
-        <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(node.tel||'—')}</span></div>
-        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(node.tg||'—')}</span></div>
+        <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(telDisplay)}</span></div>
+        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(tgDisplay)}</span></div>
         <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>
         <div><span class="flbl">Ishga kirgan sana</span><br><span style="color:var(--white-80)">${esc(node.startdate||'—')}</span></div>
       </div>
@@ -533,9 +535,45 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       </div>`;
     orgShowModal(html);
   }
+  function orgTelHtml(tels){
+    var arr = (tels&&tels.length)?tels:[''];
+    return arr.map(function(v,i){
+      return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
+        +'<input class="fi" id="oem-tel-'+i+'" value="'+esc(v||'+998')+'" style="margin-top:0;flex:1">'
+        +(i>0?'<button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>':'')
+        +'</div>';
+    }).join('');
+  }
+  function orgTgHtml(tgs){
+    var arr = (tgs&&tgs.length)?tgs:[''];
+    return arr.map(function(v,i){
+      return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
+        +'<input class="fi" id="oem-tg-'+i+'" value="'+esc(v||'')+'" placeholder="@username" style="margin-top:0;flex:1">'
+        +(i>0?'<button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>':'')
+        +'</div>';
+    }).join('');
+  }
+  function orgAddTel(id){
+    var wrap=document.getElementById('oem-tels-'+id);
+    var count=wrap.querySelectorAll('input').length;
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;gap:6px;margin-top:4px';
+    div.innerHTML='<input class="fi" id="oem-tel-'+count+'" value="+998" style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>';
+    wrap.appendChild(div);
+  }
+  function orgAddTg(id){
+    var wrap=document.getElementById('oem-tgs-'+id);
+    var count=wrap.querySelectorAll('input').length;
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;gap:6px;margin-top:4px';
+    div.innerHTML='<input class="fi" id="oem-tg-'+count+'" placeholder="@username" style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>';
+    wrap.appendChild(div);
+  }
   function orgShowEditModal(id){
     var node=orgData.find(n=>n.id===id);
     var days=node.workdays||[];
+    var tels = node.tels||(node.tel?[node.tel]:['+998']);
+    var tgs = node.tgs||(node.tg?[node.tg]:[]);
     var dayLabels=[['mon','Dush'],['tue','Sesh'],['wed','Chor'],['thu','Pay'],['fri','Jum'],['sat','Shan'],['sun','Yak']];
     var daysHtml=dayLabels.map(([key,label])=>{
       var active=days.includes(key);
@@ -544,8 +582,14 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Tahrirlash</div>
       <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oem-name" value="${esc(node.name)}"></div>
       <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oem-fio" value="${esc(node.fio||'')}"></div>
-      <div class="frow"><label class="flbl">Tel raqam</label><input class="fi" id="oem-tel" value="${esc(node.tel||'')}"></div>
-      <div class="frow"><label class="flbl">Telegram</label><input class="fi" id="oem-tg" value="${esc(node.tg||'')}"></div>
+      <div class="frow"><label class="flbl">Tel raqam</label>
+        <div id="oem-tels-${id}">${orgTelHtml(tels)}</div>
+        <button class="abtn" style="margin-top:6px" onclick="orgAddTel('${id}')">+ Tel qo'shish</button>
+      </div>
+      <div class="frow"><label class="flbl">Telegram</label>
+        <div id="oem-tgs-${id}">${orgTgHtml(tgs)}</div>
+        <button class="abtn" style="margin-top:6px" onclick="orgAddTg('${id}')">+ Telegram qo'shish</button>
+      </div>
       <div class="frow">
         <label class="flbl">Ish kunlari</label>
         <div id="oem-days-${id}" style="display:flex;gap:4px;margin-top:5px">${daysHtml}</div>
@@ -590,8 +634,16 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(!name){notify('Nom kiriting!');return;}
     node.name=name;
     node.fio=document.getElementById('oem-fio').value.trim();
-    node.tel=document.getElementById('oem-tel').value.trim();
-    node.tg=document.getElementById('oem-tg').value.trim();
+    // Tel raqamlar
+    var telWrap=document.getElementById('oem-tels-'+id);
+    var tels=telWrap?Array.from(telWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
+    node.tels=tels;
+    node.tel=tels[0]||'';
+    // Telegram
+    var tgWrap=document.getElementById('oem-tgs-'+id);
+    var tgs=tgWrap?Array.from(tgWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
+    node.tgs=tgs;
+    node.tg=tgs[0]||'';
     node.workdays = node._tmpDays || node.workdays || [];
     node.workstart = document.getElementById('oem-start').value;
     node.workend = document.getElementById('oem-end').value;
@@ -2006,20 +2058,16 @@ function kaitenApplyData(data){
   if(data.columns && data.columns.length) kaitenColumns = data.columns;
 }
 function kaitenGetEmployees(deptName){
-  var dept = orgData.find(n=>kaitenNorm(n.name)===kaitenNorm(deptName));
-  if(!dept) return [];
-  return orgData.filter(n=>n.parentId===dept.id && n.fio && n.fio.trim());
+  return orgData.filter(function(n){ return n.fio && n.fio.trim(); }).map(function(n){
+    var parent = orgData.find(function(p){ return p.id===n.parentId; });
+    return {fio:n.fio, name:n.name, role:n.name, dept:parent?parent.name:'', tg:n.tg||''};
+  });
 }
 function kaitenGetAllEmployees(){
-  var result=[];
-  KAITEN_DEPTS.forEach(function(deptName){
-    var dept=orgData.find(function(n){return kaitenNorm(n.name)===kaitenNorm(deptName);});
-    if(!dept) return;
-    orgData.filter(function(n){return n.parentId===dept.id && n.fio && n.fio.trim();}).forEach(function(e){
-      result.push({fio:e.fio, role:e.name, dept:deptName, tg:e.tg||''});
-    });
+  return orgData.filter(function(n){ return n.fio && n.fio.trim(); }).map(function(n){
+    var parent = orgData.find(function(p){ return p.id===n.parentId; });
+    return {fio:n.fio, role:n.name, dept:parent?parent.name:'', tg:n.tg||''};
   });
-  return result;
 }
 function kaitenFieldsHtml(prefix, task){
   task = task || {};
@@ -2186,15 +2234,15 @@ function kaitenShowEditForm(id){
   kaitenFillFormValues('ke', t);
 }
 function kaitenUpdateEmpOptions(prefix, presetVal){
-  var dept = document.getElementById(prefix+'-dept').value;
   var empSel = document.getElementById(prefix+'-emp');
-  if(!dept){ empSel.innerHTML = '<option value="">— avval bo&#39;limni tanlang —</option>'; return; }
-  var emps = kaitenGetEmployees(dept);
+  if(!empSel) return;
+  var emps = kaitenGetAllEmployees();
   if(!emps.length){ empSel.innerHTML = '<option value="">— xodim topilmadi —</option>'; return; }
   empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(function(e){
-    var val = e.fio+'|'+e.name+'|'+(e.tg||'');
+    var val = e.fio+'|'+e.role+'|'+(e.tg||'');
+    var label = e.fio+(e.role?' ('+e.role+')':'')+(e.dept?' — '+e.dept:'');
     var sel = (presetVal && presetVal.split('|').slice(0,2).join('|')===val.split('|').slice(0,2).join('|')) ? 'selected' : '';
-    return `<option value="${esc(val)}" ${sel}>${esc(e.fio)} (${esc(e.name)})</option>`;
+    return '<option value="'+esc(val)+'" '+sel+'>'+esc(label)+'</option>';
   }).join('');
 }
 function kaitenReadFields(prefix){
