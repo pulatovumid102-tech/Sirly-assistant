@@ -2214,6 +2214,16 @@ function kaitenSaveAlarm(id){
   kaitenAlarmFormOpen = null;
   renderKaiten();
   notify('Budilnik qo\'yildi ✓');
+  var col = kaitenColumns.find(function(c){ return c.id===t.status; });
+  var colTitle = col ? col.title : t.status;
+  var empName = t.empFio || 'Noma\'lum xodim';
+  // 1) Darhol tasdiqlash xabari
+  var confirmLines = [
+    '⏰ '+empName+' "'+colTitle+'" ustunidagi "'+t.text+'" vazifasiga budilnik qo\'ydi'+(sabab?(': '+sabab):''),
+    'Vaqt: '+kaitenFormatDeadline(iso)
+  ];
+  fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kalarmset'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:confirmLines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(e){ console.error('alarm confirm send error', e); });
+  // 2) Kechiktirilgan eslatma (belgilangan vaqtda)
   var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
   if(sabab) lines.push('Sabab: '+sabab);
   var msgText = lines.join(String.fromCharCode(10));
