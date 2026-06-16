@@ -2106,7 +2106,19 @@ function kaitenRemoveAlarm(id){
 }
 function kaitenToggleChat(id){
   kaitenChatOpen = (kaitenChatOpen===id) ? null : id;
+  if(kaitenChatOpen===id){
+    var t = kaitenTasks.find(x=>x.id===id);
+    var count = (t&&t.comments)?t.comments.length:0;
+    try{ localStorage.setItem('kaiten_seen_'+id, String(count)); }catch(e){}
+  }
   renderKaiten();
+}
+function kaitenHasUnread(t){
+  var count = (t.comments)?t.comments.length:0;
+  if(!count) return false;
+  var seen = 0;
+  try{ seen = parseInt(localStorage.getItem('kaiten_seen_'+t.id)||'0'); }catch(e){}
+  return count > seen;
 }
 function kaitenMyFio(){
   if(CURRENT_USER_ORG_ID){
@@ -2550,7 +2562,7 @@ function kaitenCard(t){
     <div class="kaiten-card-btns">
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
-      <button class="abtn" style="${(canLeft||canRight)?'':'margin-right:auto'}" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}</button>
+      <button class="abtn" style="${(canLeft||canRight)?'':'margin-right:auto'};position:relative" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}${kaitenHasUnread(t)?'<span style="position:absolute;top:-3px;right:-3px;width:8px;height:8px;background:#d32f2f;border-radius:50%"></span>':''}</button>
       ${!chatOpen?'':''}
       <button class="abtn" onclick="kaitenToggleAlarmForm('${t.id}')">⏰</button>
       <div style="margin-left:auto;display:flex;gap:6px">
