@@ -2217,15 +2217,19 @@ function kaitenSaveAlarm(id){
   var col = kaitenColumns.find(function(c){ return c.id===t.status; });
   var colTitle = col ? col.title : t.status;
   var setterName = kaitenCreatorNameNow();
+  var assigneeForAlarm = t.empFio||'—';
   // 1) Darhol tasdiqlash xabari
   var confirmLines = [
-    '⏰ '+setterName+' "'+colTitle+'" ustunidagi "'+t.text+'" vazifasiga budilnik qo\'ydi'+(sabab?(': '+sabab):''),
-    'Vaqt: '+kaitenFormatDeadline(iso)
+    setterName+' '+t.dept+'dagi, '+assigneeForAlarm+' uchun yaratilgan',
+    '"'+t.text+'" vazifasiga '+kaitenFormatDeadline(iso)+' ga budilnik qo\'ydi'+(sabab?(': '+sabab):'')+'.'
   ];
   fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kalarmset'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:confirmLines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(e){ console.error('alarm confirm send error', e); });
   // 2) Kechiktirilgan eslatma (belgilangan vaqtda)
-  var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
-  if(sabab) lines.push('Sabab: '+sabab);
+  var lines = [
+    'Eslatma: '+t.dept+'dagi, '+assigneeForAlarm+' uchun yaratilgan',
+    '"'+t.text+'" vazifasi bo\'yicha '+setterName+' qo\'ygan',
+    'budilnik vaqti keldi'+(sabab?(' — '+sabab):'')+'.'
+  ];
   var msgText = lines.join(String.fromCharCode(10));
   fetch(SB_URL+'/rest/v1/bot_group_messages?on_conflict=id',{
     method:'POST',
@@ -2982,16 +2986,22 @@ function kaitenNotifyGroup(t){
   try{
     var creator = kaitenCreatorName(t);
     var assignee = t.empFio||'—';
-    if(t.empTg) assignee += ' @'+t.empTg.replace(/^@/,'');
+    var createdDate = t.createdAt ? kaitenFormatDateOnly(t.createdAt) : kaitenFormatDateOnly(new Date().toISOString());
     var lines = [
-      t.dept+" da",
-      creator+' '+assignee+' uchun',
-      'yangi vazifa shakllantirdi',
-      'vazifa "'+t.text+'"'
+      creator+' '+createdDate+' kuni '+t.dept+'da '+assignee+' uchun',
+      '"'+t.text+'" vazifasini yaratdi.'
     ];
-    if(t.deadline) lines.push('Yakuniy sana: '+kaitenFormatDeadline(t.deadline));
+    if(t.deadline) lines.push('Yakuniy muddat: '+kaitenFormatDeadline(t.deadline)+'.');
     fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
   }catch(e){}
+}
+function kaitenFormatDateOnly(dl){
+  if(!dl) return '';
+  try{
+    var d=new Date(dl);
+    var pad=n=>String(n).padStart(2,'0');
+    return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear();
+  }catch(e){ return dl; }
 }
 function kaitenSaveEdit(id){
   var t = kaitenTasks.find(function(x){return x.id===id;});
@@ -3027,10 +3037,10 @@ function kaitenMove(id, dir){
 }
 function kaitenNotifyMove(t, oldTitle, colTitle){
   try{
+    var assignee = t.empFio||'—';
     var lines=[
-      '📋 Vazifa "'+oldTitle+'" dan "'+colTitle+'" ga o\'tkazildi',
-      '👤 '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':''),
-      '🎯 '+t.text
+      assignee+' '+t.dept+'dagi "'+t.text+'" vazifasini',
+      oldTitle+' ustunidan '+colTitle+' ustuniga ko\'chirdi.'
     ];
     fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text:lines.join(String.fromCharCode(10)),status:'pending'})}).catch(function(){});
   }catch(e){}
