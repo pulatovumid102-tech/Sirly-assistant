@@ -2086,11 +2086,14 @@ function kaitenSaveAlarm(id){
   var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
   if(sabab) lines.push('Sabab: '+sabab);
   var msgText = lines.join(String.fromCharCode(10));
-  fetch(SB_URL+'/rest/v1/bot_reminders',{
+  fetch(SB_URL+'/rest/v1/bot_group_messages',{
     method:'POST',
     headers:{...SB_H,'Prefer':'resolution=merge-duplicates,return=minimal'},
-    body:JSON.stringify({id:'kalarm_'+t.id, chat_id:CHAT_ID, text:msgText, remind_at:remindAtUTC, status:'pending'})
+    body:JSON.stringify({id:'kalarm_'+t.id, text:msgText, send_at:remindAtUTC, status:'pending'})
   }).catch(function(){});
+}
+function kaitenConfirmRemoveAlarm(id){
+  askConfirm("Budilnikni o'chirishni xohlaysizmi?", function(){ kaitenRemoveAlarm(id); }, 'Ha', "Yo'q");
 }
 function kaitenRemoveAlarm(id){
   var t = kaitenTasks.find(x=>x.id===id);
@@ -2098,7 +2101,8 @@ function kaitenRemoveAlarm(id){
   delete t.alarm;
   kaitenSave();
   renderKaiten();
-  fetch(SB_URL+'/rest/v1/bot_reminders?id=eq.kalarm_'+id,{method:'DELETE',headers:SB_H}).catch(function(){});
+  notify("Budilnik o'chirildi");
+  fetch(SB_URL+'/rest/v1/bot_group_messages?id=eq.kalarm_'+id,{method:'DELETE',headers:SB_H}).catch(function(){});
 }
 function kaitenToggleChat(id){
   kaitenChatOpen = (kaitenChatOpen===id) ? null : id;
@@ -2519,11 +2523,13 @@ function kaitenCard(t){
   var linksHtml = (t.links&&t.links.length)?t.links.map(function(l){ return `<a href="${esc(l)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">🔗 ${esc(l)}</a>`; }).join(''):'';
   var filesHtml = (t.files&&t.files.length)?t.files.map(function(f){ return `<a href="${esc(f.url)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">📎 ${esc(f.name)}</a>`; }).join(''):'';
   var contactsHtml = (t.contacts&&t.contacts.length)?t.contacts.map(function(c){ return `<div style="font-size:11px;color:#16573a99;margin-top:2px">👤 ${esc(c.name)}${c.role?' · '+esc(c.role):''}${c.tel?' · '+esc(c.tel):''}</div>`; }).join(''):'';
-  var alarmHtml = t.alarm ? `<div style="font-size:11px;color:#1e7a4a;font-weight:600;margin-top:2px;display:flex;align-items:center;gap:6px">⏰ Budilnik: ${esc(kaitenFormatDeadline(t.alarm))}<button class="abtn abtn-red" style="padding:1px 6px" onclick="kaitenRemoveAlarm('${t.id}')">✕</button></div>` : '';
+  var alarmHtml = t.alarm ? `<div style="font-size:11px;color:#1e7a4a;font-weight:600;margin-top:2px;display:flex;align-items:center;gap:6px">⏰ Budilnik: ${esc(kaitenFormatDeadline(t.alarm))}<button class="abtn abtn-red" style="padding:1px 6px" onclick="kaitenConfirmRemoveAlarm('${t.id}')">✕</button></div>` : '';
+  var alarmDateVal = '', alarmTimeVal = '';
+  if(t.alarm){ var ap = t.alarm.split('T'); alarmDateVal = ap[0]||''; alarmTimeVal = (ap[1]||'').slice(0,5); }
   var alarmFormHtml = kaitenAlarmFormOpen===t.id ? `<div style="margin-top:6px;padding:8px;border:1px solid rgba(22,87,58,0.15);border-radius:8px">
       <div style="display:flex;gap:6px">
-        <input class="fi" type="date" id="alarm-date-${t.id}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
-        <input class="fi" type="time" id="alarm-time-${t.id}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
+        <input class="fi" type="date" id="alarm-date-${t.id}" value="${esc(alarmDateVal)}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
+        <input class="fi" type="time" id="alarm-time-${t.id}" value="${esc(alarmTimeVal)}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
       </div>
       <input class="fi" id="alarm-text-${t.id}" placeholder="Sabab (ixtiyoriy)" style="margin-top:6px;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15)">
       <div style="display:flex;gap:6px;margin-top:6px">
@@ -2544,7 +2550,8 @@ function kaitenCard(t){
       ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
       ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
       <button class="abtn" style="${(canLeft||canRight)?'':'margin-right:auto'}" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}</button>
-      ${!t.alarm?`<button class="abtn" onclick="kaitenToggleAlarmForm('${t.id}')">⏰</button>`:''}
+      ${!chatOpen?'':''}
+      <button class="abtn" onclick="kaitenToggleAlarmForm('${t.id}')">⏰</button>
       <div style="margin-left:auto;display:flex;gap:6px">
       ${canEdit?`
       <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
