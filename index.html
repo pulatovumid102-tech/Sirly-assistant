@@ -2904,26 +2904,30 @@ function kaitenHasUnreadForMe(){
   });
 }
 async function refreshAllBadges(){
+  var groupUnread = false, personalUnread = false, kaitenUnread = false;
   try{
-    // Umumiy chat (gruppadan tag)
-    try{
-      var rg = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
-      var rowsg = await rg.json();
-      chatGroupMessages = (rowsg&&rowsg.length&&rowsg[0].data&&rowsg[0].data.messages) ? rowsg[0].data.messages : chatGroupMessages;
-    }catch(e){}
-    var groupUnread = chatHasUnreadGroupTag();
-    var personalUnread = await chatHasUnreadPersonal();
-    var kaitenUnread = kaitenHasUnreadForMe();
-    var chatUnread = groupUnread || personalUnread;
-    var bChat = document.getElementById('badge-chat');
-    if(bChat) bChat.style.display = chatUnread ? '' : 'none';
-    var bKaiten = document.getElementById('badge-kaiten');
-    if(bKaiten) bKaiten.style.display = kaitenUnread ? '' : 'none';
-    var bGroup = document.getElementById('badge-chat-group');
-    if(bGroup) bGroup.style.display = groupUnread ? '' : 'none';
-    var bPersonal = document.getElementById('badge-chat-personal');
-    if(bPersonal) bPersonal.style.display = personalUnread ? '' : 'none';
-  }catch(e){}
+    var rg = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
+    var rowsg = await rg.json();
+    chatGroupMessages = (rowsg&&rowsg.length&&rowsg[0].data&&rowsg[0].data.messages) ? rowsg[0].data.messages : chatGroupMessages;
+    groupUnread = chatHasUnreadGroupTag();
+  }catch(e){ console.error('badge group check error', e); }
+  try{
+    personalUnread = await chatHasUnreadPersonal();
+  }catch(e){ console.error('badge personal check error', e); }
+  try{
+    kaitenUnread = kaitenHasUnreadForMe();
+  }catch(e){ console.error('badge kaiten check error', e); }
+  var chatUnread = groupUnread || personalUnread;
+  var bChat = document.getElementById('badge-chat');
+  if(bChat) bChat.style.display = chatUnread ? '' : 'none';
+  var bKaiten = document.getElementById('badge-kaiten');
+  if(bKaiten) bKaiten.style.display = kaitenUnread ? '' : 'none';
+  var bGroup = document.getElementById('badge-chat-group');
+  if(bGroup) bGroup.style.display = groupUnread ? '' : 'none';
+  var bPersonal = document.getElementById('badge-chat-personal');
+  if(bPersonal) bPersonal.style.display = personalUnread ? '' : 'none';
+  var pcl = document.getElementById('p-chat-personal-list');
+  if(pcl && pcl.classList.contains('active')) renderChatContacts();
 }
 setInterval(refreshAllBadges, 5000);
 setTimeout(refreshAllBadges, 2000);
