@@ -1513,6 +1513,7 @@ async function doAppLogin(){
 }
 
 function startApp(app, role){
+  document.getElementById('login-screen').style.display = 'none';
   document.getElementById('sirly-app').style.display = 'block';
   sirlyStart(role);
 }
