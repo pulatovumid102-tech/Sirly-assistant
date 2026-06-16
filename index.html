@@ -2699,7 +2699,11 @@ async function chatGroupSend(){
   chatRenderSidebar('chat-group-sidebar','group');
   chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
   try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatGroupMessages}})});
+    var pr = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=representation'},body:JSON.stringify({data:{messages:chatGroupMessages}})});
+    var prRows = await pr.json();
+    if(!prRows || !prRows.length){
+      await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})});
+    }
   }catch(e){
     try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})}); }catch(e2){}
   }
@@ -2780,7 +2784,11 @@ async function chatPersonalSend(){
   chatRenderPendingFiles('chat-personal-pending', []);
   chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[key], 'personal');
   try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatPersonalThreads[key]}})});
+    var pr2 = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=representation'},body:JSON.stringify({data:{messages:chatPersonalThreads[key]}})});
+    var pr2Rows = await pr2.json();
+    if(!pr2Rows || !pr2Rows.length){
+      await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:{messages:chatPersonalThreads[key]}})});
+    }
   }catch(e){
     try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:{messages:chatPersonalThreads[key]}})}); }catch(e2){}
   }
