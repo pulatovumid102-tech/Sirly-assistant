@@ -434,7 +434,12 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
   ];
   var orgMenuOpen = null;
-  function orgIsAdmin(){ return !!(window && window.isAdmin); }
+  function orgIsAdmin(){
+    try{
+      if(typeof isAdmin !== 'undefined') return !!isAdmin;
+      return !!(window && window.isAdmin);
+    }catch(e){ return false; }
+  }
   var orgDetailOpen = null;
   var orgInfoOpen = null;
   var orgInfoMenuOpen = null;
@@ -975,12 +980,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgDel(id){ orgDelModal(id); }
 
   setTimeout(function(){
-    renderOrg();
-    setTimeout(function(){
-      var pan = document.getElementById('org-pan-wrap');
-      if(pan) pan.scrollLeft = (pan.scrollWidth - pan.clientWidth) / 2;
-    }, 100);
-  }, 0);
+    var pan = document.getElementById('org-pan-wrap');
+    if(pan) pan.scrollLeft = (pan.scrollWidth - pan.clientWidth) / 2;
+  }, 200);
   </script>
 </div>
 
@@ -1628,6 +1630,14 @@ showLogin('sirly');
             USER_PERMS = user.permissions || null;
             CURRENT_USER_TG = user.tg || '';
             CURRENT_USER_ORG_ID = user.orgNodeId || '';
+            var freshRole = user.role || 'guest';
+            if(freshRole === 'editor' && !isAdmin){
+              isAdmin = true;
+              if(typeof renderOrg==='function') renderOrg();
+            } else if(freshRole !== 'editor' && isAdmin){
+              isAdmin = false;
+              if(typeof renderOrg==='function') renderOrg();
+            }
             applyEntryCardPerms();
           }
         })
@@ -3372,7 +3382,7 @@ function sirlyStart(role){
   applyEntryCardPerms();
   load().then(function(){ updateBc(); });
   acadLoad().catch(function(){});
-  orgLoad().catch(function(){ renderOrg(); });
+  orgLoad().catch(function(){}).then(function(){ renderOrg(); });
   kaitenLoad().catch(function(){}).then(function(){ if(document.getElementById('p-kaiten').classList.contains('active')) renderKaiten(); });
   sekretarLoad().catch(function(){});
   bolimTitlesLoad().catch(function(){}).then(function(){ if(document.getElementById('p-entry2').classList.contains('active')) renderBolimCards(); });
