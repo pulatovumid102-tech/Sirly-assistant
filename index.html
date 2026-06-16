@@ -2762,9 +2762,10 @@ async function renderChatContacts(){
   var myName = chatMyName();
   var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
   if(!emps.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xodimlar topilmadi</div>'; return; }
-  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  var withUnread = [];
-  for(var e of emps){
+  if(!listEl.innerHTML || listEl.innerHTML.indexOf('nav-card')<0){
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
+  }
+  var results = await Promise.all(emps.map(async function(e){
     var key = chatThreadKey(myName, e.fio);
     var lastSeen = 0;
     try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
@@ -2775,10 +2776,10 @@ async function renderChatContacts(){
       var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
       unread = msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
     }catch(e3){}
-    withUnread.push({emp:e, unread:unread});
-  }
-  withUnread.sort(function(a,b){ return (b.unread?1:0)-(a.unread?1:0); });
-  listEl.innerHTML = withUnread.map(function(item){
+    return {emp:e, unread:unread};
+  }));
+  results.sort(function(a,b){ return (b.unread?1:0)-(a.unread?1:0); });
+  listEl.innerHTML = results.map(function(item){
     var e = item.emp;
     return `<div class="nav-card" style="margin-bottom:8px;position:relative" onclick="chatOpenPersonal('${esc(e.fio)}','${esc((e.tg||'').replace(/^@/,''))}')">
       ${item.unread?'<span class="nav-card-badge"></span>':''}
@@ -2880,7 +2881,7 @@ function chatHasUnreadGroupTag(){
 async function chatHasUnreadPersonal(){
   var myName = chatMyName();
   var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  for(var e of emps){
+  var results = await Promise.all(emps.map(async function(e){
     var key = chatThreadKey(myName, e.fio);
     var lastSeen = 0;
     try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
@@ -2888,11 +2889,10 @@ async function chatHasUnreadPersonal(){
       var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
       var rows = await r.json();
       var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-      var hasNew = msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
-      if(hasNew) return true;
-    }catch(e3){}
-  }
-  return false;
+      return msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
+    }catch(e3){ return false; }
+  }));
+  return results.some(function(x){ return x; });
 }
 function kaitenHasUnreadForMe(){
   var myFio = kaitenMyFio();
