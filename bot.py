@@ -183,7 +183,7 @@ async def _daily_stats_once(context: ContextTypes.DEFAULT_TYPE):
 
 async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
     try:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_utc = datetime.now(timezone.utc)
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(
                 f"{SB_URL}/rest/v1/bot_group_messages",
@@ -199,10 +199,13 @@ async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
                 send_at = row.get("send_at")
                 if send_at:
                     try:
-                        if send_at > now_iso:
+                        send_dt = datetime.fromisoformat(send_at.replace("Z", "+00:00"))
+                        if send_dt.tzinfo is None:
+                            send_dt = send_dt.replace(tzinfo=timezone.utc)
+                        if send_dt > now_utc:
                             continue
-                    except Exception:
-                        pass
+                    except Exception as parse_err:
+                        logger.error(f"send_at parse error for {rid}: {parse_err}")
                 try:
                     await context.bot.send_message(chat_id=CHAT_ID, text=text)
                     await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
