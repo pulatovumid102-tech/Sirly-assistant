@@ -361,8 +361,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
     var detailOpen = orgDetailOpen === node.id;
+    var draggable = orgIsAdmin() && node.parentId;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')">
+      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" id="org-node-${node.id}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')"
+        ${draggable?`draggable="true" ondragstart="orgDragStart(event,'${node.id}')" ondragover="orgDragOver(event,'${node.id}')" ondragleave="orgDragLeave(event,'${node.id}')" ondrop="orgDrop(event,'${node.id}')" ondragend="orgDragEnd(event)"`:''}>
         <div style="flex:1;min-width:0">
           <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -372,6 +374,48 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div id="org-form-${node.id}"></div>
       <div id="org-children-${node.id}"></div>
     </div>`;
+  }
+  var orgDragSrcId = null;
+  function orgIsDescendant(parentId, childId){
+    var n = orgData.find(x=>x.id===childId);
+    while(n && n.parentId){
+      if(n.parentId===parentId) return true;
+      n = orgData.find(x=>x.id===n.parentId);
+    }
+    return false;
+  }
+  function orgDragStart(ev, id){
+    orgDragSrcId = id;
+    ev.dataTransfer.effectAllowed = 'move';
+    try{ ev.dataTransfer.setData('text/plain', id); }catch(e){}
+  }
+  function orgDragOver(ev, id){
+    if(!orgDragSrcId || orgDragSrcId===id) return;
+    if(id===orgDragSrcId || orgIsDescendant(orgDragSrcId, id)) return;
+    ev.preventDefault();
+    var el = document.getElementById('org-node-'+id);
+    if(el) el.style.outline = '2px dashed var(--lime)';
+  }
+  function orgDragLeave(ev, id){
+    var el = document.getElementById('org-node-'+id);
+    if(el) el.style.outline = '';
+  }
+  function orgDrop(ev, id){
+    ev.preventDefault();
+    var el = document.getElementById('org-node-'+id);
+    if(el) el.style.outline = '';
+    if(!orgDragSrcId || orgDragSrcId===id) return;
+    if(orgIsDescendant(orgDragSrcId, id)){ notify("O'z bolasi ostiga ko'chirib bo'lmaydi!"); return; }
+    var srcNode = orgData.find(n=>n.id===orgDragSrcId);
+    if(!srcNode) return;
+    srcNode.parentId = id;
+    orgSave(); renderOrg();
+    notify('Ko\'chirildi ✓');
+    orgDragSrcId = null;
+  }
+  function orgDragEnd(ev){
+    document.querySelectorAll('.section-item').forEach(function(el){ el.style.outline=''; });
+    orgDragSrcId = null;
   }
 
   function orgCloseModal(){
