@@ -68,6 +68,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .page-title{font-size:15px;font-weight:700;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
 .cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .nav-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:18px;padding:18px 16px 38px;cursor:pointer;position:relative;min-height:90px;transition:transform .15s,background .15s;overflow:hidden;}
+.nav-card-badge{position:absolute;top:12px;right:12px;width:10px;height:10px;background:#d32f2f;border-radius:50%;box-shadow:0 0 0 2px var(--green-card)}
 .nav-card::after{content:'';position:absolute;bottom:-20px;right:-20px;width:70px;height:70px;background:var(--lime);opacity:.06;border-radius:50%;}
 .nav-card:active{transform:scale(.97);background:var(--green-light)}
 .nav-card.dragging{opacity:.4}
@@ -272,6 +273,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-arrow">→</div>
     </div>
     <div class="nav-card" id="card-kaiten" onclick="goTo('p-kaiten')">
+      <span id="badge-kaiten" class="nav-card-badge" style="display:none"></span>
       <div class="nav-card-title" style="margin-top:4px">Kaiten</div>
       <div class="nav-card-arrow">→</div>
     </div>
@@ -284,6 +286,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-arrow">→</div>
     </div>
     <div class="nav-card" id="card-chat" onclick="goTo('p-chat')">
+      <span id="badge-chat" class="nav-card-badge" style="display:none"></span>
       <div class="nav-card-title" style="margin-top:4px">Chat</div>
       <div class="nav-card-arrow">→</div>
     </div>
@@ -354,10 +357,12 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   </div>
   <div class="cards-grid">
     <div class="nav-card" onclick="goTo('p-chat-group')">
+      <span id="badge-chat-group" class="nav-card-badge" style="display:none"></span>
       <div class="nav-card-title" style="margin-top:4px">Umumiy chat</div>
       <div class="nav-card-arrow">→</div>
     </div>
     <div class="nav-card" onclick="goTo('p-chat-personal-list')">
+      <span id="badge-chat-personal" class="nav-card-badge" style="display:none"></span>
       <div class="nav-card-title" style="margin-top:4px">Shaxsiy xabarlar</div>
       <div class="nav-card-arrow">→</div>
     </div>
@@ -1528,6 +1533,32 @@ showLogin('sirly');
       CURRENT_USER_ORG_ID = u.orgNodeId || '';
       USER_PERMS = u.permissions || null;
           startApp(u.app, u.role || 'guest');
+    } else {
+      // Admin-panel orqali yaratilgan profil bo'lishi mumkin — saqlangan role bilan davom etamiz,
+      // so'ng fonda Supabase orqali tekshirib, profil o'chirilgan/rad etilgan bo'lsa chiqaramiz.
+      CURRENT_APP = u.app;
+      USER_ID = u.app + '_' + u.login;
+      STORAGE_KEY = 'umatizim_data_' + USER_ID;
+      CURRENT_USER_TG = u.tg || '';
+      CURRENT_USER_ORG_ID = u.orgNodeId || '';
+      USER_PERMS = u.permissions || null;
+      startApp(u.app, u.role || 'guest');
+      fetch(SB_URL+'/rest/v1/applications?app=eq.'+u.app+'&login=eq.'+u.login, {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
+        .then(function(r){ return r.json(); })
+        .then(function(rows){
+          var user = rows && rows.find(function(x){ return x.parol === u.parol; });
+          if(!user || user.status !== 'approved'){
+            localStorage.removeItem('app_login');
+            doLogoutAll();
+          } else {
+            // Yangilangan ruxsatlarni yangilab qo'yamiz
+            USER_PERMS = user.permissions || null;
+            CURRENT_USER_TG = user.tg || '';
+            CURRENT_USER_ORG_ID = user.orgNodeId || '';
+            applyEntryCardPerms();
+          }
+        })
+        .catch(function(){});
     }
   }catch(e){ localStorage.removeItem('app_login'); }
 })();
@@ -2574,6 +2605,8 @@ async function renderChatGroup(){
     chatGroupMessages = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
   }catch(e){ chatGroupMessages = []; }
   chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
+  try{ localStorage.setItem('chat_group_tag_seen', String(Date.now())); }catch(e){}
+  refreshAllBadges();
 }
 function chatRenderSidebar(elId, kind){
   var el = document.getElementById(elId);
@@ -2723,13 +2756,31 @@ async function chatGroupSend(){
 }
 
 // ---- Shaxsiy xabarlar ----
-function renderChatContacts(){
+async function renderChatContacts(){
   var listEl = document.getElementById('chat-personal-contacts');
   var myName = chatMyName();
   var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
   if(!emps.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xodimlar topilmadi</div>'; return; }
-  listEl.innerHTML = emps.map(function(e){
-    return `<div class="nav-card" style="margin-bottom:8px" onclick="chatOpenPersonal('${esc(e.fio)}','${esc((e.tg||'').replace(/^@/,''))}')">
+  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
+  var withUnread = [];
+  for(var e of emps){
+    var key = chatThreadKey(myName, e.fio);
+    var lastSeen = 0;
+    try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
+    var unread = false;
+    try{
+      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
+      var rows = await r.json();
+      var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
+      unread = msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
+    }catch(e3){}
+    withUnread.push({emp:e, unread:unread});
+  }
+  withUnread.sort(function(a,b){ return (b.unread?1:0)-(a.unread?1:0); });
+  listEl.innerHTML = withUnread.map(function(item){
+    var e = item.emp;
+    return `<div class="nav-card" style="margin-bottom:8px;position:relative" onclick="chatOpenPersonal('${esc(e.fio)}','${esc((e.tg||'').replace(/^@/,''))}')">
+      ${item.unread?'<span class="nav-card-badge"></span>':''}
       <div class="nav-card-title" style="margin-top:4px">${esc(e.fio)}</div>
       <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(e.name)}</div>
       <div class="nav-card-arrow">→</div>
@@ -2755,6 +2806,8 @@ async function chatOpenPersonal(otherFio, otherUsername){
     chatPersonalThreads[key] = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
   }catch(e){ chatPersonalThreads[key] = []; }
   chatRenderMsgList(listEl, chatPersonalThreads[key], 'personal');
+  try{ localStorage.setItem('chat_personal_seen_'+key, String(Date.now())); }catch(e){}
+  refreshAllBadges();
 }
 async function chatPersonalUploadFiles(){
   var inp = document.getElementById('chat-personal-file-inp');
@@ -2807,6 +2860,75 @@ function chatCheckDeliveryStatus(){
   // Optional: could poll personal_messages status; kept simple for now
 }
 
+// =========================
+// BILDIRISHNOMA BADGE TIZIMI
+// =========================
+function chatTaggedForMe(text){
+  var myName = chatMyName();
+  if(!myName) return false;
+  return text && text.indexOf('@'+myName)===0;
+}
+function chatHasUnreadGroupTag(){
+  var myName = chatMyName();
+  var lastSeen = 0;
+  try{ lastSeen = parseInt(localStorage.getItem('chat_group_tag_seen')||'0'); }catch(e){}
+  return chatGroupMessages.some(function(m){
+    return m.from!==myName && chatTaggedForMe(m.text) && new Date(m.time).getTime() > lastSeen;
+  });
+}
+async function chatHasUnreadPersonal(){
+  var myName = chatMyName();
+  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
+  for(var e of emps){
+    var key = chatThreadKey(myName, e.fio);
+    var lastSeen = 0;
+    try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
+    try{
+      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
+      var rows = await r.json();
+      var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
+      var hasNew = msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
+      if(hasNew) return true;
+    }catch(e3){}
+  }
+  return false;
+}
+function kaitenHasUnreadForMe(){
+  var myFio = kaitenMyFio();
+  if(!myFio) return false;
+  var myNorm = kaitenNorm(myFio);
+  var lastSeen = 0;
+  try{ lastSeen = parseInt(localStorage.getItem('kaiten_assigned_seen')||'0'); }catch(e){}
+  return kaitenTasks.some(function(t){
+    return t.empFio && kaitenNorm(t.empFio)===myNorm && t.createdAt && new Date(t.createdAt).getTime() > lastSeen;
+  });
+}
+async function refreshAllBadges(){
+  try{
+    // Umumiy chat (gruppadan tag)
+    try{
+      var rg = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
+      var rowsg = await rg.json();
+      chatGroupMessages = (rowsg&&rowsg.length&&rowsg[0].data&&rowsg[0].data.messages) ? rowsg[0].data.messages : chatGroupMessages;
+    }catch(e){}
+    var groupUnread = chatHasUnreadGroupTag();
+    var personalUnread = await chatHasUnreadPersonal();
+    var kaitenUnread = kaitenHasUnreadForMe();
+    var chatUnread = groupUnread || personalUnread;
+    var bChat = document.getElementById('badge-chat');
+    if(bChat) bChat.style.display = chatUnread ? '' : 'none';
+    var bKaiten = document.getElementById('badge-kaiten');
+    if(bKaiten) bKaiten.style.display = kaitenUnread ? '' : 'none';
+    var bGroup = document.getElementById('badge-chat-group');
+    if(bGroup) bGroup.style.display = groupUnread ? '' : 'none';
+    var bPersonal = document.getElementById('badge-chat-personal');
+    if(bPersonal) bPersonal.style.display = personalUnread ? '' : 'none';
+  }catch(e){}
+}
+setInterval(refreshAllBadges, 5000);
+setTimeout(refreshAllBadges, 2000);
+
+
 function kaitenAddTask(){
   var f = kaitenReadFields('kt');
   if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
@@ -2815,6 +2937,7 @@ function kaitenAddTask(){
   askConfirm("Vazifani aniq tushunarli qilib berdingizmi? Esdan chiqmadimi hech narsa?",()=>{
     f.id='kt'+Date.now(); f.status='todo';
     f.createdBy = kaitenMyId();
+    f.createdAt = new Date().toISOString();
     kaitenTasks.push(f);
     kaitenUploadedFiles['kt']=[];
     kaitenSave(); notify('Saqlandi ✓');
@@ -3052,6 +3175,8 @@ function kaitenSaveNewColumn(){
   renderKaiten();
 }
 function renderKaiten(){
+  try{ localStorage.setItem('kaiten_assigned_seen', String(Date.now())); }catch(e){}
+  if(typeof refreshAllBadges==='function') refreshAllBadges();
   renderKaitenFilter();
   var boardEl = document.getElementById('kaiten-board');
   if(boardEl){
