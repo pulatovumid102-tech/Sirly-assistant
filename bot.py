@@ -215,6 +215,50 @@ async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"check_group_messages_job error: {e}")
 
+# =========================
+# CHAT -> shaxsiy xabar yuborish
+# =========================
+
+async def check_personal_messages_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/personal_messages",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                username = (row.get("to_username") or "").lstrip("@").lower()
+                text = row.get("text") or ""
+                if not username:
+                    await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error", "error": "username yo'q"})
+                    continue
+                try:
+                    ur = await c.get(
+                        f"{SB_URL}/rest/v1/telegram_users",
+                        headers=SB_HEADERS,
+                        params={"username": f"eq.{username}", "select": "chat_id"}
+                    )
+                    urows = ur.json()
+                    if not urows:
+                        await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "no_start"})
+                        continue
+                    chat_id = urows[0]["chat_id"]
+                    await context.bot.send_message(chat_id=chat_id, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"personal_message error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_personal_messages_job error: {e}")
+
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -2855,6 +2899,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_type in ("group", "supergroup"):
         return
 
+    # Foydalanuvchi chat_id'sini saqlash (shaxsiy xabar yuborish uchun)
+    if user.username:
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                await c.post(
+                    f"{SB_URL}/rest/v1/telegram_users?on_conflict=username",
+                    headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"},
+                    json={"username": user.username.lower(), "chat_id": user.id, "name": user.first_name or ""}
+                )
+        except Exception as e:
+            logger.error(f"telegram_users save error: {e}")
+
     name = user.first_name or user.username or "Salom"
 
     # Admin qo'llanmasi
@@ -3370,6 +3426,9 @@ def main():
 
     # Kaiten -> guruhga vazifa xabari
     application.job_queue.run_repeating(check_group_messages_job, interval=2, first=2)
+
+    # Chat -> shaxsiy xabar yuborish
+    application.job_queue.run_repeating(check_personal_messages_job, interval=2, first=2)
 
     # Kaiten -> kunlik statistika (10:00 va 20:00)
     for _hour, _label in [(10, "Ertalab"), (20, "Kechki")]:
