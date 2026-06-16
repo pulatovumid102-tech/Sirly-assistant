@@ -183,6 +183,7 @@ async def _daily_stats_once(context: ContextTypes.DEFAULT_TYPE):
 
 async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
     try:
+        now_iso = datetime.now(timezone.utc).isoformat()
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(
                 f"{SB_URL}/rest/v1/bot_group_messages",
@@ -195,6 +196,13 @@ async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
             for row in rows:
                 rid = row.get("id")
                 text = row.get("text") or ""
+                send_at = row.get("send_at")
+                if send_at:
+                    try:
+                        if send_at > now_iso:
+                            continue
+                    except Exception:
+                        pass
                 try:
                     await context.bot.send_message(chat_id=CHAT_ID, text=text)
                     await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
