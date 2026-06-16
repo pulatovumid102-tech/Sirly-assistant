@@ -2077,13 +2077,15 @@ function kaitenSaveAlarm(id){
   if(!date || !time){ notify("Sana va vaqtni kiriting!"); return; }
   var iso = date+'T'+time;
   var remindAtUTC = new Date(iso).toISOString();
-  var customText = textEl.value.trim();
+  var sabab = textEl.value.trim();
   t.alarm = iso;
   kaitenSave();
   kaitenAlarmFormOpen = null;
   renderKaiten();
   notify('Budilnik qo\'yildi ✓');
-  var msgText = customText || ('⏰ Eslatma: '+t.text);
+  var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
+  if(sabab) lines.push('Sabab: '+sabab);
+  var msgText = lines.join(String.fromCharCode(10));
   fetch(SB_URL+'/rest/v1/bot_reminders',{
     method:'POST',
     headers:{...SB_H,'Prefer':'resolution=merge-duplicates,return=minimal'},
@@ -2523,7 +2525,7 @@ function kaitenCard(t){
         <input class="fi" type="date" id="alarm-date-${t.id}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
         <input class="fi" type="time" id="alarm-time-${t.id}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
       </div>
-      <input class="fi" id="alarm-text-${t.id}" placeholder="Eslatma matni (ixtiyoriy)" style="margin-top:6px;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15)">
+      <input class="fi" id="alarm-text-${t.id}" placeholder="Sabab (ixtiyoriy)" style="margin-top:6px;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15)">
       <div style="display:flex;gap:6px;margin-top:6px">
         <button class="fsave" style="margin-top:0;flex:1" onclick="kaitenSaveAlarm('${t.id}')">Saqlash</button>
         <button class="abtn" style="margin-top:0" onclick="kaitenToggleAlarmForm('${t.id}')">Bekor</button>
