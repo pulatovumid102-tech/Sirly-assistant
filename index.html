@@ -2952,6 +2952,8 @@ function kaitenAddTask(){
   askConfirm("Vazifani aniq tushunarli qilib berdingizmi? Esdan chiqmadimi hech narsa?",()=>{
     f.id='kt'+Date.now(); f.status='todo';
     f.createdBy = kaitenMyId();
+    f.createdByName = kaitenCreatorNameNow();
+    f.createdByTg = (CURRENT_USER_TG||'').replace(/^@/,'');
     f.createdAt = new Date().toISOString();
     kaitenTasks.push(f);
     kaitenUploadedFiles['kt']=[];
@@ -2961,7 +2963,13 @@ function kaitenAddTask(){
     renderKaiten();
   }, 'Ha', "Yo'q");
 }
+function kaitenCreatorNameNow(){
+  var fio = kaitenMyFio();
+  if(fio) return fio;
+  return chatMyName();
+}
 function kaitenCreatorName(t){
+  if(t.createdByName) return t.createdByName;
   if(!t.createdBy) return chatMyName();
   if(t.createdBy.indexOf('fio:')===0){
     var norm = t.createdBy.slice(4);
