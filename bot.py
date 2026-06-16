@@ -156,6 +156,66 @@ async def kaiten_daily_stats_job(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"kaiten_daily_stats_job error: {e}")
 
+async def kaiten_overdue_check_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/biznes_data",
+                headers=SB_HEADERS,
+                params={"id": "eq.kaiten", "select": "data"}
+            )
+            rows = r.json()
+            if not rows or not isinstance(rows, list) or not rows[0].get("data"):
+                return
+            data = rows[0]["data"]
+            tasks = data.get("tasks", [])
+            now_utc = datetime.now(timezone.utc)
+            changed = False
+            for t in tasks:
+                if t.get("status") in ("done", "accepted"):
+                    continue
+                if t.get("overdue_notified"):
+                    continue
+                deadline = t.get("deadline")
+                if not deadline:
+                    continue
+                try:
+                    dl_dt = datetime.fromisoformat(deadline)
+                    if dl_dt.tzinfo is None:
+                        dl_dt = dl_dt.replace(tzinfo=TIMEZONE)
+                    dl_dt_utc = dl_dt.astimezone(timezone.utc)
+                except Exception as parse_err:
+                    logger.error(f"overdue deadline parse error: {parse_err}")
+                    continue
+                if dl_dt_utc <= now_utc:
+                    dept = t.get("dept") or "Boshqa"
+                    assignee = t.get("empFio") or "—"
+                    emp_tg = t.get("empTg")
+                    if emp_tg:
+                        assignee += f" @{emp_tg.lstrip('@')}"
+                    deadline_local = dl_dt.astimezone(TIMEZONE).strftime("%d.%m.%Y %H:%M")
+                    text = (
+                        f"⚠️ Vazifa muddati o'tdi\n"
+                        f"{dept} da\n"
+                        f"{assignee} uchun\n"
+                        f"\"{t.get('text','')}\"\n"
+                        f"Muddat: {deadline_local}"
+                    )
+                    try:
+                        await context.bot.send_message(chat_id=CHAT_ID, text=text)
+                        t["overdue_notified"] = True
+                        changed = True
+                    except Exception as send_err:
+                        logger.error(f"overdue send error: {send_err}")
+            if changed:
+                await c.patch(
+                    f"{SB_URL}/rest/v1/biznes_data?id=eq.kaiten",
+                    headers=SB_HEADERS,
+                    json={"data": {"tasks": tasks, "columns": data.get("columns", [])}}
+                )
+    except Exception as e:
+        logger.error(f"kaiten_overdue_check_job error: {e}")
+
 async def schedule_daily_stats(application):
     for hour, label in [(10, "Ertalab"), (20, "Kechki")]:
         secs = seconds_until_time(hour, 0)
@@ -3432,6 +3492,9 @@ def main():
 
     # Chat -> shaxsiy xabar yuborish
     application.job_queue.run_repeating(check_personal_messages_job, interval=2, first=2)
+
+    # Kaiten -> muddati o'tgan vazifalar
+    application.job_queue.run_repeating(kaiten_overdue_check_job, interval=60, first=15)
 
     # Kaiten -> kunlik statistika (10:00 va 20:00)
     for _hour, _label in [(10, "Ertalab"), (20, "Kechki")]:
