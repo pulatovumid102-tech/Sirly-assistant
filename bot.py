@@ -190,21 +190,26 @@ async def kaiten_overdue_check_job(context: ContextTypes.DEFAULT_TYPE):
                 if dl_dt_utc <= now_utc:
                     dept = t.get("dept") or "Boshqa"
                     assignee = t.get("empFio") or "—"
-                    creator = t.get("createdByName") or "—"
+                    creator = t.get("createdByName")
                     creator_tg = t.get("createdByTg")
-                    creator_line = creator
-                    if creator_tg:
-                        creator_line += f" @{creator_tg.lstrip('@')}"
+                    creator_line = None
+                    if creator:
+                        creator_line = creator
+                        if creator_tg:
+                            creator_line += f" @{creator_tg.lstrip('@')}"
                     deadline_local = dl_dt.astimezone(TIMEZONE).strftime("%d.%m.%Y %H:%M")
-                    text = (
-                        f"⚠️ Vazifa muddati o'tdi\n\n"
-                        f"{dept} bo'limida\n"
-                        f"{deadline_local}da\n"
-                        f"{creator_line} tomonidan\n"
-                        f"{assignee} uchun yaratilgan\n"
-                        f"\"{t.get('text','')}\"\n"
-                        f"muddati o'tdi"
-                    )
+                    text_parts = [
+                        "⚠️ Vazifa muddati o'tdi",
+                        "",
+                        f"{dept}da",
+                        f"{deadline_local}da",
+                    ]
+                    if creator_line:
+                        text_parts.append(f"{creator_line} tomonidan")
+                    text_parts.append(f"{assignee} uchun yaratilgan")
+                    text_parts.append(f"\"{t.get('text','')}\"")
+                    text_parts.append("muddati o'tdi")
+                    text = "\n".join(text_parts)
                     try:
                         await context.bot.send_message(chat_id=CHAT_ID, text=text)
                         t["overdue_notified"] = True
