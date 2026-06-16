@@ -2961,15 +2961,25 @@ function kaitenAddTask(){
     renderKaiten();
   }, 'Ha', "Yo'q");
 }
+function kaitenCreatorName(t){
+  if(!t.createdBy) return chatMyName();
+  if(t.createdBy.indexOf('fio:')===0){
+    var norm = t.createdBy.slice(4);
+    var node = orgData.find(function(n){ return n.fio && kaitenNorm(n.fio)===norm; });
+    if(node) return node.fio;
+  }
+  return chatMyName();
+}
 function kaitenNotifyGroup(t){
   try{
-    var lines=['🆕 Yangi vazifa — '+t.dept,''];
-    var empLine='👤 Xodim: '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':'');
-    if(t.empTg) empLine+=' — @'+t.empTg.replace(/^@/,'');
-    lines.push(empLine);
-    if(t.nazFio) lines.push('🧭 Nazoratchi: '+t.nazFio+(t.nazRole?' ('+t.nazRole+')':''));
-    lines.push('🎯 '+t.text);
-    if(t.deadline) lines.push('⏰ Muddat: '+kaitenFormatDeadline(t.deadline));
+    var creator = kaitenCreatorName(t);
+    var assignee = t.empFio||'—';
+    var lines = [
+      t.dept+" bo'limida",
+      creator+' '+assignee+' uchun',
+      '"'+t.text+'"ni shakllantirdi'
+    ];
+    if(t.deadline) lines.push('Yakuniy sana: '+kaitenFormatDeadline(t.deadline));
     fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
   }catch(e){}
 }
