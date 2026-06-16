@@ -1,3088 +1,3497 @@
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tizim</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
-#login-screen {
-  min-height: 100vh; display: none;
-  align-items: center; justify-content: center; padding: 24px;
+# -*- coding: utf-8 -*-
+
+import json
+import logging
+import os
+import asyncio
+import httpx
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
+
+TOKEN = "8935324683:AAFrVn1gszbbU5il0Us5dsMHWLLIHNHlVgw"
+CHAT_ID = -1003914304171
+
+SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
+SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU"
+SB_HEADERS = {"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
+
+async def sb_save_screenshot(username, time_key, status):
+    now = datetime.now(TIMEZONE)
+    rid = f"{username}_{time_key.replace(':', '')}_{now.strftime('%d%m%Y')}"
+    data = {"id": rid, "username": username, "time_key": time_key, "sent_at": now.isoformat(), "status": status, "date": now.strftime("%d.%m.%Y")}
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.get(f"{SB_URL}/rest/v1/screenshots?id=eq.{rid}", headers=SB_HEADERS)
+            if r.json():
+                await c.patch(f"{SB_URL}/rest/v1/screenshots?id=eq.{rid}", headers=SB_HEADERS, json={"status": status})
+            else:
+                await c.post(f"{SB_URL}/rest/v1/screenshots", headers=SB_HEADERS, json=data)
+    except Exception as e:
+        logger.error(f"sb_save error: {e}")
+
+# =========================
+# HUJJATLAR -> "Botga yuborish" navbati
+# =========================
+
+async def check_file_send_requests_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{SB_URL}/rest/v1/file_send_requests?status=eq.pending&select=*", headers=SB_HEADERS)
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                chat_id = row.get("chat_id")
+                kind = row.get("kind") or "file"
+                try:
+                    if kind == "message":
+                        text = row.get("message_text") or ""
+                        await context.bot.send_message(chat_id=chat_id, text=text)
+                    else:
+                        file_url = row.get("file_url")
+                        file_name = row.get("file_name") or "fayl"
+                        fr = await c.get(file_url)
+                        fr.raise_for_status()
+                        await context.bot.send_document(chat_id=chat_id, document=fr.content, filename=file_name)
+                    await c.patch(f"{SB_URL}/rest/v1/file_send_requests?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"file_send error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/file_send_requests?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_file_send_requests_job error: {e}")
+
+# =========================
+# SEKRETAR -> uchrashuv eslatmalari
+# =========================
+
+async def check_bot_reminders_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/bot_reminders",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "remind_at": f"lte.{now_iso}", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                chat_id = row.get("chat_id")
+                text = row.get("text") or ""
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/bot_reminders?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"bot_reminder error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/bot_reminders?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_bot_reminders_job error: {e}")
+
+# =========================
+# KAITEN -> kunlik statistika (10:00 va 20:00)
+# =========================
+
+async def kaiten_daily_stats_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        time_label = context.job.data.get("label", "")
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/biznes_data",
+                headers=SB_HEADERS,
+                params={"id": "eq.kaiten", "select": "data"}
+            )
+            rows = r.json()
+            if not rows or not isinstance(rows, list) or not rows[0].get("data"):
+                return
+            data = rows[0]["data"]
+            tasks = data.get("tasks", [])
+            columns = data.get("columns", [
+                {"id": "todo", "title": "Topshiriqlar"},
+                {"id": "progress", "title": "Jarayonda"},
+                {"id": "done", "title": "Bajarildi"},
+                {"id": "accepted", "title": "Qabul qilindi"},
+            ])
+            now = datetime.now(TIMEZONE)
+            date_str = now.strftime("%d.%m.%Y")
+            lines = [f"📊 Vazifalar holati — {date_str} ({time_label})",""]
+            # Group by dept
+            dept_tasks = {}
+            for t in tasks:
+                dept = t.get("dept") or "Boshqa"
+                if dept not in dept_tasks:
+                    dept_tasks[dept] = []
+                dept_tasks[dept].append(t)
+            if not dept_tasks:
+                lines.append("Hozircha vazifalar yo'q")
+            else:
+                col_emojis = {"todo":"📋","progress":"▶️","done":"✅","accepted":"🏆"}
+                for dept, dtasks in dept_tasks.items():
+                    lines.append(f"📁 {dept}")
+                    for col in columns:
+                        count = sum(1 for t in dtasks if t.get("status") == col["id"])
+                        emoji = col_emojis.get(col["id"], "•")
+                        lines.append(f"  {emoji} {col['title']}: {count} ta")
+                    lines.append("")
+            text = "\n".join(lines).strip()
+            await context.bot.send_message(chat_id=CHAT_ID, text=text)
+    except Exception as e:
+        logger.error(f"kaiten_daily_stats_job error: {e}")
+
+async def schedule_daily_stats(application):
+    for hour, label in [(10, "Ertalab"), (20, "Kechki")]:
+        secs = seconds_until_time(hour, 0)
+        application.job_queue.run_once(
+            _daily_stats_once,
+            when=secs,
+            name=f"kaiten_stats_{hour}",
+            data={"hour": hour, "label": label}
+        )
+
+async def _daily_stats_once(context: ContextTypes.DEFAULT_TYPE):
+    await kaiten_daily_stats_job(context)
+    hour = context.job.data["hour"]
+    label = context.job.data["label"]
+    context.application.job_queue.run_once(
+        _daily_stats_once,
+        when=86400,
+        name=f"kaiten_stats_{hour}",
+        data={"hour": hour, "label": label}
+    )
+
+# =========================
+# KAITEN -> guruhga vazifa xabari
+# =========================
+
+async def check_group_messages_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/bot_group_messages",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                text = row.get("text") or ""
+                send_at = row.get("send_at")
+                if send_at:
+                    try:
+                        if send_at > now_iso:
+                            continue
+                    except Exception:
+                        pass
+                try:
+                    await context.bot.send_message(chat_id=CHAT_ID, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"group_message error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/bot_group_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_group_messages_job error: {e}")
+
+# =========================
+# CHAT -> shaxsiy xabar yuborish
+# =========================
+
+async def check_personal_messages_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(
+                f"{SB_URL}/rest/v1/personal_messages",
+                headers=SB_HEADERS,
+                params={"status": "eq.pending", "select": "*"}
+            )
+            rows = r.json()
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                rid = row.get("id")
+                username = (row.get("to_username") or "").lstrip("@").lower()
+                text = row.get("text") or ""
+                if not username:
+                    await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error", "error": "username yo'q"})
+                    continue
+                try:
+                    ur = await c.get(
+                        f"{SB_URL}/rest/v1/telegram_users",
+                        headers=SB_HEADERS,
+                        params={"username": f"eq.{username}", "select": "chat_id"}
+                    )
+                    urows = ur.json()
+                    if not urows:
+                        await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "no_start"})
+                        continue
+                    chat_id = urows[0]["chat_id"]
+                    await context.bot.send_message(chat_id=chat_id, text=text)
+                    await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "sent"})
+                except Exception as e:
+                    logger.error(f"personal_message error for {rid}: {e}")
+                    try:
+                        await c.patch(f"{SB_URL}/rest/v1/personal_messages?id=eq.{rid}", headers=SB_HEADERS, json={"status": "error"})
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"check_personal_messages_job error: {e}")
+
+
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+TIMEZONE = ZoneInfo("Asia/Tashkent")
+ADMIN_USERNAME = "umidpulatov"
+NOTIFY_TAGS = "@umidpulatov"
+
+# =========================
+# AUTO-DELETE HELPER
+# =========================
+
+async def delete_messages_after(bot, chat_id, message_ids, delay=10):
+    await asyncio.sleep(delay)
+    for mid in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except:
+            pass
+
+def schedule_delete(bot, chat_id, message_ids, delay=10):
+    asyncio.create_task(delete_messages_after(bot, chat_id, message_ids, delay))
+
+# =========================
+# AGENTS
+# =========================
+
+AGENTS_FILE = "agents.json"
+
+DEFAULT_AGENTS = {
+    "sirlyinfo": {
+        "name": "Ozodbek", "username": "sirlyinfo", "phone": "+998 93 798 13 04",
+        "work_days": [0, 1, 2, 3, 4, 5, 6],
+        "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
+        "lunch": [13, 14],
+    },
+    "kh_nosirov": {
+        "name": "Xojiakbar", "username": "kh_nosirov", "phone": "",
+        "work_days": [0, 1, 2, 3, 4, 5, 6],
+        "work_hours": {"0": [10, 24], "1": [10, 24], "2": [10, 24], "3": [10, 24], "4": [10, 24], "5": [10, 24], "6": [10, 24]},
+    },
+    "umidpulatov": {
+        "name": "Umid", "username": "umidpulatov", "phone": "+998 99 477 41 48",
+        "work_days": [0, 1, 2, 3, 4],
+        "work_hours": {"0": [12, 20], "1": [12, 20], "2": [12, 20], "3": [12, 20], "4": [12, 20]},
+    },
+    "al_xorazm1y": {
+        "name": "Azamjon", "username": "al_xorazm1y", "phone": "+998 99 737 11 99",
+        "work_days": [0, 1, 2, 3, 4, 5],
+        "work_hours": {"0": [10, 20], "1": [10, 20], "2": [10, 20], "3": [10, 20], "4": [10, 20], "5": [10, 20]},
+    },
+    "abdurahmon": {
+        "name": "Abdurahmon", "username": "abdurahmon", "phone": "+998 91 415 92 55",
+        "work_days": [0, 1, 2, 3, 4, 5],
+        "work_hours": {"0": [9, 13], "1": [9, 13], "2": [9, 13], "3": [9, 13], "4": [9, 13], "5": [9, 13]},
+    },
 }
-#login-screen.uma-theme { background: #f0f3ee; }
-#login-screen.sirly-theme { background: #0d4a2e; }
-.login-box { width: 100%; max-width: 340px; }
-.login-logo { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 12px; }
-.uma-theme .login-logo { background: #1e5927; }
-.sirly-theme .login-logo { background: rgba(255,255,255,0.15); }
-.login-app-name { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-.uma-theme .login-app-name { color: #1e5927; }
-.sirly-theme .login-app-name { color: #fff; }
-.login-sub { text-align: center; font-size: 13px; margin-bottom: 32px; }
-.uma-theme .login-sub { color: #7a9669; }
-.sirly-theme .login-sub { color: rgba(255,255,255,0.6); }
-.login-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
-.uma-theme .login-label { color: #7a9669; }
-.sirly-theme .login-label { color: rgba(255,255,255,0.7); }
-.login-input { width: 100%; border-radius: 10px; padding: 14px; font-size: 16px; outline: none; margin-bottom: 14px; border: 1px solid transparent; font-family: inherit; }
-.uma-theme .login-input { background: #fff; color: #1e2e1a; border-color: #e2e8de; }
-.sirly-theme .login-input { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
-.sirly-theme .login-input::placeholder { color: rgba(255,255,255,0.4); }
-.login-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
-.uma-theme .login-btn { background: #558237; color: white; }
-.sirly-theme .login-btn { background: #a8e063; color: #0d4a2e; }
-.login-error { font-size: 13px; text-align: center; margin-bottom: 10px; display: none; }
-.uma-theme .login-error { color: #c0392b; }
-.sirly-theme .login-error { color: #ff9090; }
-.login-back { background: none; border: none; cursor: pointer; font-size: 13px; margin-top: 16px; display: block; width: 100%; text-align: center; font-family: inherit; }
-.uma-theme .login-back { color: #7a9669; }
-.sirly-theme .login-back { color: rgba(255,255,255,0.5); }
-#sirly-app { display: none; }
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --green-dark:#0d4a2e;--green-mid:#1a6b42;--green-card:#16573a;--green-light:#1e7a4a;
-  --lime:#a8e063;--lime-dark:#7ec832;--white:#ffffff;--white-80:rgba(255,255,255,0.80);
-  --white-50:rgba(255,255,255,0.50);--white-20:rgba(255,255,255,0.20);--white-10:rgba(255,255,255,0.10);
-  --white-06:rgba(255,255,255,0.06);--acc:var(--lime);--acc-text:#0d4a2e;--hint:var(--white-50);
-  --bg2:var(--green-card);--border:var(--white-10);
+
+def load_agents():
+    if not os.path.exists(AGENTS_FILE):
+        save_agents(DEFAULT_AGENTS)
+        return dict(DEFAULT_AGENTS)
+    try:
+        with open(AGENTS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        changed = False
+        for key, val in DEFAULT_AGENTS.items():
+            if key not in data:
+                data[key] = val
+                changed = True
+        if changed:
+            save_agents(data)
+        return data
+    except Exception as e:
+        logger.error(f"load_agents error: {e}")
+        return dict(DEFAULT_AGENTS)
+
+def save_agents(agents_data):
+    with open(AGENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(agents_data, f, ensure_ascii=False, indent=2)
+
+AGENTS_DATA = load_agents()
+
+def get_agent_order():
+    return list(AGENTS_DATA.keys())
+
+def get_agent_info(username):
+    d = AGENTS_DATA.get(username, {})
+    name = d.get("name", username)
+    phone = d.get("phone", "")
+    line = f"👨🏻‍💻 {name} @{username}"
+    if phone:
+        line += f"\n📞 {phone}"
+    return line
+
+# =========================
+# CHECKLIST CONFIG
+# =========================
+
+CHECKLIST_CONFIG = {
+    "10:15": [
+        "Olib ketilmagan statusini tekshiring va guruhga qisqacha hisobot yuboring: soni va nima bo'ldi suhbat paytida",
+        "Muammoli mijozlar jadvalini ko'rib chiqing, jarayondagilarni yakunlanganlarga o'tkazing va guruhga @umidpulatov tag qilib qisqacha hisobot yuboring",
+        "Bugalteriya jadvalini to'ldiring, shoshмang xato bo'lmasin",
+        "Sotuv tablitsasini to'ldiring, xato qilmang, shoshмang",
+    ],
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;background:var(--green-dark);color:var(--white);font-size:14px;min-height:100vh;}
-body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:24px 24px;pointer-events:none;z-index:0;}
-.page{display:none;padding:16px;position:relative;z-index:1}
-#p-chat-group.active,#p-chat-personal.active{display:flex;flex-direction:column;height:100vh;padding:0}
-#p-chat-group .page-topbar,#p-chat-personal .page-topbar{padding:16px;flex-shrink:0}
-.page.active{display:block}
-.home-header{padding:28px 0 20px}
-.home-title{font-size:26px;font-weight:800;letter-spacing:-0.6px;line-height:1.2;color:var(--white)}
-.home-title span{color:var(--lime)}
-.home-sub{font-size:13px;color:var(--white-50);margin-top:5px;font-weight:500}
-.logout-btn{position:fixed;top:10px;right:52px;z-index:50;border:1px solid var(--white-10);background:var(--white-06);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--white-80)}
-.page-topbar{position:sticky;top:0;z-index:10;background:var(--green-dark);padding:10px 16px 0;margin:-16px -16px 16px;}
-.page-header{display:flex;align-items:center;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--white-10);margin-bottom:16px}
-.back-btn{background:var(--white-10);border:none;font-size:12px;color:var(--white);cursor:pointer;font-family:inherit;font-weight:600;padding:6px 10px;border-radius:10px;display:flex;align-items:center;gap:3px;transition:background .15s;white-space:nowrap;flex-shrink:0;}
-.back-btn:active{background:var(--white-20)}
-.page-title{font-size:15px;font-weight:700;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
-.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.nav-card{background:var(--green-card);border:1px solid var(--white-10);border-radius:18px;padding:18px 16px 38px;cursor:pointer;position:relative;min-height:90px;transition:transform .15s,background .15s;overflow:hidden;}
-.nav-card::after{content:'';position:absolute;bottom:-20px;right:-20px;width:70px;height:70px;background:var(--lime);opacity:.06;border-radius:50%;}
-.nav-card:active{transform:scale(.97);background:var(--green-light)}
-.nav-card.dragging{opacity:.4}
-.nav-card.drag-over{outline:2px dashed var(--lime)}
-.nav-card-title{font-size:14px;font-weight:700;color:var(--white);line-height:1.4;margin-top:4px}
-.nav-card-arrow{position:absolute;bottom:14px;right:16px;font-size:18px;color:var(--lime);font-weight:700}
-.nav-card-drag{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;opacity:.35}
-.nav-card-drag span{display:block;width:13px;height:2px;background:var(--white);border-radius:2px}
-.nav-card-actions{position:absolute;top:7px;right:7px;display:flex;gap:3px;opacity:0;transition:opacity .15s}
-.nav-card:hover .nav-card-actions{opacity:1}
-.nav-card.acad-card{background:linear-gradient(135deg,#1a3d55,#0e2e40)}
-.add-btn{width:100%;padding:13px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:14px;font-size:13px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:6px;transition:background .15s;}
-.add-btn:active{background:var(--white-10)}
-.add-item-btn{width:100%;padding:11px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:12px;font-size:13px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:8px;transition:background .15s;}
-.add-item-btn:active{background:var(--white-10)}
-.search-wrap{margin-bottom:14px}
-.search-inp{width:100%;padding:10px 14px;border:1px solid var(--white-10);border-radius:12px;font-size:13px;font-family:inherit;background:var(--white-06);color:var(--white);outline:none;transition:border-color .15s;}
-.search-inp::placeholder{color:var(--white-50)}
-.search-inp:focus{border-color:var(--lime)}
-.section-list{display:flex;flex-direction:column;gap:8px}
-.section-item{background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:13px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .15s;}
-.section-item:active{background:var(--green-light)}
-.section-item.dragging{opacity:.4}
-.section-item.drag-over{border:2px dashed var(--lime)}
-.section-num{width:30px;height:30px;border-radius:9px;background:var(--white-10);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--lime);flex-shrink:0;margin-right:12px;}
-.section-name{font-size:14px;font-weight:600;color:var(--white)}
-.chevron{color:var(--white-50);font-size:18px;font-weight:300}
-.drag-handle{display:flex;flex-direction:column;gap:3px;padding:4px;cursor:grab;margin-right:8px;opacity:.3}
-.drag-handle span{display:block;width:14px;height:2px;background:var(--white);border-radius:2px}
-.drag-handle:active{cursor:grabbing}
-.form-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:16px;padding:16px;margin-top:10px}
-.fi{width:100%;padding:10px 12px;border:1px solid var(--white-10);border-radius:10px;font-size:13px;font-family:inherit;background:var(--white-06);color:var(--white);outline:none;margin-top:5px;transition:border-color .15s;}
-.fi:focus{border-color:var(--lime)}
-.fi::placeholder{color:var(--white-50)}
-.flbl{font-size:11px;font-weight:700;color:var(--white-50);text-transform:uppercase;letter-spacing:.6px}
-.frow{margin-bottom:12px}
-.fbtns{display:flex;gap:8px;margin-top:14px}
-.fsave{background:var(--lime);color:var(--green-dark);border:none;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;}
-.fsave:active{background:var(--lime-dark)}
-.fcancel{background:var(--white-10);border:none;padding:10px 16px;border-radius:10px;font-size:13px;cursor:pointer;color:var(--white-80);font-family:inherit;}
-.action-btns{display:flex;gap:4px;align-items:center}
-.abtn{border:1px solid var(--white-10);background:var(--white-06);border-radius:7px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--white-50);transition:background .15s;}
-.abtn:active{background:var(--white-20)}
-.abtn-red{border-color:rgba(255,100,100,.25);color:#ff7070}
-.tree-wrap{overflow-x:auto;padding-bottom:16px}
-.tree-col{display:flex;flex-direction:column}
-.node-row{display:flex;flex-direction:row;align-items:flex-start;margin-bottom:10px}
-.node-card{width:260px;flex-shrink:0;background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:14px;position:relative;}
-.node-num{position:absolute;top:10px;left:10px;width:26px;height:26px;background:var(--lime);color:var(--green-dark);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;}
-.node-name{font-size:13px;font-weight:600;line-height:1.4;margin-top:32px;padding-right:36px;color:var(--white)}
-.node-msg{background:var(--white-06);border-radius:8px;padding:8px 30px 8px 10px;font-size:11px;line-height:1.6;margin-top:8px;white-space:pre-wrap;position:relative;font-family:monospace;color:var(--white-80);border:1px solid var(--white-10);}
-.copy-btn{width:20px;height:20px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:5px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:.7;color:var(--white);}
-.node-link{font-size:11px;margin-top:8px;word-break:break-all}
-.node-link a{display:inline-flex;align-items:center;gap:5px;background:var(--lime);color:var(--green-dark);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;}
-.node-corner{position:absolute;top:6px;right:6px;display:flex;gap:2px;opacity:0;transition:opacity .15s}
-.node-card:hover .node-corner{opacity:1}
-.corner-btn{width:22px;height:22px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:6px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;color:var(--white-50);}
-.corner-btn.always{opacity:1!important}
-.connector{display:flex;flex-direction:row;align-items:stretch}
-.vbar-wrap{width:24px;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
-.vbar{width:1px;background:var(--white-20);flex:1}
-.children-col{display:flex;flex-direction:column}
-.child-row{display:flex;align-items:flex-start}
-.hbar{width:24px;height:1px;background:var(--white-20);flex-shrink:0;margin-top:22px}
-.add-child-btn{width:260px;padding:8px 12px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:10px;font-size:11px;color:var(--white-50);cursor:pointer;font-family:inherit;text-align:left;margin-bottom:8px;}
-.add-root-btn{padding:10px 16px;background:var(--white-06);border:1.5px dashed var(--white-20);border-radius:12px;font-size:12px;color:var(--white-50);cursor:pointer;font-family:inherit;margin-top:8px;display:flex;align-items:center;gap:6px;}
-.node-form{width:260px;background:var(--green-card);border:1px solid var(--white-10);border-radius:12px;padding:14px;margin-bottom:8px}
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
-.modal-bg.open{display:flex}
-.modal-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:300px}
-.modal-title{font-size:18px;font-weight:800;margin-bottom:4px;color:var(--white)}
-.modal-sub{font-size:12px;color:var(--white-50);margin-bottom:16px}
-.modal-err{font-size:11px;color:#ff7070;margin-top:6px;display:none}
-.modal-err.show{display:block}
-.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
-.confirm-bg.open{display:flex}
-.confirm-box{background:var(--green-card);border:1px solid var(--white-10);border-radius:20px;padding:24px;width:280px;text-align:center}
-.confirm-msg{font-size:15px;font-weight:600;color:var(--white);margin-bottom:20px;line-height:1.5}
-.confirm-btns{display:flex;gap:10px;justify-content:center}
-.confirm-yes{background:#e53935;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.confirm-no{background:var(--white-10);color:var(--white-80);border:none;padding:10px 20px;border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit}
-.notif{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--lime);color:var(--green-dark);padding:10px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
-.notif.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;align-items:center;justify-content:center;cursor:zoom-out}
-.img-modal.open{display:flex}
-.img-modal img{max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain}
-.breadcrumb{font-size:11px;color:var(--white-50);display:flex;flex-wrap:nowrap;gap:3px;align-items:center;overflow:hidden;position:relative;z-index:1;margin-bottom:4px;}
-.bc-item{cursor:pointer;color:var(--lime);font-weight:600;white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis}
-.bc-sep{opacity:.4;flex-shrink:0}
-.bc-cur{color:var(--white-80);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
-.fade{animation:fadeIn .2s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-.node-msg-collapsed{max-height:80px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 100%);mask-image:linear-gradient(to bottom,black 40%,transparent 100%)}
-.node-msg-btns{position:absolute;top:6px;right:6px;display:flex;gap:3px}
-.expand-btn{width:20px;height:20px;border:1px solid var(--white-10);background:var(--green-dark);border-radius:5px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--white-50)}
-.acad-intro{background:rgba(168,224,99,.1);border-left:3px solid var(--lime);border-radius:0 12px 12px 0;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.7;color:var(--white-80);}
-.acad-section-block{background:var(--green-card);border:1px solid var(--white-10);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
-.acad-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;padding:4px 10px;border-radius:8px;display:inline-block;}
-.acad-label-standard{background:rgba(99,102,241,.18);color:#a5b4fc}
-.acad-label-violation{background:rgba(255,112,112,.15);color:#ff9090}
-.acad-label-decision{background:rgba(168,224,99,.15);color:var(--lime)}
-.acad-content{font-size:13px;line-height:1.85;color:var(--white-80)}
-.acad-content ul{padding-left:18px;margin:6px 0}
-.acad-content li{margin-bottom:4px}
-.org-pan-wrap{scrollbar-width:none;-ms-overflow-style:none}
-.org-pan-wrap::-webkit-scrollbar{display:none}
-.acad-content b{font-weight:700;color:var(--white)}
-.kaiten-col{flex-shrink:0;width:260px;background:var(--white-06);border:1px solid var(--white-10);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
-.kaiten-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--white-50);padding:4px 2px;display:flex;align-items:center;gap:6px}
-.kaiten-col-title-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kaiten-col-edit-btn{flex-shrink:0;width:20px;height:20px;border:none;background:var(--white-06);border-radius:6px;color:var(--white-50);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
-.kaiten-add-col{flex-shrink:0;width:60px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
-.kaiten-add-col-btn{width:36px;height:36px;border-radius:50%;border:1.5px dashed var(--white-20);background:var(--white-06);color:var(--white-50);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
-.kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
-.kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
-.kaiten-col-list{display:flex;flex-direction:column;gap:8px}
-.kaiten-card{background:#ffffff;border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
-.sek-card{background:#f3f1ec;border:1px solid #e2dfd6;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px}
-.sek-date{font-size:13px;font-weight:700;color:#2e2c28;letter-spacing:.2px}
-.sek-row{font-size:13px;color:#5a574f;line-height:1.4}
-.sek-lbl{color:#9a9588;font-weight:600}
-.sek-purpose{color:#2e2c28}
-.sek-note{color:#8b877c;font-size:12px}
-.sek-link{display:block;font-size:12px;color:#5a574f;text-decoration:underline;word-break:break-all;margin-top:2px}
-.sek-btns{display:flex;gap:6px;margin-top:6px}
-.sek-abtn{border:1px solid #ddd9cc;background:#ffffff;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;color:#5a574f;font-family:inherit;transition:background .15s}
-.sek-abtn:active{background:#ebe8df}
-.sek-abtn-red{border-color:#e0c9c4;color:#a8493d}
-.chat-msg-list{display:flex;flex-direction:column;gap:8px;padding:12px;overflow-y:auto;flex:1;min-height:0}
-.chat-msg{max-width:78%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4;word-break:break-word}
-.chat-msg-mine{align-self:flex-end;background:var(--lime);color:var(--green-dark)}
-.chat-msg-other{align-self:flex-start;background:var(--white-06);color:var(--white);border:1px solid var(--white-10)}
-.chat-msg-meta{font-size:10px;opacity:.6;margin-bottom:2px;font-weight:600}
-.chat-msg-file{display:block;font-size:12px;text-decoration:underline;margin-top:4px;word-break:break-all}
-.chat-input-row{display:flex;gap:6px;align-items:center;padding:10px 12px;border-top:1px solid var(--white-10)}
-.chat-input{flex:1}
-.chat-pending-files{padding:0 12px;display:flex;flex-wrap:wrap;gap:6px}
-.chat-pending-file{font-size:11px;background:var(--white-06);border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:4px;color:var(--white-80)}
-.chat-body{display:flex;flex:1;min-height:0;overflow:hidden}
-.chat-sidebar{width:140px;flex-shrink:0;border-right:1px solid var(--white-10);overflow-y:auto;padding:8px}
-.chat-sidebar-item{padding:8px 6px;border-radius:8px;font-size:12px;cursor:pointer;color:var(--white-80);margin-bottom:4px}
-.chat-sidebar-item.active{background:var(--lime);color:var(--green-dark);font-weight:600}
-.chat-sidebar-title{font-size:10px;text-transform:uppercase;color:var(--white-50);padding:4px 6px;font-weight:700}
-.chat-main{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
-.chat-input{resize:none;max-height:100px;overflow-y:auto}
-.chat-msg-time{font-size:10px;opacity:.55;margin-top:3px}
-.chat-msg-edited{font-size:10px;opacity:.5;font-style:italic;margin-top:1px}
-.chat-msg-actions{display:flex;gap:4px;margin-top:4px}
-.chat-msg-actions button{font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--white-10);background:transparent;color:inherit;opacity:.6;cursor:pointer}
-.org-white-dots{background-image:radial-gradient(circle, rgba(22,87,58,0.15) 1px, transparent 1px)!important;background-size:14px 14px;background-color:#ffffff;}
-.kaiten-card-text{font-size:13px;color:#16573a;line-height:1.4}
-.kaiten-card-meta{font-size:13px;color:#16573a;font-weight:600}
-.kaiten-card-naz{font-size:11px;color:#16573a99;font-weight:400}
-.kaiten-card-timer{font-size:11px;font-weight:700}
-.kaiten-card-deadline{font-size:11px;color:#1e7a4a;font-weight:600}
-.kaiten-card-btns{display:flex;gap:6px;margin-top:4px}
-.kaiten-card .abtn{border-color:rgba(22,87,58,0.15);background:rgba(22,87,58,0.06);color:#16573a}
-.kaiten-card .abtn:active{background:rgba(22,87,58,0.18)}
-.kaiten-card .abtn-red{border-color:rgba(211,47,47,.25);color:#d32f2f}
-</style>
-</head>
-<body>
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo" id="login-logo">🌿</div>
-    <div class="login-app-name" id="login-app-name">Uma-tizim</div>
-    <div class="login-sub" id="login-sub">Shaxsiy rivojlanish</div>
-    <label class="login-label">Login</label>
-    <input id="login-input" type="text" class="login-input" placeholder="loginni kiriting" autocomplete="off" autocapitalize="none">
-    <label class="login-label">Parol</label>
-    <input id="parol-input" type="password" class="login-input" placeholder="parolni kiriting">
-    <div id="login-error" class="login-error">Login yoki parol noto'g'ri</div>
-    <button id="login-btn" class="login-btn">Kirish</button>
-  </div>
-</div>
-<div id="admin-screen" style="display:none;min-height:100vh;background:#f5f5f5;font-family:-apple-system,sans-serif;">
-  <div style="background:#1e5927;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;">
-    <div style="color:white;font-size:17px;font-weight:700;">👑 Admin Panel</div>
-    <button id="admin-logout" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;">Chiqish</button>
-  </div>
-  <div style="padding:16px;">
-    <button id="admin-new-profile-btn" style="width:100%;background:#1e5927;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:16px;">＋ Yangi profil yaratish</button>
-    <div id="admin-new-profile-form"></div>
-    <div id="admin-list"></div>
-  </div>
-</div>
-<div id="sirly-app">
-<button class="logout-btn" id="logout-btn" style="display:none">← Chiqish</button>
 
-<div class="page active" id="p-entry1">
-  <div class="home-header">
-    <div class="home-title">Tizimga<br><span>xush kelibsiz</span></div>
-    <div class="home-sub">Bo'limni tanlang</div>
-  </div>
-  <div class="cards-grid">
-    <div class="nav-card" id="card-bolimlar" onclick="goTo('p-entry2')">
-      <div class="nav-card-title" style="margin-top:4px">Bo'limlar</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" id="card-org" onclick="goTo('p-org')">
-      <div class="nav-card-title" style="margin-top:4px">Org struktura</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" id="card-kaiten" onclick="goTo('p-kaiten')">
-      <div class="nav-card-title" style="margin-top:4px">Kaiten</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" id="card-hujjatlar" onclick="goTo('p-hujjatlar')">
-      <div class="nav-card-title" style="margin-top:4px">Hujjatlar</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" id="card-sekretar" onclick="goTo('p-sekretar')">
-      <div class="nav-card-title" style="margin-top:4px">Sekretar</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" id="card-chat" onclick="goTo('p-chat')">
-      <div class="nav-card-title" style="margin-top:4px">Chat</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-  </div>
-</div>
+# Checklist faqat shu xodimga yuboriladi
+CHECKLIST_AGENTS = {"sirlyinfo"}
 
-<div class="page" id="p-kaiten">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Kaiten</span>
-    </div>
-  </div>
-  <div id="kaiten-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch;"></div>
-  <div id="kaiten-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;-webkit-overflow-scrolling:touch;"></div>
-</div>
+CHECKLIST_TIMES = list(CHECKLIST_CONFIG.keys())
 
-<div class="page" id="p-hujjatlar">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Hujjatlar</span>
-    </div>
-  </div>
-  <div class="search-wrap"><input class="search-inp" id="search-hujjat" placeholder="🔍 Qidirish..." oninput="renderHujjatlar()"></div>
-  <div id="hujjat-list" class="section-list"></div><div id="hujjat-form"></div>
-</div>
+# Checklist verify state: vkey -> {pending_items, verify_msg_id}
+checklist_verify_state = {}
 
-<div class="page" id="p-hujjat-detail">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-hujjatlar')">← Orqaga</button>
-      <span class="page-title" id="hujjat-detail-title">Hujjat</span>
-    </div>
-  </div>
-  <div id="hujjat-detail-body"></div>
-</div>
+WEEKDAY_UZ = {0: "Dushanba", 1: "Seshanba", 2: "Chorshanba", 3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"}
+MONTH_UZ = {1: "yanvar", 2: "fevral", 3: "mart", 4: "aprel", 5: "may", 6: "iyun", 7: "iyul", 8: "avgust", 9: "sentyabr", 10: "oktyabr", 11: "noyabr", 12: "dekabr"}
 
-<div class="page" id="p-sekretar">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Sekretar</span>
-      <button class="back-btn" style="margin-left:auto" onclick="goTo('p-sekretar-arxiv')">🗄 Arxiv</button>
-    </div>
-  </div>
-  <div id="sekretar-list" class="section-list"></div>
-  <div id="sekretar-form"></div>
-  <button class="add-item-btn" onclick="showSekretarForm()">＋ Vazifa qo'shish</button>
-</div>
+WEEKDAY_BUTTONS = [
+    ("Dush", 0), ("Sesh", 1), ("Chor", 2), ("Pay", 3), ("Juma", 4), ("Shanba", 5), ("Yakshanba", 6),
+]
 
-<div class="page" id="p-sekretar-arxiv">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-sekretar')">← Orqaga</button>
-      <span class="page-title">Arxiv</span>
-    </div>
-  </div>
-  <div id="sekretar-archive-list" class="section-list"></div>
-</div>
+# =========================
+# CUSTOM CHECKLIST (yaratilgan checklistlar)
+# =========================
 
-<div class="page" id="p-chat">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Chat</span>
-    </div>
-  </div>
-  <div class="cards-grid">
-    <div class="nav-card" onclick="goTo('p-chat-group')">
-      <div class="nav-card-title" style="margin-top:4px">Umumiy chat</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" onclick="goTo('p-chat-personal-list')">
-      <div class="nav-card-title" style="margin-top:4px">Shaxsiy xabarlar</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-  </div>
-</div>
+CUSTOM_CHECKLISTS_FILE = "custom_checklists.json"
+custom_checklists = []  # list of dicts
+custom_checklist_state = {}  # user_id -> creation state
+custom_checklist_confirmations = {}  # cl_id -> {username: {task_index: bool}}
+custom_checklist_verified = {}  # cl_id -> set
+custom_checklist_verify_state = {}  # cl_id -> {verify_msg_id}
+custom_checklist_message_ids = {}  # cl_id -> message_id
 
-<div class="page" id="p-chat-group">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat')">← Orqaga</button>
-      <span class="page-title">Umumiy chat</span>
-    </div>
-  </div>
-  <div class="chat-body">
-    <div id="chat-group-sidebar" class="chat-sidebar"></div>
-    <div class="chat-main">
-      <div id="chat-group-list" class="chat-msg-list"></div>
-      <div id="chat-group-pending" class="chat-pending-files"></div>
-      <div class="chat-input-row">
-        <input type="file" id="chat-group-file-inp" multiple style="display:none" onchange="chatGroupUploadFiles()">
-        <button class="abtn" onclick="document.getElementById('chat-group-file-inp').click()">📎</button>
-        <textarea class="fi chat-input" id="chat-group-text" placeholder="Xabar yozing... (Shift+Enter — yuborish)" style="margin-top:0" rows="1" onkeydown="chatHandleKeydown(event,'group')" oninput="chatAutoGrow(this)"></textarea>
-        <button class="fsave" style="margin-top:0;padding:10px 16px" onclick="chatGroupSend()">➤</button>
-      </div>
-    </div>
-  </div>
-</div>
+def save_custom_checklists():
+    with open(CUSTOM_CHECKLISTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(custom_checklists, f, ensure_ascii=False, indent=2)
 
-<div class="page" id="p-chat-personal-list">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat')">← Orqaga</button>
-      <span class="page-title">Shaxsiy xabarlar</span>
-    </div>
-  </div>
-  <div id="chat-personal-contacts" class="section-list"></div>
-</div>
+def load_custom_checklists():
+    global custom_checklists
+    if not os.path.exists(CUSTOM_CHECKLISTS_FILE):
+        return
+    try:
+        with open(CUSTOM_CHECKLISTS_FILE, "r", encoding="utf-8") as f:
+            custom_checklists = json.load(f)
+    except Exception as e:
+        logger.error(f"load_custom_checklists error: {e}")
 
-<div class="page" id="p-chat-personal">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat-personal-list')">← Orqaga</button>
-      <span class="page-title" id="chat-personal-title">Xabar</span>
-    </div>
-  </div>
-  <div id="chat-personal-list" class="chat-msg-list"></div>
-  <div id="chat-personal-pending" class="chat-pending-files"></div>
-  <div class="chat-input-row">
-    <input type="file" id="chat-personal-file-inp" multiple style="display:none" onchange="chatPersonalUploadFiles()">
-    <button class="abtn" onclick="document.getElementById('chat-personal-file-inp').click()">📎</button>
-    <textarea class="fi chat-input" id="chat-personal-text" placeholder="Xabar yozing... (Shift+Enter — yuborish)" style="margin-top:0" rows="1" onkeydown="chatHandleKeydown(event,'personal')" oninput="chatAutoGrow(this)"></textarea>
-    <button class="fsave" style="margin-top:0;padding:10px 16px" onclick="chatPersonalSend()">➤</button>
-  </div>
-</div>
+def get_next_cl_id():
+    if not custom_checklists:
+        return 1
+    return max(cl["id"] for cl in custom_checklists) + 1
 
-<div class="page" id="p-org">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Org struktura</span>
-    </div>
-  </div>
-  <div id="org-pan-wrap" class="org-pan-wrap" style="overflow:scroll;width:100%;height:calc(100vh - 120px);-webkit-overflow-scrolling:touch;">
-    <div id="org-tree" style="display:flex;flex-direction:column;align-items:center;min-width:max-content;padding:40px 200px 120px 200px;"></div>
-  </div>
-  <script>
-  var orgData = [
-    {id:'o1', name:'Bosh direktor', fio:'', parentId:null},
-    {id:'o2', name:'Moliya direktori (ЧФ)', fio:'', parentId:'o1'}
-  ];
-  var orgMenuOpen = null;
-  function orgIsAdmin(){ return !!(window && window.isAdmin); }
-  var orgDetailOpen = null;
-  var orgInfoOpen = null;
-  var orgInfoMenuOpen = null;
-  var orgTasksOpen = null;
-  var orgTasksMenuOpen = null;
-  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  async function orgSave(){
-    try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:orgData})});}
-    catch(e){localStorage.setItem('org_data',JSON.stringify(orgData));}
-  }
-  async function orgLoad(){
-    var localData = null;
-    try{ var d=localStorage.getItem('org_data'); if(d) localData=JSON.parse(d); }catch(e){}
-    try{
-      var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{headers:SB_H});
-      var rows=await r.json();
-      if(rows&&rows.length&&rows[0].data&&rows[0].data.length){ orgData=rows[0].data; }
-      else if(localData && localData.length){
-        orgData = localData;
-        try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'org',data:orgData})});}catch(e2){}
-      }
-      // one-time migration: if local has more nodes than server, push local up
-      if(localData && rows && rows.length && rows[0].data && localData.length > rows[0].data.length){
-        orgData = localData;
-        await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.org',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:orgData})});
-        notify("Eski ma'lumotlar serverga ko'chirildi ✓");
-      }
-      localStorage.removeItem('org_data');
-    }catch(e){
-      if(localData) orgData=localData;
+def seconds_until_custom_checklist(cl):
+    """Keyingi yuborish vaqtigacha sekundlar"""
+    now = datetime.now(TIMEZONE)
+    repeat = cl["repeat"]
+    hour = cl["hour"]
+    minute = 0
+
+    if repeat == "daily":
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return (target - now).total_seconds()
+
+    elif repeat == "interval":
+        days = cl["interval_days"]
+        last_sent = cl.get("last_sent")
+        if last_sent:
+            last_dt = datetime.fromisoformat(last_sent)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=TIMEZONE)
+            next_dt = last_dt + timedelta(days=days)
+            next_dt = next_dt.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        else:
+            next_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if next_dt <= now:
+                next_dt += timedelta(days=1)
+        if next_dt <= now:
+            next_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=1)
+        return max((next_dt - now).total_seconds(), 1)
+
+    elif repeat == "weekly":
+        weekday = cl["weekday"]
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        days_ahead = (weekday - now.weekday()) % 7
+        if days_ahead == 0 and target <= now:
+            days_ahead = 7
+        target += timedelta(days=days_ahead)
+        return (target - now).total_seconds()
+
+    return 86400
+
+# =========================
+# STATE
+# =========================
+
+state = {
+    "checklist_confirmations": {}, "checklist_message_ids": {}, "checklist_log_message_ids": {}, "checklist_log_lines": {},
+    "cycle_id": 0, "stopped": False,
+}
+
+# =========================
+# HELPERS
+# =========================
+
+def cancel_jobs_by_name(job_queue, name):
+    for job in job_queue.get_jobs_by_name(name):
+        job.schedule_removal()
+
+def seconds_until_time(hour, minute):
+    now = datetime.now(TIMEZONE)
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+def get_active_agents():
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    hour = now.hour
+    active = set()
+    for username, data in AGENTS_DATA.items():
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), [0, 24])
+            if wh[0] <= hour < wh[1]:
+                active.add(username)
+    return active
+
+def get_active_agents_for_time(time_key):
+    hour = int(time_key.split(":")[0])
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    active = set()
+    for username, data in AGENTS_DATA.items():
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), [0, 24])
+            if wh[0] <= hour <= wh[1]:
+                active.add(username)
+    return active
+
+def get_agent_work_schedule(username):
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", list(range(7)))
+    work_hours = data.get("work_hours", {})
+    schedule = {}
+    for d in work_days:
+        wh = work_hours.get(str(d), [10, 20])
+        schedule[d] = (wh[0], wh[1])
+    return schedule
+
+def get_available_dates_for_targets(targets):
+    now = datetime.now(TIMEZONE)
+    available = []
+    for i in range(14):
+        d = now + timedelta(days=i)
+        weekday = d.weekday()
+        all_work = all(weekday in get_agent_work_schedule(u) for u in targets)
+        if all_work:
+            available.append(d)
+        if len(available) >= 7:
+            break
+    return available
+
+def get_available_times_for_targets(targets, date_str):
+    now = datetime.now(TIMEZONE)
+    year = now.year
+    d = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y")
+    weekday = d.weekday()
+    start_hour = 0
+    end_hour = 24
+    for username in targets:
+        schedule = get_agent_work_schedule(username)
+        if weekday not in schedule:
+            return []
+        s, e = schedule[weekday]
+        start_hour = max(start_hour, s)
+        end_hour = min(end_hour, e)
+    if start_hour >= end_hour:
+        return []
+    slots = []
+    for h in range(start_hour, end_hour):
+        if d.date() == now.date() and h <= now.hour:
+            continue
+        slots.append(f"{h:02d}:00")
+    return slots
+
+def zadacha_target_str(targets):
+    return " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in targets)
+
+def build_days_keyboard(selected_days, prefix="add"):
+    keyboard = []
+    row = []
+    for label, idx in WEEKDAY_BUTTONS:
+        icon = "✅" if idx in selected_days else "⬜"
+        row.append(InlineKeyboardButton(f"{icon} {label}", callback_data=f"{prefix}day_{idx}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("✅ Tayyor", callback_data=f"{prefix}days_done")])
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data=f"{prefix}cancel")])
+    return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# CHECKLIST BUILDERS
+# =========================
+
+def build_checklist_keyboard(time_key, active_agents, checklist_confs, verified_tasks=None):
+    if verified_tasks is None:
+        verified_tasks = set()
+    keyboard = []
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
+    for username in get_agent_order():
+        if username not in active_agents:
+            continue
+        user_conf = checklist_confs.get(username, {})
+        for i, task in enumerate(tasks):
+            done = user_conf.get(i, False)
+            verified = i in verified_tasks
+            row = [
+                InlineKeyboardButton(
+                    f"{'✅' if done else '⬜'} {i+1} — Bajardim",
+                    callback_data=f"chk_{time_key.replace(':', '')}_{username}_{i}"
+                ),
+                InlineKeyboardButton(
+                    f"{'✅' if verified else '⬜'} Tekshirdim",
+                    callback_data=f"chk_verify_{time_key.replace(':', '')}_{username}_{i+1}"
+                )
+            ]
+            keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
+
+def build_checklist_text(time_key, active_agents):
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
+    task_lines = "\n".join(f"{i+1}. {task}" for i, task in enumerate(tasks))
+    agent_block = "\n\n".join(get_agent_info(u) for u in get_agent_order() if u in active_agents)
+    now = datetime.now(TIMEZONE)
+    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}, {now.strftime('%H:%M')}"
+    return (
+        f"📋 CHECKLIST — {date_str}\n\n"
+        f"{agent_block}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        f"📝 Vazifalar:\n<tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "⚠️ Avval o'qing, keyin bosing!\n"
+        "Har bir vazifa bajarilgandan so'ng tugmani bosing"
+    )
+
+def checklist_all_confirmed(time_key, active_agents, checklist_confs):
+    tasks = CHECKLIST_CONFIG.get(time_key, [])
+    for username in active_agents:
+        user_conf = checklist_confs.get(username, {})
+        for i in range(len(tasks)):
+            if not user_conf.get(i, False):
+                return False
+    return True
+
+# =========================
+# ZADACHA CLEANUP
+# =========================
+
+async def zadacha_cleanup_job(context: ContextTypes.DEFAULT_TYPE):
+    now_ts = datetime.now(TIMEZONE).timestamp()
+    to_delete = []
+    for uid, s in list(zadacha_state.items()):
+        created = s.get("created_ts", now_ts)
+        if now_ts - created > 600:
+            to_delete.append(uid)
+    for uid in to_delete:
+        msgs = zadacha_state.pop(uid, {}).get("messages", [])
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=uid, message_id=mid)
+            except:
+                pass
+
+# =========================
+# ZADACHA — SAVE / LOAD
+# =========================
+
+zadacha_state = {}
+zadacha_tasks = {}
+zadacha_counter = [0]
+zadacha_reminder_msgs = {}
+zadacha_main_msg = {}
+TASKS_FILE = "zadacha_tasks.json"
+
+def save_tasks():
+    data = {}
+    for tid, task in zadacha_tasks.items():
+        data[str(tid)] = {
+            "creator": task["creator"],
+            "creator_username": task["creator_username"],
+            "targets": task["targets"],
+            "text": task["text"],
+            "deadline": task["deadline"].isoformat(),
+            "supervisor": task.get("supervisor", []),
+            "accepted_executors": list(task.get("accepted_executors", set())),
+            "accepted_supervisors": list(task.get("accepted_supervisors", set())),
+            "done": list(task.get("done", set())),
+            "main_msg_id": task.get("main_msg_id"),
+            "reminder_msg_ids": list(task.get("reminder_msg_ids", [])),
+            "created_at": task["created_at"].isoformat() if task.get("created_at") else None,
+            "accepted_at": {u: t.isoformat() for u, t in task.get("accepted_at", {}).items()},
+            "done_at": {u: t.isoformat() for u, t in task.get("done_at", {}).items()},
+            "done_confirmed": list(task.get("done_confirmed", set())),
+        }
+    with open(TASKS_FILE, "w") as f:
+        json.dump({"counter": zadacha_counter[0], "tasks": data}, f, ensure_ascii=False)
+
+def load_tasks():
+    if not os.path.exists(TASKS_FILE):
+        return
+    try:
+        with open(TASKS_FILE, "r") as f:
+            data = json.load(f)
+        zadacha_counter[0] = data.get("counter", 0)
+        for tid_str, task in data.get("tasks", {}).items():
+            tid = int(tid_str)
+            dl = datetime.fromisoformat(task["deadline"])
+            if dl.tzinfo is None:
+                dl = dl.replace(tzinfo=TIMEZONE)
+            def parse_dt(s):
+                if not s:
+                    return None
+                dt2 = datetime.fromisoformat(s)
+                if dt2.tzinfo is None:
+                    dt2 = dt2.replace(tzinfo=TIMEZONE)
+                return dt2
+
+            zadacha_tasks[tid] = {
+                "creator": task["creator"],
+                "creator_username": task["creator_username"],
+                "targets": task["targets"],
+                "text": task["text"],
+                "deadline": dl,
+                "supervisor": task.get("supervisor", []),
+                "accepted_executors": set(task.get("accepted_executors", [])),
+                "accepted_supervisors": set(task.get("accepted_supervisors", [])),
+                "done": set(task.get("done", [])),
+                "main_msg_id": task.get("main_msg_id"),
+                "reminder_msg_ids": list(task.get("reminder_msg_ids", [])),
+                "created_at": parse_dt(task.get("created_at")),
+                "accepted_at": {u: parse_dt(t) for u, t in task.get("accepted_at", {}).items()},
+                "done_at": {u: parse_dt(t) for u, t in task.get("done_at", {}).items()},
+                "done_confirmed": set(task.get("done_confirmed", [])),
+            }
+    except Exception as e:
+        logger.error(f"load_tasks error: {e}")
+
+# =========================
+# ZADACHA — BUILD MAIN MESSAGE
+# =========================
+
+def build_zadacha_main_text(task):
+    creator = task["creator"]
+    targets = task["targets"]
+    supervisors = task.get("supervisor", [])
+    text = task["text"]
+    deadline = task["deadline"]
+    target_str = zadacha_target_str(targets)
+    supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
+    date_str = deadline.strftime("%d.%m")
+    time_str = deadline.strftime("%H:%M")
+    seen_tags = set()
+    tags_list = []
+    for u in list(targets) + list(supervisors):
+        if u not in seen_tags:
+            seen_tags.add(u)
+            tags_list.append(f"@{u}")
+    all_tags = " ".join(tags_list)
+    return (
+        f"📌 {creator} → {target_str}\n"
+        f"🧑 Nazorat: {supervisor_names}\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"📝 Vazifa:\n<tg-spoiler>{text}</tg-spoiler>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
+        f"{all_tags}"
+    )
+
+def build_zadacha_main_keyboard(tid, task):
+    targets = task["targets"]
+    supervisors = task.get("supervisor", [])
+    accepted_exec = task.get("accepted_executors", set())
+    accepted_sup = task.get("accepted_supervisors", set())
+    keyboard = []
+    for username in targets:
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        if username in accepted_exec:
+            keyboard.append([InlineKeyboardButton(f"{name} – ✅", callback_data="noop")])
+        else:
+            keyboard.append([InlineKeyboardButton(
+                f"⬜ Xop, bajaraman — {name}",
+                callback_data=f"zacc_exec_{tid}_{username}"
+            )])
+    for username in supervisors:
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        if username in accepted_sup:
+            keyboard.append([InlineKeyboardButton(f"{name} – ✅", callback_data="noop")])
+        else:
+            keyboard.append([InlineKeyboardButton(
+                f"⬜ Xop, nazorat qilaman — {name}",
+                callback_data=f"zacc_sup_{tid}_{username}"
+            )])
+    return InlineKeyboardMarkup(keyboard)
+
+def all_accepted(task):
+    targets = task["targets"]
+    supervisors = task.get("supervisor", [])
+    exec_ok = all(u in task.get("accepted_executors", set()) for u in targets)
+    sup_ok = all(u in task.get("accepted_supervisors", set()) for u in supervisors)
+    return exec_ok and sup_ok
+
+# =========================
+# CHECKLIST JOB
+# =========================
+
+async def send_checklist(bot, time_key):
+    active = CHECKLIST_AGENTS
+    if not active:
+        return
+    state["checklist_confirmations"][time_key] = {u: {} for u in active}
+    state["checklist_log_lines"][time_key] = []
+    # checklist_verified ni ham tozalash
+    state.setdefault("checklist_verified", {})[time_key] = set()
+    sent = await bot.send_message(
+        chat_id=CHAT_ID,
+        text=build_checklist_text(time_key, active),
+        reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
+        parse_mode="HTML"
+    )
+    state["checklist_message_ids"][time_key] = sent.message_id
+
+async def checklist_job(context: ContextTypes.DEFAULT_TYPE):
+    cycle_id = context.job.data["cycle_id"]
+    time_key = context.job.data["time_key"]
+    if cycle_id != state["cycle_id"] or state["stopped"]:
+        return
+    await send_checklist(context.bot, time_key)
+    hour, minute = map(int, time_key.split(":"))
+    context.job_queue.run_once(
+        checklist_job,
+        when=seconds_until_time(hour, minute),
+        name=f"checklist_{time_key}",
+        data={"cycle_id": cycle_id, "time_key": time_key}
+    )
+
+# =========================
+# ZADACHA ACCEPT REMINDER JOB
+# =========================
+
+def is_agent_working_now(username):
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    hour = now.hour
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", [])
+    work_hours = data.get("work_hours", {})
+    if weekday not in work_days:
+        return False
+    wh = work_hours.get(str(weekday), [0, 24])
+    return wh[0] <= hour < wh[1]
+
+def seconds_until_agent_works(username):
+    now = datetime.now(TIMEZONE)
+    data = AGENTS_DATA.get(username, {})
+    work_days = data.get("work_days", [])
+    work_hours = data.get("work_hours", {})
+    for days_ahead in range(8):
+        check_day = now + timedelta(days=days_ahead)
+        wd = check_day.weekday()
+        if wd in work_days:
+            wh = work_hours.get(str(wd), [0, 24])
+            sh, eh = wh[0], wh[1]
+            if days_ahead == 0:
+                if now.hour >= sh and now.hour < eh:
+                    return 0
+                if now.hour >= eh:
+                    continue
+                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
+            else:
+                work_start = check_day.replace(hour=sh, minute=0, second=0, microsecond=0)
+            secs = (work_start - now).total_seconds()
+            if secs > 0:
+                return secs
+    return 300
+
+async def zadacha_accept_reminder_job(context: ContextTypes.DEFAULT_TYPE):
+    tid = context.job.data["task_id"]
+    if tid not in zadacha_tasks:
+        return
+    task = zadacha_tasks[tid]
+    if all_accepted(task):
+        return
+
+    targets = task["targets"]
+    supervisors = task.get("supervisor", [])
+    accepted_exec = task.get("accepted_executors", set())
+    accepted_sup = task.get("accepted_supervisors", set())
+    deadline_str = task["deadline"].strftime("%d.%m")
+    time_str = task["deadline"].strftime("%H:%M")
+    text_short = task["text"]
+    creator = task["creator"]
+    target_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in targets)
+    sup_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
+
+    for mid in task.get("reminder_msg_ids", []):
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+        except:
+            pass
+    task["reminder_msg_ids"] = []
+
+    exec_next = 600
+    for username in targets:
+        if username in accepted_exec:
+            continue
+        if not is_agent_working_now(username):
+            secs = seconds_until_agent_works(username)
+            exec_next = min(exec_next, max(secs, 60))
+            continue
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        keyboard = [[InlineKeyboardButton(f"⬜ Xop, bajaraman — {name}", callback_data=f"zacc_exec_{tid}_{username}")]]
+        sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"🔔 {name} @{username}\n"
+                f"Sizga vazifa tayinlandi, hali qabul qilmadingiz!\n\n"
+                f"👤 Vazifani bergan: {creator}\n"
+                f"🧑 Nazoratchi: {sup_names}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 Vazifa: <tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
+            ),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        task["reminder_msg_ids"].append(sent.message_id)
+
+    sup_next = 600
+    for username in supervisors:
+        if username in accepted_sup:
+            continue
+        if not is_agent_working_now(username):
+            secs = seconds_until_agent_works(username)
+            sup_next = min(sup_next, max(secs, 60))
+            continue
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        keyboard = [[InlineKeyboardButton(f"⬜ Xop, nazorat qilaman — {name}", callback_data=f"zacc_sup_{tid}_{username}")]]
+        sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"🔔 {name} @{username}\n"
+                f"Sizga nazorat qilish uchun vazifa tayinlandi!\n\n"
+                f"👤 Vazifani bergan: {creator}\n"
+                f"👷 Ijrochi: {target_names}\n"
+                f"🧑 Nazoratchi: {name}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 Vazifa: <tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {deadline_str}  ⏰ {time_str}"
+            ),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        task["reminder_msg_ids"].append(sent.message_id)
+
+    save_tasks()
+
+    next_schedule = min(exec_next, sup_next)
+    context.job_queue.run_once(
+        zadacha_accept_reminder_job,
+        when=next_schedule,
+        name=f"zaccrem_{tid}",
+        data={"task_id": tid}
+    )
+
+# =========================
+# BUTTON CALLBACKS
+# =========================
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+
+    if data == "noop":
+        return
+
+    # CHECKLIST VERIFY — checklistdagi Tekshirdim tugmasi
+    if data.startswith("chk_verify_") and not data.endswith("_all"):
+        if query.from_user.username != ADMIN_USERNAME:
+            return
+        rest = data[11:]
+        parts = rest.split("_")
+        time_raw = parts[0]
+        task_num = int(parts[-1])
+        username = "_".join(parts[1:-1])
+        time_key = f"{time_raw[:2]}:{time_raw[2:]}"
+        vkey = f"{time_key}_{username}"
+
+        # Shu vazifani verified deb belgilaymiz
+        task_index = task_num - 1
+        state.setdefault("checklist_verified", {}).setdefault(time_key, set()).add(task_index)
+        verified_set = state["checklist_verified"][time_key]
+
+        # Checklistni yangilaymiz
+        msg_id = state["checklist_message_ids"].get(time_key)
+        if msg_id:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=CHAT_ID,
+                    message_id=msg_id,
+                    reply_markup=build_checklist_keyboard(time_key, CHECKLIST_AGENTS, state["checklist_confirmations"].get(time_key, {}), verified_set)
+                )
+            except:
+                pass
+
+        # Barcha 4 ta tekshirildimi?
+        tasks = CHECKLIST_CONFIG.get(time_key, [])
+        all_verified = all(i in verified_set for i in range(len(tasks)))
+
+        if all_verified:
+            # Verify xabarini o'chir
+            vs = checklist_verify_state.get(vkey, {})
+            verify_mid = vs.get("verify_msg_id")
+            if verify_mid:
+                async def delete_verify():
+                    await asyncio.sleep(1)
+                    try:
+                        await context.bot.delete_message(chat_id=CHAT_ID, message_id=verify_mid)
+                    except:
+                        pass
+                asyncio.create_task(delete_verify())
+                vs["verify_msg_id"] = None
+        return
+
+    # CHECKLIST VERIFY — eski _all format (ignore)
+    if data.startswith("chk_verify_") and data.endswith("_all"):
+        return
+
+    # DAVOMAT — Tasdiqlandi
+    if data.startswith("att_confirm_"):
+        username = data[12:]
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        schedule_delete(context.bot, CHAT_ID, [query.message.message_id], delay=5)
+        return
+
+    # SCREENSHOT — Qabul qildim
+    if data.startswith("ss_confirm_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        rest = data[11:]
+        ss_key = f"ss_{rest}"
+        ss_info = attendance_state.get("ss_msg_ids", {}).get(ss_key, {})
+
+        parts = rest.split("_", 1)
+        time_raw = parts[0]
+        sender_from_key = parts[1] if len(parts) > 1 else ""
+        time_key_restored = f"{time_raw[:2]}:{time_raw[2:]}"
+
+        to_delete = [query.message.message_id]
+        if ss_info.get("photo_msg_id"):
+            to_delete.append(ss_info["photo_msg_id"])
+
+        reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{time_key_restored}_{sender_from_key}")
+        if not reminder_mid:
+            for _u in SCREENSHOT_SCHEDULE.get(time_key_restored, []):
+                reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{time_key_restored}_{_u}")
+                if reminder_mid:
+                    break
+        if reminder_mid:
+            to_delete.append(reminder_mid)
+
+        async def delete_all():
+            import asyncio
+            await asyncio.sleep(5)
+            for mid in to_delete:
+                for cid in [CHAT_ID, query.message.chat.id]:
+                    try:
+                        await context.bot.delete_message(chat_id=cid, message_id=mid)
+                        break
+                    except:
+                        pass
+        asyncio.create_task(delete_all())
+        return
+
+    # SCREENSHOT FINE — Qabul qildim
+    if data.startswith("ss_fine_confirm_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"{admin_name} – ✅", callback_data="noop")]])
+            )
+        except:
+            pass
+        return
+
+    if data == "zadachi_group_cancel":
+        stored_id = zadacha_state.get(f"zadachi_group_{query.message.message_id}")
+        if stored_id and query.from_user.id != stored_id:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        zadacha_state.pop(f"zadachi_group_{query.message.message_id}", None)
+        cmd_msg = query.message.reply_to_message
+        try:
+            await query.message.delete()
+        except:
+            pass
+        if cmd_msg:
+            try:
+                await cmd_msg.delete()
+            except:
+                pass
+        return
+
+    # CHECKLIST
+    if data.startswith("chk_") and not data.startswith("chk_verify_"):
+        without_prefix = data[4:]
+        first_underscore = without_prefix.index("_")
+        time_raw = without_prefix[:first_underscore]
+        rest = without_prefix[first_underscore + 1:]
+        last_underscore = rest.rindex("_")
+        username = rest[:last_underscore]
+        task_index = int(rest[last_underscore + 1:])
+        time_key = f"{time_raw[:2]}:{time_raw[2:]}"
+        presser = query.from_user.username
+
+        # Faqat Ozodbek bosa ishlaydi, boshqalar — ignore
+        if presser != "sirlyinfo":
+            return
+
+        state["checklist_confirmations"].setdefault(time_key, {}).setdefault(username, {})
+        user_conf = state["checklist_confirmations"][time_key][username]
+        if user_conf.get(task_index, False):
+            return
+        user_conf[task_index] = True
+
+        active = CHECKLIST_AGENTS
+        verified_set = state.get("checklist_verified", {}).get(time_key, set())
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key], verified_set)
+            )
+        except:
+            pass
+
+        # Barcha vazifalar bajarilganmi tekshir
+        tasks = CHECKLIST_CONFIG.get(time_key, [])
+        all_done = all(user_conf.get(i, False) for i in range(len(tasks)))
+
+        if all_done:
+            # Faqat shu payt verify xabari yuboriladi
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            admin_name = AGENTS_DATA.get(ADMIN_USERNAME, {}).get("name", "Umid")
+            vkey = f"{time_key}_{username}"
+            if vkey not in checklist_verify_state:
+                checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
+            vs = checklist_verify_state[vkey]
+
+            # Eski verify xabarini o'chir
+            if vs.get("verify_msg_id"):
+                try:
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=vs["verify_msg_id"])
+                except:
+                    pass
+
+            verify_text = (
+                f"✅ {name} barcha vazifalarni bajardi!\n"
+                f"@{ADMIN_USERNAME} checklistdan tekshiring"
+            )
+            sent_v = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=verify_text
+            )
+            vs["verify_msg_id"] = sent_v.message_id
+        return
+
+    # ZADACHA ACCEPT — EXECUTOR
+    if data.startswith("zacc_exec_"):
+        rest = data[10:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("accepted_executors", set()):
+            await query.answer("Siz allaqachon qabul qilgansiz.")
+            return
+        task.setdefault("accepted_executors", set()).add(username)
+        task.setdefault("accepted_at", {})[username] = datetime.now(TIMEZONE)
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
+            except:
+                pass
+        if query.message.message_id != task.get("main_msg_id"):
+            try:
+                await query.message.delete()
+            except:
+                pass
+        if task.get("reminder_msg_ids"):
+            task["reminder_msg_ids"] = [m for m in task["reminder_msg_ids"] if m != query.message.message_id]
+        if all_accepted(task):
+            await _on_all_accepted(context.bot, tid, task)
+        save_tasks()
+        return
+
+    # ZADACHA ACCEPT — SUPERVISOR
+    if data.startswith("zacc_sup_"):
+        rest = data[9:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username and query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("accepted_supervisors", set()):
+            await query.answer("Siz allaqachon qabul qilgansiz.")
+            return
+        task.setdefault("accepted_supervisors", set()).add(username)
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=task["main_msg_id"], reply_markup=build_zadacha_main_keyboard(tid, task))
+            except:
+                pass
+        if query.message.message_id != task.get("main_msg_id"):
+            try:
+                await query.message.delete()
+            except:
+                pass
+        if task.get("reminder_msg_ids"):
+            task["reminder_msg_ids"] = [m for m in task["reminder_msg_ids"] if m != query.message.message_id]
+        if all_accepted(task):
+            await _on_all_accepted(context.bot, tid, task)
+        save_tasks()
+        return
+
+    # DONE
+    if data.startswith("zdone_"):
+        rest = data[6:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        task.setdefault("done", set()).add(username)
+        save_tasks()
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        supervisors = task.get("supervisor", [])
+        sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"✅ {name} vazifani bajardi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
+            parse_mode="HTML"
+        )
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    # CANCEL
+    if data.startswith("zcancel_"):
+        rest = data[8:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        task.setdefault("cancelled", set()).add(username)
+        save_tasks()
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        supervisors = task.get("supervisor", [])
+        sup_tag = " " + " ".join(f"@{u}" for u in supervisors) if supervisors else ""
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"❌ {name} vazifani bekor qildi.\n🕐 {datetime.now(TIMEZONE).strftime('%d.%m soat %H:%M')}\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n@{task['creator_username']}{sup_tag}",
+            parse_mode="HTML"
+        )
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    # EXTEND
+    if data.startswith("zext_"):
+        parts = data[5:].split("_")
+        tid = int(parts[0])
+        username = parts[1]
+        minutes = int(parts[2])
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        task["deadline"] += timedelta(minutes=minutes)
+        save_tasks()
+        new_dl = task["deadline"].strftime("%d.%m soat %H:%M")
+        cancel_jobs_by_name(context.job_queue, f"zdue_{tid}")
+        now = datetime.now(TIMEZONE)
+        if task["deadline"] > now:
+            context.job_queue.run_once(zadacha_deadline_job, when=(task["deadline"] - now).total_seconds(), name=f"zdue_{tid}", data={"task_id": tid})
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except:
+            pass
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"⏰ Deadline uzaytirildi.\n📌 <tg-spoiler>{task['text'][:50]}</tg-spoiler>\nYangi deadline: 📅 {new_dl}\n@{task['creator_username']}",
+            parse_mode="HTML"
+        )
+        return
+
+    # ESIMDA
+    if data.startswith("zes_"):
+        rest = data[4:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        msg_to_delete = query.message
+        async def del10():
+            await asyncio.sleep(10)
+            try:
+                await msg_to_delete.delete()
+            except:
+                pass
+        asyncio.create_task(del10())
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except:
+            pass
+        return
+
+    # ZADACHI — BAJARDIM
+    if data.startswith("ztask_done_"):
+        rest = data[11:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("done", set()):
+            await query.answer("Siz allaqachon bajardingiz.")
+            return
+        now_done = datetime.now(TIMEZONE)
+        task.setdefault("done", set()).add(username)
+        task.setdefault("done_at", {})[username] = now_done
+
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        supervisors = task.get("supervisor", [])
+        creator_username = task["creator_username"]
+        seen = set()
+        tags_list = []
+        for t in ([creator_username] + list(supervisors)):
+            if t not in seen:
+                seen.add(t)
+                tags_list.append(f"@{t}")
+        all_tags = " ".join(tags_list)
+
+        created_at = task.get("created_at")
+        accepted_at = task.get("accepted_at", {}).get(username)
+        created_str = created_at.strftime("%d.%m soat %H:%M") if created_at else "—"
+        accepted_str = accepted_at.strftime("%d.%m soat %H:%M") if accepted_at else "—"
+        done_str = now_done.strftime("%d.%m soat %H:%M")
+        text_short = task["text"]
+
+        msg_text = (
+            f"✅ {name} vazifani bajardi!\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📌 <tg-spoiler>{text_short}</tg-spoiler>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📋 Vazifa berildi: {created_str}\n"
+            f"✅ Qabul qilindi: {accepted_str}\n"
+            f"✅ Bajarildi: {done_str}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"{all_tags}"
+        )
+
+        creator_name = task["creator"]
+        keyboard = [[InlineKeyboardButton(f"⬜ Qabul qildim — {creator_name}", callback_data=f"ztask_doneack_{tid}_{creator_username}")]]
+
+        await context.bot.send_message(chat_id=CHAT_ID, text=msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=task["main_msg_id"])
+            except:
+                pass
+        for mid in task.get("reminder_msg_ids", []):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+            except:
+                pass
+        task["reminder_msg_ids"] = []
+        task["main_msg_id"] = None
+
+        save_tasks()
+
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    # ZADACHI — DONE ACK
+    if data.startswith("ztask_doneack_"):
+        rest = data[14:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        username = rest[idx + 1:]
+        if query.from_user.username != username:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if username in task.get("done_confirmed", set()):
+            await query.answer("Siz allaqachon tasdiqladingiz.")
+            return
+        task.setdefault("done_confirmed", set()).add(username)
+        creator_name = task["creator"]
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ Qabul qildim — {creator_name}", callback_data="noop")]])
+            )
+        except:
+            pass
+        save_tasks()
+        return
+
+    if data.startswith("ztask_edit_"):
+        tid = int(data[11:])
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if query.from_user.username != task["creator_username"] and query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        keyboard = [
+            [InlineKeyboardButton("✏️ Matnni o'zgartir", callback_data=f"ztask_editfield_text_{tid}")],
+            [InlineKeyboardButton("📅 Deadlineni o'zgartir", callback_data=f"ztask_editfield_deadline_{tid}")],
+            [InlineKeyboardButton("👷 Ijrochini o'zgartir", callback_data=f"ztask_editfield_target_{tid}")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")],
+        ]
+        zadacha_state[f"edit_zadachi_{query.from_user.id}"] = {"zadachi_msg_id": query.message.message_id}
+        edit_sent = await query.message.reply_text(
+            f"📌 №{tid} | <tg-spoiler>{task['text'][:50]}</tg-spoiler>\n\nNimani o'zgartirmoqchisiz?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        zadacha_state[f"edit_zadachi_{query.from_user.id}"]["edit_msg_id"] = edit_sent.message_id
+        return
+
+    if data.startswith("ztask_editfield_"):
+        rest = data[16:]
+        if rest.startswith("text_"):
+            tid = int(rest[5:])
+            zadacha_state[query.from_user.id] = {"step": "edit_text", "tid": tid, "messages": [query.message.message_id]}
+            sent = await query.message.reply_text(f"Yangi vazifa matnini yozing:")
+            zadacha_state[query.from_user.id]["messages"].append(sent.message_id)
+        elif rest.startswith("deadline_"):
+            tid = int(rest[9:])
+            task = zadacha_tasks[tid]
+            targets = task["targets"]
+            available_dates = get_available_dates_for_targets(targets)
+            now2 = datetime.now(TIMEZONE)
+            days = []
+            for d in available_dates:
+                diff = (d.date() - now2.date()).days
+                if diff == 0:
+                    label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
+                elif diff == 1:
+                    label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
+                else:
+                    label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
+                days.append([InlineKeyboardButton(label, callback_data=f"ztask_editdate_{tid}_{d.strftime('%d.%m')}")])
+            days.append([InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")])
+            zadacha_state[query.from_user.id] = {"step": "edit_deadline_date", "tid": tid, "messages": [query.message.message_id]}
+            sent = await query.message.reply_text("Yangi deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
+            zadacha_state[query.from_user.id]["messages"].append(sent.message_id)
+        elif rest.startswith("target_"):
+            tid = int(rest[7:])
+            all_agents = list(AGENTS_DATA.keys())
+            keyboard2 = [
+                [InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ztask_edittarget_{tid}_{u}")]
+                for u in all_agents
+            ]
+            keyboard2.append([InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")])
+            zadacha_state[query.from_user.id] = {"step": "edit_target", "tid": tid, "messages": [query.message.message_id]}
+            sent = await query.message.reply_text("Yangi ijrochini tanlang:", reply_markup=InlineKeyboardMarkup(keyboard2))
+            zadacha_state[query.from_user.id]["messages"].append(sent.message_id)
+        return
+
+    if data.startswith("ztask_editdate_"):
+        rest = data[15:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        date_str = rest[idx + 1:]
+        task = zadacha_tasks[tid]
+        targets = task["targets"]
+        available_times = get_available_times_for_targets(targets, date_str)
+        slots = [
+            [InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztask_edittime_{tid}_{date_str}_{t}")]
+            for t in available_times
+        ]
+        slots.append([InlineKeyboardButton("❌ Bekor", callback_data="ztask_editcancel")])
+        user_id2 = query.from_user.id
+        if user_id2 in zadacha_state:
+            zadacha_state[user_id2]["messages"].append(query.message.message_id)
+        sent = await query.message.reply_text("Yangi deadline vaqtini tanlang:", reply_markup=InlineKeyboardMarkup(slots))
+        if user_id2 in zadacha_state:
+            zadacha_state[user_id2]["messages"].append(sent.message_id)
+        return
+
+    if data.startswith("ztask_edittime_"):
+        rest = data[15:]
+        parts2 = rest.split("_")
+        tid = int(parts2[0])
+        date_str = parts2[1]
+        time_str2 = parts2[2]
+        task = zadacha_tasks[tid]
+        now3 = datetime.now(TIMEZONE)
+        dt = datetime.strptime(f"{date_str}.{now3.year} {time_str2}", "%d.%m.%Y %H:%M").replace(tzinfo=TIMEZONE)
+        task["deadline"] = dt
+        task["accepted_executors"] = set()
+        task["accepted_supervisors"] = set()
+        save_tasks()
+        cancel_jobs_by_name(context.job_queue, f"zdue_{tid}")
+        cancel_jobs_by_name(context.job_queue, f"zpre_{tid}")
+        cancel_jobs_by_name(context.job_queue, f"zaccrem_{tid}")
+        if dt > now3:
+            context.job_queue.run_once(zadacha_deadline_job, when=(dt - now3).total_seconds(), name=f"zdue_{tid}", data={"task_id": tid})
+            remind_time = dt - timedelta(minutes=30)
+            if remind_time > now3:
+                context.job_queue.run_once(zadacha_pre_deadline_job, when=(remind_time - now3).total_seconds(), name=f"zpre_{tid}", data={"task_id": tid})
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=CHAT_ID, message_id=task["main_msg_id"],
+                    text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                    parse_mode="HTML",
+                    reply_markup=build_zadacha_main_keyboard(tid, task)
+                )
+            except:
+                pass
+        for mid in task.get("reminder_msg_ids", []):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+            except:
+                pass
+        task["reminder_msg_ids"] = []
+        context.job_queue.run_once(zadacha_accept_reminder_job, when=300, name=f"zaccrem_{tid}", data={"task_id": tid})
+        user_id3 = query.from_user.id
+        msgs3 = zadacha_state.pop(user_id3, {}).get("messages", [])
+        for mid in msgs3:
+            try:
+                await context.bot.delete_message(chat_id=user_id3, message_id=mid)
+            except:
+                pass
+        await context.bot.send_message(chat_id=user_id3, text=f"✅ Deadline yangilandi: 📅 {date_str} ⏰ {time_str2}")
+        return
+
+    if data.startswith("ztask_edittarget_"):
+        rest = data[17:]
+        idx = rest.index("_")
+        tid = int(rest[:idx])
+        new_target = rest[idx + 1:]
+        task = zadacha_tasks[tid]
+        task["targets"] = [new_target]
+        task["accepted_executors"] = set()
+        task["accepted_supervisors"] = set()
+        save_tasks()
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=CHAT_ID, message_id=task["main_msg_id"],
+                    text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                    parse_mode="HTML",
+                    reply_markup=build_zadacha_main_keyboard(tid, task)
+                )
+            except:
+                pass
+        for mid in task.get("reminder_msg_ids", []):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+            except:
+                pass
+        task["reminder_msg_ids"] = []
+        cancel_jobs_by_name(context.job_queue, f"zaccrem_{tid}")
+        context.job_queue.run_once(zadacha_accept_reminder_job, when=300, name=f"zaccrem_{tid}", data={"task_id": tid})
+        user_id4 = query.from_user.id
+        msgs4 = zadacha_state.pop(user_id4, {}).get("messages", [])
+        for mid in msgs4:
+            try:
+                await context.bot.delete_message(chat_id=user_id4, message_id=mid)
+            except:
+                pass
+        name_new = AGENTS_DATA.get(new_target, {}).get("name", new_target)
+        await context.bot.send_message(chat_id=user_id4, text=f"✅ Ijrochi {name_new} ga o'zgartirildi.")
+        return
+
+    if data == "ztask_editcancel":
+        user_id5 = query.from_user.id
+        msgs5 = zadacha_state.pop(user_id5, {}).get("messages", [])
+        for mid in msgs5:
+            try:
+                await context.bot.delete_message(chat_id=user_id5, message_id=mid)
+            except:
+                pass
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    if data.startswith("ztask_delete_"):
+        tid = int(data[13:])
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if query.from_user.username != task["creator_username"] and query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        keyboard = [
+            [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"ztask_deleteconfirm_{tid}")],
+            [InlineKeyboardButton("❌ Yo'q", callback_data="ztask_editcancel")],
+        ]
+        confirm_sent = await query.message.reply_text(
+            f"⚠️ №{tid} vazifani o'chirishni tasdiqlaysizmi?\n<tg-spoiler>{task['text'][:50]}</tg-spoiler>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        zadacha_state[f"del_confirm_{tid}"] = {
+            "confirm_msg_id": confirm_sent.message_id,
+            "zadachi_msg_id": query.message.message_id,
+            "chat_id": query.from_user.id,
+        }
+        return
+
+    if data.startswith("ztask_deleteconfirm_"):
+        tid = int(data[20:])
+        if tid not in zadacha_tasks:
+            return
+        task = zadacha_tasks[tid]
+        if query.from_user.username != task["creator_username"] and query.from_user.username != ADMIN_USERNAME:
+            await query.answer("⛔ Bu tugma siz uchun emas!", show_alert=True)
+            return
+        cancel_jobs_by_name(context.job_queue, f"zdue_{tid}")
+        cancel_jobs_by_name(context.job_queue, f"zpre_{tid}")
+        cancel_jobs_by_name(context.job_queue, f"zaccrem_{tid}")
+        if task.get("main_msg_id"):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=task["main_msg_id"])
+            except:
+                pass
+        for mid in task.get("reminder_msg_ids", []):
+            try:
+                await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+            except:
+                pass
+        del zadacha_tasks[tid]
+        save_tasks()
+        try:
+            await query.message.delete()
+        except:
+            pass
+        sent_ok = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ №{tid} vazifa o'chirildi.")
+        del_info = zadacha_state.pop(f"del_confirm_{tid}", {})
+        zadachi_msg_id = del_info.get("zadachi_msg_id")
+        msgs_to_del = [sent_ok.message_id]
+        if zadachi_msg_id:
+            msgs_to_del.append(zadachi_msg_id)
+        schedule_delete(context.bot, query.from_user.id, msgs_to_del, delay=5)
+        return
+
+async def _on_all_accepted(bot, tid, task):
+    for mid in task.get("reminder_msg_ids", []):
+        try:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+        except:
+            pass
+    task["reminder_msg_ids"] = []
+    save_tasks()
+
+# =========================
+# ADDAGENT / EDITAGENT / DELAGENT
+# =========================
+
+addagent_state = {}
+editagent_state = {}
+
+async def addagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    addagent_state[user_id] = {"step": "username", "messages": []}
+    sent = await context.bot.send_message(chat_id=user_id, text="➕ Yangi hodim qo'shish\n\n1. Username kiriting (@ belgisisiz):")
+    addagent_state[user_id]["messages"].append(sent.message_id)
+
+async def editagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    if not AGENTS_DATA:
+        await context.bot.send_message(chat_id=user_id, text="❌ Hodimlar royxati bosh.")
+        return
+    keyboard = [[InlineKeyboardButton(f"👤 {d['name']} (@{u})", callback_data=f"edit_select_{u}")] for u, d in AGENTS_DATA.items()]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")])
+    sent = await context.bot.send_message(chat_id=user_id, text="✏️ Qaysi hodimni tahrirlaysiz?", reply_markup=InlineKeyboardMarkup(keyboard))
+    cmd_msg_id = update.message.message_id if update.message else None
+    editagent_state[user_id] = {"messages": [sent.message_id], "cmd_msg_id": cmd_msg_id}
+
+async def delagent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    if not AGENTS_DATA:
+        await context.bot.send_message(chat_id=user_id, text="❌ Hodimlar royxati bosh.")
+        return
+    keyboard = [[InlineKeyboardButton(f"🗑 {d['name']} (@{u})", callback_data=f"delagent_{u}")] for u, d in AGENTS_DATA.items()]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="delagent_cancel")])
+    await context.bot.send_message(chat_id=user_id, text="🗑 Qaysi hodimni ochirmoqchisiz?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def addagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+    if data == "add_cancel":
+        msgs = addagent_state.pop(user_id, {}).get("messages", [])
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
+        return
+    if user_id not in addagent_state:
+        return
+    s = addagent_state[user_id]
+    if data.startswith("addday_"):
+        day_idx = int(data[7:])
+        if day_idx in s["selected_days"]:
+            s["selected_days"].remove(day_idx)
+        else:
+            s["selected_days"].append(day_idx)
+        try:
+            await query.message.edit_reply_markup(reply_markup=build_days_keyboard(s["selected_days"], prefix="add"))
+        except:
+            pass
+    elif data == "adddays_done":
+        if not s["selected_days"]:
+            await query.answer("❌ Kamida 1 kun tanlang!", show_alert=True)
+            return
+        s["step"] = "start_hour"
+        sent = await context.bot.send_message(chat_id=user_id, text="5. Ish boshlash vaqtini kiriting (masalan: 10):")
+        s["messages"].append(sent.message_id)
+    elif data == "addconfirm_yes":
+        username = s["username"]
+        work_hours = {str(d): [s["start_hour"], s["end_hour"]] for d in s["selected_days"]}
+        AGENTS_DATA[username] = {"name": s["name"], "username": username, "phone": s["phone"], "work_days": sorted(s["selected_days"]), "work_hours": work_hours}
+        save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
+        addagent_state.pop(user_id, None)
+        sent_ok = await context.bot.send_message(chat_id=user_id, text=f"✅ {s['name']} (@{username}) muvaffaqiyatli qoshildi!")
+        schedule_delete(context.bot, user_id, msgs + [sent_ok.message_id])
+        await context.bot.send_message(chat_id=CHAT_ID, text=f"👤 Yangi hodim qoshildi: {s['name']} (@{username})\n📞 {s['phone']}")
+
+async def editagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+    if data == "edit_cancel":
+        msgs = editagent_state.pop(user_id, {}).get("messages", [])
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, msgs + [sent.message_id])
+        return
+    if user_id not in editagent_state:
+        return
+    s = editagent_state[user_id]
+    if data.startswith("edit_select_"):
+        username = data[12:]
+        s["username"] = username
+        d = AGENTS_DATA[username]
+        days_str = ", ".join(WEEKDAY_UZ[day] for day in sorted(d["work_days"]))
+        keyboard = [
+            [InlineKeyboardButton("📛 Ismini ozgartir", callback_data="edit_field_name")],
+            [InlineKeyboardButton("👤 Usernameni ozgartir", callback_data="edit_field_username")],
+            [InlineKeyboardButton("📞 Telefonni ozgartir", callback_data="edit_field_phone")],
+            [InlineKeyboardButton("📅 Ish kunlarini ozgartir", callback_data="edit_field_days")],
+            [InlineKeyboardButton("🕐 Ish vaqtini ozgartir", callback_data="edit_field_hours")],
+            [InlineKeyboardButton("🍽 Tushlik vaqtini ozgartir", callback_data="edit_field_lunch")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="edit_cancel")],
+        ]
+        sent = await context.bot.send_message(chat_id=user_id, text=f"👤 {d['name']} (@{username})\n📞 {d['phone']}\n📅 {days_str}\n\nNimani ozgartirmoqchisiz?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_name":
+        s["step"] = "name"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi ismini kiriting:")
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_username":
+        s["step"] = "username_edit"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi username kiriting (@ belgisisiz):")
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_phone":
+        s["step"] = "phone"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi telefon raqamini kiriting:")
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_days":
+        s["step"] = "days"
+        s["selected_days"] = list(AGENTS_DATA[s["username"]]["work_days"])
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi ish kunlarini tanlang:", reply_markup=build_days_keyboard(s["selected_days"], prefix="editday_"))
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_hours":
+        s["step"] = "start_hour"
+        sent = await context.bot.send_message(chat_id=user_id, text="Yangi boshlash vaqtini kiriting (masalan: 10):")
+        s["messages"].append(sent.message_id)
+    elif data == "edit_field_lunch":
+        s["step"] = "lunch_start"
+        username = s.get("username", "")
+        lunch = AGENTS_DATA.get(username, {}).get("lunch", None)
+        current = f"{lunch[0]:02d}:00 - {lunch[1]:02d}:00" if lunch else "Belgilanmagan"
+        sent = await context.bot.send_message(chat_id=user_id, text=f"Hozirgi tushlik vaqti: {current}\n\nYangi tushlik boshlanish vaqtini kiriting (masalan: 13:00):")
+        s["messages"].append(sent.message_id)
+    elif data.startswith("editday__"):
+        day_idx = int(data[9:])
+        if day_idx in s["selected_days"]:
+            s["selected_days"].remove(day_idx)
+        else:
+            s["selected_days"].append(day_idx)
+        try:
+            await query.message.edit_reply_markup(reply_markup=build_days_keyboard(s["selected_days"], prefix="editday_"))
+        except:
+            pass
+    elif data == "editday_days_done":
+        username = s["username"]
+        AGENTS_DATA[username]["work_days"] = sorted(s["selected_days"])
+        new_hours = {}
+        for d in s["selected_days"]:
+            old_wh = AGENTS_DATA[username]["work_hours"].get(str(d), [10, 20])
+            new_hours[str(d)] = old_wh
+        AGENTS_DATA[username]["work_hours"] = new_hours
+        save_agents(AGENTS_DATA)
+        msgs = s.get("messages", [])
+        cmd_msg = s.get("cmd_msg_id")
+        editagent_state.pop(user_id, None)
+        days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
+        warn = await context.bot.send_message(chat_id=user_id, text="⚠️ Jarayon xabarlari ⏱ 5 soniyadan keyin o'chadi")
+        sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish kunlari yangilandi: {days_str}")
+        del_list = msgs + [sent.message_id, warn.message_id]
+        if cmd_msg:
+            del_list.append(cmd_msg)
+        schedule_delete(context.bot, user_id, del_list)
+
+async def delagent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+    if data == "delagent_cancel":
+        try:
+            await query.message.delete()
+        except:
+            pass
+        sent = await context.bot.send_message(chat_id=query.from_user.id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, query.from_user.id, [sent.message_id])
+        return
+    if data.startswith("delagent_confirm_"):
+        username = data[17:]
+        if username in AGENTS_DATA:
+            name = AGENTS_DATA[username]["name"]
+            del AGENTS_DATA[username]
+            save_agents(AGENTS_DATA)
+            sent = await context.bot.send_message(chat_id=query.from_user.id, text=f"✅ {name} (@{username}) ochirildi.")
+            try:
+                await query.message.delete()
+            except:
+                pass
+            schedule_delete(context.bot, query.from_user.id, [sent.message_id])
+        return
+    if data.startswith("delagent_"):
+        username = data[9:]
+        if username not in AGENTS_DATA:
+            return
+        name = AGENTS_DATA[username]["name"]
+        keyboard = [
+            [InlineKeyboardButton("✅ Ha, ochirish", callback_data=f"delagent_confirm_{username}")],
+            [InlineKeyboardButton("❌ Yo'q", callback_data="delagent_cancel")],
+        ]
+        await query.message.edit_text(f"⚠️ {name} (@{username}) ni ochirishni tasdiqlaysizmi?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+# =========================
+# TEXT HANDLER
+# =========================
+
+async def universal_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    text = update.message.text.strip()
+
+    if user_id in addagent_state:
+        if username != ADMIN_USERNAME:
+            return
+        s = addagent_state[user_id]
+        step = s.get("step")
+        clean = text.lstrip("@")
+        if step == "username":
+            s["username"] = clean
+            s["step"] = "name"
+            sent = await context.bot.send_message(chat_id=user_id, text="2. Ismini kiriting:")
+            s["messages"].append(sent.message_id)
+        elif step == "name":
+            s["name"] = clean
+            s["step"] = "phone"
+            sent = await context.bot.send_message(chat_id=user_id, text="3. Telefon raqamini kiriting:")
+            s["messages"].append(sent.message_id)
+        elif step == "phone":
+            s["phone"] = clean
+            s["step"] = "days"
+            s["selected_days"] = []
+            sent = await context.bot.send_message(chat_id=user_id, text="4. Ish kunlarini tanlang:", reply_markup=build_days_keyboard(s["selected_days"], prefix="add"))
+            s["messages"].append(sent.message_id)
+        elif step == "start_hour":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                s["start_hour"] = h
+                s["step"] = "end_hour"
+                sent = await context.bot.send_message(chat_id=user_id, text="6. Tugash vaqtini kiriting (masalan: 20, yoki 24 = 23:59):")
+                s["messages"].append(sent.message_id)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "end_hour":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                s["end_hour"] = h
+                s["step"] = "confirm"
+                days_str = ", ".join(WEEKDAY_UZ[d] for d in sorted(s["selected_days"]))
+                sent = await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"📋 Yangi hodim:\n👤 @{s['username']}\n📛 {s['name']}\n📞 {s['phone']}\n📅 {days_str}\n🕐 {s['start_hour']:02d}:00 — {h:02d}:00\n\nTasdiqlaysizmi?",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Tasdiqlash", callback_data="addconfirm_yes")], [InlineKeyboardButton("❌ Bekor", callback_data="add_cancel")]])
+                )
+                s["messages"].append(sent.message_id)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        return
+
+    if user_id in editagent_state:
+        if username != ADMIN_USERNAME:
+            return
+        s = editagent_state[user_id]
+        step = s.get("step")
+        if step == "name":
+            AGENTS_DATA[s["username"]]["name"] = text
+            save_agents(AGENTS_DATA)
+            msgs = s.get("messages", [])
+            editagent_state.pop(user_id, None)
+            sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ismi '{text}' ga ozgartirildi.")
+            schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+        elif step == "username_edit":
+            new_u = text.lstrip("@")
+            old_u = s["username"]
+            agent_data = AGENTS_DATA.pop(old_u)
+            agent_data["username"] = new_u
+            AGENTS_DATA[new_u] = agent_data
+            save_agents(AGENTS_DATA)
+            msgs = s.get("messages", [])
+            editagent_state.pop(user_id, None)
+            sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Username '@{old_u}' => '@{new_u}' ga ozgartirildi.")
+            schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+        elif step == "phone":
+            AGENTS_DATA[s["username"]]["phone"] = text
+            save_agents(AGENTS_DATA)
+            msgs = s.get("messages", [])
+            editagent_state.pop(user_id, None)
+            sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Telefon '{text}' ga ozgartirildi.")
+            schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+        elif step == "start_hour":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                s["start_hour"] = h
+                s["step"] = "end_hour"
+                sent = await context.bot.send_message(chat_id=user_id, text="Yangi tugash vaqtini kiriting (masalan: 20):")
+                s["messages"].append(sent.message_id)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "end_hour":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                username_edit = s["username"]
+                for d in AGENTS_DATA[username_edit]["work_days"]:
+                    AGENTS_DATA[username_edit]["work_hours"][str(d)] = [s["start_hour"], h]
+                save_agents(AGENTS_DATA)
+                msgs = s.get("messages", [])
+                editagent_state.pop(user_id, None)
+                sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Ish vaqti {s['start_hour']:02d}:00 — {h:02d}:00 ga ozgartirildi.")
+                schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id])
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "lunch_start":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                s["lunch_start"] = h
+                s["step"] = "lunch_end"
+                sent = await context.bot.send_message(chat_id=user_id, text="Tushlik tugash vaqtini kiriting (masalan: 14:00):")
+                s["messages"].append(sent.message_id)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        elif step == "lunch_end":
+            try:
+                h = int(text.split(":")[0]) if ":" in text else int(text)
+                username_edit = s["username"]
+                AGENTS_DATA[username_edit]["lunch"] = [s["lunch_start"], h]
+                save_agents(AGENTS_DATA)
+                msgs = s.get("messages", [])
+                editagent_state.pop(user_id, None)
+                sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Tushlik vaqti {s['lunch_start']:02d}:00 — {h:02d}:00 ga ozgartirildi.\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi")
+                schedule_delete(context.bot, user_id, msgs + [update.message.message_id, sent.message_id], delay=60)
+            except:
+                await context.bot.send_message(chat_id=user_id, text="❌ Notogri format.")
+        return
+
+    if user_id not in zadacha_state:
+        return
+    zs = zadacha_state[user_id]
+    step = zs.get("step")
+
+    if step == "text":
+        zs["text"] = update.message.text
+        zs["step"] = "confirm"
+        zs["messages"].append(update.message.message_id)
+        targets = zs.get("targets", [])
+        supervisors = zs.get("supervisor", [])
+        date_str = zs.get("deadline_date", "")
+        time_str2 = zs.get("deadline_time", "")
+        creator = update.effective_user.first_name or update.effective_user.username
+        supervisor_names = " + ".join(AGENTS_DATA.get(u, {}).get("name", u) for u in supervisors)
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"📌 {creator} → {zadacha_target_str(targets)}\n"
+                f"🧑 Nazorat: {supervisor_names}\n"
+                f"Vazifa:\n━━━━━━━━━━━━━━\n"
+                f'"{update.message.text}"\n'
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {date_str}  ⏰ {time_str2}\n\n"
+                f"Yuborilsinmi?"
+            ),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Tasdiqlash", callback_data="zconfirm_yes")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")],
+                [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]
+            ])
+        )
+        zs["messages"].append(sent.message_id)
+
+    elif step == "edit_text":
+        tid = zs.get("tid")
+        if tid in zadacha_tasks:
+            zadacha_tasks[tid]["text"] = update.message.text
+            zadacha_tasks[tid]["accepted_executors"] = set()
+            zadacha_tasks[tid]["accepted_supervisors"] = set()
+            save_tasks()
+            task = zadacha_tasks[tid]
+            if task.get("main_msg_id"):
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=CHAT_ID, message_id=task["main_msg_id"],
+                        text=build_zadacha_main_text(task) + "\n\n✏️ (yangilandi)",
+                        parse_mode="HTML",
+                        reply_markup=build_zadacha_main_keyboard(tid, task)
+                    )
+                except:
+                    pass
+            for mid in task.get("reminder_msg_ids", []):
+                try:
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=mid)
+                except:
+                    pass
+            task["reminder_msg_ids"] = []
+            cancel_jobs_by_name(context.job_queue, f"zaccrem_{tid}")
+            context.job_queue.run_once(zadacha_accept_reminder_job, when=300, name=f"zaccrem_{tid}", data={"task_id": tid})
+        msgs = zs.get("messages", [])
+        zadacha_state.pop(user_id, None)
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=mid)
+            except:
+                pass
+        sent = await context.bot.send_message(chat_id=user_id, text="✅ Vazifa matni yangilandi.")
+        schedule_delete(context.bot, user_id, [update.message.message_id, sent.message_id])
+
+    # Custom checklist task kiritish
+    handled = await custom_checklist_text_handler(user_id, update.message.text, context)
+    if handled:
+        try:
+            await update.message.delete()
+        except:
+            pass
+
+# =========================
+# ZADACHA COMMAND + CALLBACKS
+# =========================
+
+def get_available_supervisors_for_deadline(targets, date_str, time_str):
+    try:
+        now = datetime.now(TIMEZONE)
+        year = now.year
+        d = datetime.strptime(f"{date_str}.{year} {time_str}", "%d.%m.%Y %H:%M")
+        weekday = d.weekday()
+        deadline_hour = d.hour
+    except:
+        return list(AGENTS_DATA.keys())
+
+    available = []
+    for username, data in AGENTS_DATA.items():
+        if username in targets:
+            continue
+        work_days = data.get("work_days", [])
+        work_hours = data.get("work_hours", {})
+        if weekday in work_days:
+            wh = work_hours.get(str(weekday), [0, 24])
+            if wh[0] <= deadline_hour < wh[1]:
+                available.append(username)
+    return available
+
+async def zadacha_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    chat_type = update.effective_chat.type
+
+    if chat_type in ("group", "supergroup"):
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+        sent = await update.message.reply_text(
+            f"Bu funksiyadan shaxsiy xabar orqali foydalanishingiz mumkin 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 5 daqiqadan keyin o'chadi"
+        )
+        schedule_delete(context.bot, update.effective_chat.id, [sent.message_id], delay=60)
+        return
+
+    zadacha_state[user_id] = {"step": "executor", "messages": [], "creator_username": username}
+    if update.message:
+        zadacha_state[user_id]["messages"].append(update.message.message_id)
+    all_agents = list(AGENTS_DATA.keys())
+    keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
+    keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="👷 Ijro etuvchi hodimni tanlang:\n\n⚠️ Bu xabar ⏱ 5 daqiqadan keyin o'chadi",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    zadacha_state[user_id]["messages"].append(sent.message_id)
+    zadacha_state[user_id]["created_ts"] = datetime.now(TIMEZONE).timestamp()
+
+async def zadacha_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+
+    if data == "zt_otmen":
+        msgs = zadacha_state.get(user_id, {}).get("messages", [])
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=mid)
+            except:
+                pass
+        zadacha_state.pop(user_id, None)
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Vazifa bekor qilindi.\n⚠️ Bu xabar ⏱ 10 soniyadan keyin o'chadi")
+        schedule_delete(context.bot, user_id, [sent.message_id])
+        return
+
+    if user_id not in zadacha_state and not data.startswith(("zacc_", "zes_", "zdone_", "zext_", "zcancel_", "ztask_")):
+        return
+
+    if data.startswith("ze_"):
+        target = data[3:]
+        targets = [target]
+        zadacha_state[user_id]["targets"] = targets
+        zadacha_state[user_id]["step"] = "date"
+        now2 = datetime.now(TIMEZONE)
+        available_dates = get_available_dates_for_targets(targets)
+        days = []
+        for d in available_dates:
+            diff = (d.date() - now2.date()).days
+            if diff == 0:
+                label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
+            elif diff == 1:
+                label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
+            else:
+                label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
+            days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
+        days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+        days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+        sent = await context.bot.send_message(chat_id=user_id, text="📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data.startswith("zd_"):
+        date_str = data[3:]
+        zadacha_state[user_id]["deadline_date"] = date_str
+        targets = zadacha_state[user_id].get("targets", [])
+        available_times = get_available_times_for_targets(targets, date_str)
+        if not available_times:
+            sent = await context.bot.send_message(chat_id=user_id, text="❌ Bu sana uchun ish vaqti topilmadi.")
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+            return
+        slots = [[InlineKeyboardButton(f"⏰ {t}", callback_data=f"ztime_{t}")] for t in available_times]
+        slots.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+        slots.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+        sent = await context.bot.send_message(chat_id=user_id, text="🕐 Deadline vaqtini tanlang:", reply_markup=InlineKeyboardMarkup(slots))
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data.startswith("ztime_"):
+        time_str = data[6:]
+        zadacha_state[user_id]["deadline_time"] = time_str
+        zadacha_state[user_id]["step"] = "supervisor"
+        targets = zadacha_state[user_id].get("targets", [])
+        date_str = zadacha_state[user_id].get("deadline_date", "")
+        available_sups = get_available_supervisors_for_deadline(targets, date_str, time_str)
+        if not available_sups:
+            available_sups = [u for u in AGENTS_DATA.keys() if u not in targets]
+        keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in available_sups]
+        keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")])
+        keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data.startswith("zs_"):
+        supervisor = data[3:]
+        targets = zadacha_state[user_id].get("targets", [])
+        if len(targets) == 1 and supervisor == targets[0]:
+            await query.answer("⛔ O'zingizga o'zingiz nazoratchi bo'la olmaysiz!", show_alert=True)
+            return
+        zadacha_state[user_id]["supervisor"] = [supervisor]
+        zadacha_state[user_id]["step"] = "text"
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="✏️ Vazifa matnini yozing:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]])
+        )
+        zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data.startswith("zback_"):
+        where = data[6:]
+        all_agents = list(AGENTS_DATA.keys())
+        if where == "start":
+            keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ze_{u}")] for u in all_agents]
+            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+            sent = await context.bot.send_message(chat_id=user_id, text="👷 Ijro etuvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+        elif where == "date":
+            targets = zadacha_state[user_id].get("targets", [])
+            now2 = datetime.now(TIMEZONE)
+            available_dates = get_available_dates_for_targets(targets)
+            days = []
+            for d in available_dates:
+                diff = (d.date() - now2.date()).days
+                if diff == 0:
+                    label = f"📆 Bugun ({d.day} {MONTH_UZ[d.month]})"
+                elif diff == 1:
+                    label = f"📆 Ertaga ({d.day} {MONTH_UZ[d.month]})"
+                else:
+                    label = f"📆 {WEEKDAY_UZ[d.weekday()]} ({d.day} {MONTH_UZ[d.month]})"
+                days.append([InlineKeyboardButton(label, callback_data=f"zd_{d.strftime('%d.%m')}")])
+            days.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_start")])
+            days.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+            sent = await context.bot.send_message(chat_id=user_id, text="📅 Deadline sanasini tanlang:", reply_markup=InlineKeyboardMarkup(days))
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+        elif where == "supervisor":
+            targets = zadacha_state[user_id].get("targets", [])
+            date_str2 = zadacha_state[user_id].get("deadline_date", "")
+            time_str3 = zadacha_state[user_id].get("deadline_time", "")
+            available_sups = get_available_supervisors_for_deadline(targets, date_str2, time_str3)
+            if not available_sups:
+                available_sups = [u for u in AGENTS_DATA.keys() if u not in targets]
+            keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"zs_{u}")] for u in available_sups]
+            keyboard.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_date")])
+            keyboard.append([InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")])
+            sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+        elif where in ("target", "text"):
+            sent = await context.bot.send_message(
+                chat_id=user_id,
+                text="✏️ Vazifa matnini yozing:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="zback_supervisor")], [InlineKeyboardButton("❌ Otmen", callback_data="zt_otmen")]])
+            )
+            zadacha_state[user_id]["messages"].append(sent.message_id)
+
+    elif data == "zconfirm_yes":
+        if user_id not in zadacha_state:
+            return
+        s = zadacha_state.pop(user_id)
+        targets = s["targets"]
+        text = s["text"]
+        date_str = s["deadline_date"]
+        time_str = s["deadline_time"]
+        creator = query.from_user.first_name or query.from_user.username or "Noma'lum"
+        creator_username = query.from_user.username
+        supervisors = s.get("supervisor", [])
+        if isinstance(supervisors, str):
+            supervisors = [supervisors]
+
+        now = datetime.now(TIMEZONE)
+        dt = datetime.strptime(f"{date_str}.{now.year} {time_str}", "%d.%m.%Y %H:%M").replace(tzinfo=TIMEZONE)
+
+        zadacha_counter[0] += 1
+        tid = zadacha_counter[0]
+
+        zadacha_tasks[tid] = {
+            "creator": creator,
+            "creator_username": creator_username,
+            "targets": targets,
+            "supervisor": supervisors,
+            "text": text,
+            "deadline": dt,
+            "accepted_executors": set(),
+            "accepted_supervisors": set(),
+            "done": set(),
+            "main_msg_id": None,
+            "reminder_msg_ids": [],
+            "created_at": datetime.now(TIMEZONE),
+            "accepted_at": {},
+            "done_at": {},
+            "done_confirmed": set(),
+        }
+
+        main_sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=build_zadacha_main_text(zadacha_tasks[tid]),
+            reply_markup=build_zadacha_main_keyboard(tid, zadacha_tasks[tid]),
+            parse_mode="HTML"
+        )
+        zadacha_tasks[tid]["main_msg_id"] = main_sent.message_id
+
+        remind_time = dt - timedelta(minutes=30)
+        if remind_time > now:
+            context.job_queue.run_once(zadacha_pre_deadline_job, when=(remind_time - now).total_seconds(), name=f"zpre_{tid}", data={"task_id": tid})
+        if dt > now:
+            context.job_queue.run_once(zadacha_deadline_job, when=(dt - now).total_seconds(), name=f"zdue_{tid}", data={"task_id": tid})
+
+        all_users = targets + supervisors
+        earliest = 300
+        for u in all_users:
+            if is_agent_working_now(u):
+                earliest = 300
+                break
+            secs = seconds_until_agent_works(u)
+            if secs < earliest:
+                earliest = max(secs, 60)
+        context.job_queue.run_once(zadacha_accept_reminder_job, when=earliest, name=f"zaccrem_{tid}", data={"task_id": tid})
+
+        save_tasks()
+
+        target_str = zadacha_target_str(targets)
+        sent_ok = await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"✅ Vazifa yuborildi.\n"
+                f"📌 {creator} → {target_str}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f'<tg-spoiler>{text}</tg-spoiler>\n'
+                f"━━━━━━━━━━━━━━\n"
+                f"Deadline: 📅 {date_str}  ⏰ {time_str}\n\n"
+                f"⚠️ Bu xabar ⏱ 10 soniyadan keyin o'chadi, vazifa guruhda qoladi"
+            ),
+            parse_mode="HTML"
+        )
+        warn_sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Jarayon xabarlari ⏱ 10 soniyadan keyin o'chadi"
+        )
+        await asyncio.sleep(10)
+        for mid in s.get("messages", []):
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=mid)
+            except:
+                pass
+        schedule_delete(context.bot, user_id, [warn_sent.message_id, sent_ok.message_id], delay=10)
+
+# =========================
+# ZADACHI COMMAND
+# =========================
+
+async def zadachi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    requester = update.effective_user.username
+    chat_type = update.effective_chat.type
+
+    if chat_type in ("group", "supergroup"):
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+        keyboard = [[InlineKeyboardButton("❌ Otmen", callback_data="zadachi_group_cancel")]]
+        cmd_msg_id = update.message.message_id
+        sent = await update.message.reply_text(
+            f"📋 Vazifalar ro'yxatini ko'rish va tahrirlash uchun menga shaxsiy xabar yozing 👉 @{bot_username}\n\n⚠️ Bu xabar ⏱ 60 soniyadan keyin o'chadi",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        requester_id = update.effective_user.id
+        zadacha_state[f"zadachi_group_{sent.message_id}"] = requester_id
+        async def auto_del():
+            await asyncio.sleep(60)
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=sent.message_id)
+            except:
+                pass
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=cmd_msg_id)
+            except:
+                pass
+        asyncio.create_task(auto_del())
+        return
+
+    if not zadacha_tasks:
+        await update.message.reply_text("📋 Faol vazifalar yoq.")
+        return
+
+    lines = ["📋 Vazifalar:\n"]
+    keyboards = []
+
+    for tid, task in zadacha_tasks.items():
+        deadline_str = task["deadline"].strftime("%d.%m  ⏰ %H:%M")
+        creator = task["creator"]
+        is_creator = requester == task["creator_username"] or requester == ADMIN_USERNAME
+
+        if requester == ADMIN_USERNAME:
+            show_targets = task["targets"]
+        else:
+            show_targets = [u for u in task["targets"] if u == requester]
+            if not show_targets and requester == task["creator_username"]:
+                show_targets = task["targets"]
+            supervisors_list = task.get("supervisor", [])
+            if not show_targets and requester in supervisors_list:
+                show_targets = task["targets"]
+
+        for username in show_targets:
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            exec_accepted = username in task.get("accepted_executors", set())
+            is_done = username in task.get("done", set())
+            if is_done:
+                status = "✅ Bajardi"
+            elif username in task.get("cancelled", set()):
+                status = "❌ Bekor"
+            else:
+                status = "⏳ Bajarilmadi"
+            accepted = "✅ Qabul qildi" if exec_accepted else "⏳ Qabul qilmadi"
+            text_short = task["text"][:50] + ("..." if len(task["text"]) > 50 else "")
+
+            lines.append(
+                f"━━━━━━━━━━━━━━\n"
+                f"📌 №{tid} | {creator} → {name}\n"
+                f"📝 <tg-spoiler>{text_short}</tg-spoiler>\n"
+                f"📅 {deadline_str}\n"
+                f"{accepted} | {status}"
+            )
+
+            row = []
+            if is_creator:
+                row.append(InlineKeyboardButton(f"✏️ №{tid}", callback_data=f"ztask_edit_{tid}"))
+                row.append(InlineKeyboardButton(f"🗑 №{tid}", callback_data=f"ztask_delete_{tid}"))
+            if username == requester and not is_done:
+                keyboards.append(row) if row else None
+                row = []
+                row.append(InlineKeyboardButton(f"✅ Bajardim — №{tid}", callback_data=f"ztask_done_{tid}_{username}"))
+            if row:
+                keyboards.append(row)
+
+    lines.append("━━━━━━━━━━━━━━")
+    lines.append("\n⚠️ Bu xabar ⏱ 30 soniyadan keyin o'chadi")
+
+    sent = await update.message.reply_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(keyboards) if keyboards else None,
+        parse_mode="HTML"
+    )
+    try:
+        await update.message.delete()
+    except:
+        pass
+    schedule_delete(context.bot, update.effective_chat.id, [sent.message_id], delay=30)
+
+# =========================
+# DEADLINE JOBS
+# =========================
+
+async def zadacha_pre_deadline_job(context: ContextTypes.DEFAULT_TYPE):
+    tid = context.job.data["task_id"]
+    if tid not in zadacha_tasks:
+        return
+    task = zadacha_tasks[tid]
+    deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
+    supervisors = task.get("supervisor", [])
+    sup_tags = " ".join(f"@{u}" for u in supervisors)
+    for username in task["targets"]:
+        if username in task.get("done", set()):
+            continue
+        keyboard = [
+            [InlineKeyboardButton("✅ Ha, esimda", callback_data=f"zes_{tid}_{username}"),
+             InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
+            [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
+        ]
+        sup_line = f"\n🧑 Nazorat: {sup_tags}" if sup_tags else ""
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"📌 @{username}, esingizda a?\n━━━━━━━━━━━━━━\n<tg-spoiler>{task['text']}</tg-spoiler>\nDeadline: 📅 {deadline_str}{sup_line}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+async def zadacha_deadline_job(context: ContextTypes.DEFAULT_TYPE):
+    tid = context.job.data["task_id"]
+    if tid not in zadacha_tasks:
+        return
+    task = zadacha_tasks[tid]
+    deadline_str = task["deadline"].strftime("%d.%m soat %H:%M")
+    not_done = [u for u in task["targets"] if u not in task.get("done", set())]
+    if not not_done:
+        return
+    for username in not_done:
+        name = AGENTS_DATA.get(username, {}).get("name", username)
+        keyboard = [
+            [InlineKeyboardButton("✅ Bajardim", callback_data=f"zdone_{tid}_{username}")],
+            [InlineKeyboardButton("❌ Bekor qilindi", callback_data=f"zcancel_{tid}_{username}")],
+            [
+                InlineKeyboardButton("⏰ Yana 30 daqiqa", callback_data=f"zext_{tid}_{username}_30"),
+                InlineKeyboardButton("⏰ Yana 1 soat", callback_data=f"zext_{tid}_{username}_60"),
+                InlineKeyboardButton("⏰ Yana 2 soat", callback_data=f"zext_{tid}_{username}_120"),
+            ],
+        ]
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=f"📌 {name}, deadline tugadi.\n━━━━━━━━━━━━━━\n<tg-spoiler>{task['text']}</tg-spoiler>\nDeadline: 📅 {deadline_str}\n\n@{username} @{task['creator_username']}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+# =========================
+# DAVOMAT TIZIMI
+# =========================
+
+import random
+import string
+
+ATTENDANCE_AGENTS = {}
+
+def get_attendance_code_time(username):
+    now = datetime.now(TIMEZONE)
+    weekday = now.weekday()
+    schedule = get_agent_work_schedule(username)
+    if weekday not in schedule:
+        return None, None
+    start_h, _ = schedule[weekday]
+    code_h = start_h - 1
+    code_m = 50
+    deadline_h = start_h
+    deadline_m = 10
+    return f"{code_h:02d}:{code_m:02d}", f"{deadline_h:02d}:{deadline_m:02d}"
+
+SCREENSHOT_SCHEDULE = {
+    "10:30": ["sirlyinfo"],
+    "11:00": ["sirlyinfo"],
+    "11:30": ["sirlyinfo"],
+    "12:00": ["sirlyinfo"],
+    "12:30": ["sirlyinfo"],
+    "13:00": ["sirlyinfo"],
+    "13:30": ["sirlyinfo"],
+    "14:00": ["sirlyinfo"],
+    "14:30": ["sirlyinfo"],
+    "15:00": ["sirlyinfo"],
+    "15:30": ["sirlyinfo"],
+    "16:00": ["sirlyinfo"],
+    "16:30": ["sirlyinfo"],
+    "17:00": ["sirlyinfo"],
+    "17:30": ["sirlyinfo"],
+    "18:00": ["sirlyinfo"],
+    "18:30": ["sirlyinfo"],
+    "19:00": ["sirlyinfo"],
+    "19:30": ["sirlyinfo"],
+    "20:00": ["sirlyinfo"],
+    "20:30": ["sirlyinfo"],
+    "21:00": ["sirlyinfo"],
+    "21:30": ["sirlyinfo"],
+    "22:00": ["sirlyinfo"],
+    "22:30": ["sirlyinfo"],
+    "23:00": ["sirlyinfo"],
+    "23:30": ["sirlyinfo"],
+}
+
+attendance_state = {
+    "daily_codes": {},
+    "arrived": set(),
+    "arrived_date": "",
+    "screenshot_msg_ids": {},
+    "screenshot_done": {},
+    "screenshot_date": "",
+}
+
+def generate_code():
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=4))
+
+def reset_attendance_if_new_day():
+    today = datetime.now(TIMEZONE).strftime("%d.%m.%Y")
+    if attendance_state["arrived_date"] != today:
+        attendance_state["arrived"] = set()
+        attendance_state["arrived_date"] = today
+        attendance_state["daily_codes"] = {}
+    if attendance_state["screenshot_date"] != today:
+        attendance_state["screenshot_done"] = {}
+        attendance_state["screenshot_date"] = today
+
+async def send_attendance_code_job(context: ContextTypes.DEFAULT_TYPE):
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+    if username in attendance_state["arrived"]:
+        context.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
+        return
+    code_time, deadline = get_attendance_code_time(username)
+    if not code_time:
+        now2 = datetime.now(TIMEZONE)
+        tomorrow = now2 + timedelta(days=1)
+        context.job_queue.run_once(send_attendance_code_job, when=(tomorrow.replace(hour=9, minute=0, second=0) - now2).total_seconds(), name=f"att_code_{username}", data={"username": username})
+        return
+    agent = ATTENDANCE_AGENTS[username]
+    code = generate_code()
+    attendance_state["daily_codes"][username] = code
+    now = datetime.now(TIMEZONE)
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"🔑 {agent['name']} @{username}\n"
+            f"📞 {agent['phone']}\n\n"
+            f"Bugungi kod: {code}\n\n"
+            f"📌 Bajaring:\n"
+            f"1. Kodni katta qilib qog'ozga yozing\n"
+            f"2. Ofis fonida qog'ozni suratga oling\n"
+            f"3. Ofisda ekaningiz suratda bilinsin\n"
+            f"4. Suratni guruhga yuboring\n\n"
+            f"⚠️ Soat {deadline} gacha surat yuborilmasa {agent['fine']} so'm jarima\n"
+            f"ℹ️ Kod har kuni yangilanadi"
+        )
+    )
+    deadline_h, deadline_m = map(int, deadline.split(":"))
+    target = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
+    if target > now:
+        secs = (target - now).total_seconds()
+        context.job_queue.run_once(check_attendance_job, when=secs, name=f"att_check_{username}", data={"username": username})
+    context.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
+
+async def check_attendance_job(context: ContextTypes.DEFAULT_TYPE):
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+    if username in attendance_state["arrived"]:
+        return
+    agent = ATTENDANCE_AGENTS[username]
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"⚠️ {agent['name']} @{username} ishga vaqtida kelmadi!\n"
+            f"📅 {date_str} | 🕐 {time_str}\n\n"
+            f"💰 Oyligidan {agent['fine']} so'm jarima\n\n"
+            f"@{ADMIN_USERNAME}"
+        )
+    )
+
+# =========================
+# PHOTO HANDLER
+# =========================
+
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != CHAT_ID:
+        return
+    sender = update.effective_user.username
+    if not sender:
+        return
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+    reset_attendance_if_new_day()
+
+    if sender in ATTENDANCE_AGENTS and sender not in attendance_state["arrived"]:
+        agent = ATTENDANCE_AGENTS[sender]
+        _, deadline_str = get_attendance_code_time(sender)
+        if not deadline_str:
+            deadline_str = "10:10"
+        deadline_h, deadline_m = map(int, deadline_str.split(":"))
+        deadline_dt = now.replace(hour=deadline_h, minute=deadline_m, second=0, microsecond=0)
+        if now <= deadline_dt:
+            attendance_state["arrived"].add(sender)
+            cancel_jobs_by_name(context.job_queue, f"att_check_{sender}")
+            keyboard = [[InlineKeyboardButton(
+                f"⬜ Tasdiqlandi — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+                callback_data=f"att_confirm_{sender}"
+            )]]
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=(f"✅ {agent['name']} ishga keldi!\n📅 {date_str} | 🕐 {time_str}\n\n@{ADMIN_USERNAME}"),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+
+    current_time_key = None
+    best_diff = None
+    for tk in SCREENSHOT_SCHEDULE:
+        if sender in SCREENSHOT_SCHEDULE[tk]:
+            tk_h, tk_m = map(int, tk.split(":"))
+            tk_dt = now.replace(hour=tk_h, minute=tk_m, second=0, microsecond=0)
+            diff = (now - tk_dt).total_seconds()
+            if 0 <= diff <= 600:
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    current_time_key = tk
+
+    if current_time_key:
+        allowed_senders = set(SCREENSHOT_SCHEDULE.get(current_time_key, []))
+        if sender not in allowed_senders:
+            names = ", ".join(f"@{u}" for u in allowed_senders)
+            await context.bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Screenshot faqat quyidagi profillardan qabul qilinadi: {names}")
+            return
+
+        done = attendance_state["screenshot_done"].get(current_time_key, set())
+        if sender not in done:
+            agent = ATTENDANCE_AGENTS.get(sender, {})
+            name = agent.get("name") or AGENTS_DATA.get(sender, {}).get("name", sender)
+            keyboard = [[InlineKeyboardButton(
+                f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+                callback_data=f"ss_confirm_{current_time_key.replace(':', '')}_{sender}"
+            )]]
+            sent = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=(
+                    f"📸 Screenshot yuborildi!\n"
+                    f"📅 {date_str} | 🕐 {time_str}\n\n"
+                    f"1. Admin panelda — javob yozilmagan mijozlar qolmadi\n"
+                    f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozildi"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            agents_for_slot = SCREENSHOT_SCHEDULE.get(current_time_key, [sender])
+            for _u in agents_for_slot:
+                attendance_state["screenshot_done"].setdefault(current_time_key, set()).add(_u)
+            for _u in agents_for_slot:
+                cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{_u}")
+            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}")
+            ss_key = f"ss_{current_time_key.replace(':', '')}_{sender}"
+            reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{sender}")
+            if not reminder_mid:
+                for _u in SCREENSHOT_SCHEDULE.get(current_time_key, []):
+                    reminder_mid = attendance_state.get("ss_reminder_msg_ids", {}).get(f"{current_time_key}_{_u}")
+                    if reminder_mid:
+                        break
+            attendance_state.setdefault("ss_msg_ids", {})[ss_key] = {
+                "confirm_msg_id": sent.message_id,
+                "photo_msg_id": update.message.message_id,
+                "reminder_msg_id": reminder_mid,
+                "chat_id": update.effective_chat.id,
+            }
+            cancel_jobs_by_name(context.job_queue, f"ss_fine_{current_time_key.replace(':', '')}_{sender}")
+            await sb_save_screenshot(sender, current_time_key, 'sent')
+
+# =========================
+# SCREENSHOT JOBS
+# =========================
+
+async def screenshot_reminder_job(context: ContextTypes.DEFAULT_TYPE):
+    time_key = context.job.data["time_key"]
+    agents = context.job.data["agents"]
+    reset_attendance_if_new_day()
+
+    now_check = datetime.now(TIMEZONE)
+    now_wd = now_check.weekday()
+    tk_h = int(time_key.split(":")[0])
+
+    def is_working_at_time(username, hour):
+        data = AGENTS_DATA.get(username, {})
+        work_days = data.get("work_days", list(range(7)))
+        work_hours = data.get("work_hours", {})
+        if now_wd not in work_days:
+            return False
+        wh = work_hours.get(str(now_wd), [0, 24])
+        return wh[0] <= hour < wh[1]
+
+    agents = [u for u in agents if is_working_at_time(u, tk_h)]
+
+    # Tushlik vaqtini tekshirish — soat va daqiqani hisobga olish
+    tk_m = int(time_key.split(":")[1])
+    def is_lunch_time(username, hour, minute):
+        lunch = AGENTS_DATA.get(username, {}).get("lunch")
+        if not lunch:
+            return False
+        lunch_start_h, lunch_end_h = lunch[0], lunch[1]
+        # Tushlik boshlanishidan 10 daqiqa oldin ham so'ramasin
+        pre_lunch_minutes = lunch_start_h * 60 - 10
+        current_minutes = hour * 60 + minute
+        lunch_end_minutes = lunch_end_h * 60
+        return pre_lunch_minutes <= current_minutes < lunch_end_minutes
+
+    agents = [u for u in agents if not is_lunch_time(u, tk_h, tk_m)]
+    if not agents:
+        h, m = map(int, time_key.split(":"))
+        context.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": context.job.data["agents"]})
+        return
+
+    now = datetime.now(TIMEZONE)
+    done = attendance_state["screenshot_done"].get(time_key, set())
+    pending_agents = [u for u in agents if u not in done]
+    if not pending_agents:
+        return
+
+    if len(pending_agents) > 1:
+        names_tags = " | ".join(f"{ATTENDANCE_AGENTS.get(u, {}).get('name', u)} @{u}" for u in pending_agents)
+        reminder_sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"📸 {names_tags}\n"
+                f"Iltimos screenshot yuboring:\n\n"
+                f"1. Admin panelda — javob yozilmagan mijozlar qolmagani\n"
+                f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
+                f"haqida tasdiqlovchi screenshot yuboring\n\n"
+                f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
+                f"⚠️ 10 daqiqa ichida yuborilmasa 20,000 so'm jarima"
+            )
+        )
+        for u in pending_agents:
+            attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{u}"] = reminder_sent.message_id
+        context.job_queue.run_once(screenshot_fine_job, when=600, name=f"ss_fine_{time_key.replace(':', '')}", data={"time_key": time_key, "username": pending_agents[0], "all_agents": pending_agents})
+    else:
+        username = pending_agents[0]
+        agent = ATTENDANCE_AGENTS.get(username, {})
+        name = agent.get("name", username)
+        reminder_sent = await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"📸 {name} @{username}\n"
+                f"Iltimos screenshot yuboring:\n\n"
+                f"1. Admin panelda — javob yozilmagan mijozlar qolmagani\n"
+                f"2. Telegramda — Sirly Infoga murojaat qilgan hamkor va mijozlarning barchasiga javob yozilgani\n"
+                f"haqida tasdiqlovchi screenshot yuboring\n\n"
+                f"⚠️ Vaqt va bugungi sana ko'rinib tursin screenshotda\n"
+                f"⚠️ 10 daqiqa ichida yuborilmasa 20,000 so'm jarima"
+            )
+        )
+        attendance_state.setdefault("ss_reminder_msg_ids", {})[f"{time_key}_{username}"] = reminder_sent.message_id
+        context.job_queue.run_once(screenshot_fine_job, when=600, name=f"ss_fine_{time_key.replace(':', '')}_{username}", data={"time_key": time_key, "username": username, "all_agents": [username]})
+
+    h, m = map(int, time_key.split(":"))
+    context.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": agents})
+
+async def screenshot_fine_job(context: ContextTypes.DEFAULT_TYPE):
+    time_key = context.job.data["time_key"]
+    username = context.job.data["username"]
+    reset_attendance_if_new_day()
+    done = attendance_state["screenshot_done"].get(time_key, set())
+    if username in done:
+        return
+    agent = ATTENDANCE_AGENTS.get(username, {})
+    name = agent.get("name", username)
+    now = datetime.now(TIMEZONE)
+    date_str = now.strftime("%d.%m")
+    time_str = now.strftime("%H:%M")
+    keyboard = [[InlineKeyboardButton(
+        f"⬜ Qabul qildim — {AGENTS_DATA.get(ADMIN_USERNAME, {}).get('name', 'Umid')}",
+        callback_data=f"ss_fine_confirm_{time_key.replace(':', '')}_{username}"
+    )]]
+    await sb_save_screenshot(username, time_key, 'missed')
+    await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=(
+            f"⚠️ {name} @{username} screenshot yubormadi!\n"
+            f"📅 {date_str} | 🕐 {time_str}\n\n"
+            f"💰 20,000 so'm jarima\n\n"
+            f"@{ADMIN_USERNAME}"
+        ),
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# =========================
+# START / STOP COMMANDS
+# =========================
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_type = update.effective_chat.type
+
+    # Guruhda /start — hech narsa qilma
+    if chat_type in ("group", "supergroup"):
+        return
+
+    # Foydalanuvchi chat_id'sini saqlash (shaxsiy xabar yuborish uchun)
+    if user.username:
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                await c.post(
+                    f"{SB_URL}/rest/v1/telegram_users?on_conflict=username",
+                    headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"},
+                    json={"username": user.username.lower(), "chat_id": user.id, "name": user.first_name or ""}
+                )
+        except Exception as e:
+            logger.error(f"telegram_users save error: {e}")
+
+    name = user.first_name or user.username or "Salom"
+
+    # Admin qo'llanmasi
+    if user.username == ADMIN_USERNAME:
+        guide_text = (
+            f"👋 Salom, {name}!\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "🤖 BOT BOSHQARUVI\n"
+            "━━━━━━━━━━━━━━\n"
+            "/start — Qo'llanmani ko'rish\n"
+            "/umidstop — Botni to'xtatish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "👥 HODIMLAR\n"
+            "━━━━━━━━━━━━━━\n"
+            "/addagent — Hodim qo'shish\n"
+            "/editagent — Hodimni tahrirlash\n"
+            "/delagent — Hodimni o'chirish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "📋 CHECKLIST\n"
+            "━━━━━━━━━━━━━━\n"
+            "/checklist — Checklistni qo'lda yuborish\n"
+            "/cheklistyaratish — Yangi checklist yaratish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "📌 VAZIFALAR\n"
+            "━━━━━━━━━━━━━━\n"
+            "/zadacha — Yangi vazifa yaratish\n"
+            "/zadachi — Barcha vazifalarni ko'rish\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "ℹ️ ESLATMA\n"
+            "━━━━━━━━━━━━━━\n"
+            "• Checklist har kuni 10:15 da avtomatik yuboriladi\n"
+            "• Screenshot har 30 daqiqada so'raladi\n"
+            "• Deadline o'tsa — bot avtomatik xabar yuboradi"
+        )
+        await context.bot.send_message(chat_id=user.id, text=guide_text)
+        return
+
+    # Xodimlar qo'llanmasi
+    guide_text = (
+        f"👋 Salom, {name}!\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "📌 VAZIFALAR\n"
+        "━━━━━━━━━━━━━━\n"
+        "/zadacha — Yangi vazifa yaratish\n"
+        "• Ijrochi tanlaysiz\n"
+        "• Nazoratchi tanlaysiz\n"
+        "• Vazifa matnini yozasiz\n"
+        "• Deadline belgilaysiz\n\n"
+        "/zadachi — Vazifalar ro'yxati\n"
+        "• O'zingizga tegishli vazifalar\n"
+        "• Bajardim tugmasi\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "⚠️ ESLATMA\n"
+        "━━━━━━━━━━━━━━\n"
+        "Vazifa yaratish faqat\n"
+        "shaxsiy xabar orqali ishlaydi!"
+    )
+    await context.bot.send_message(chat_id=user.id, text=guide_text)
+
+async def umidstop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    state["stopped"] = True
+    state["cycle_id"] += 1
+    for t in CHECKLIST_TIMES:
+        cancel_jobs_by_name(context.job_queue, f"checklist_{t}")
+    await context.bot.send_message(chat_id=CHAT_ID, text="🛑 Bot toxtatildi.\nQayta ishga tushirish uchun /start bosing.")
+
+async def custom_checklist_job(context: ContextTypes.DEFAULT_TYPE):
+    cl_id = context.job.data["cl_id"]
+    cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+    if not cl:
+        return
+
+    username = cl["username"]
+    supervisor = cl["supervisor"]
+    tasks = cl["tasks"]
+    now = datetime.now(TIMEZONE)
+    date_str = f"{now.day} {MONTH_UZ[now.month]}, {WEEKDAY_UZ[now.weekday()]}, {now.strftime('%H:%M')}"
+    name = AGENTS_DATA.get(username, {}).get("name", username)
+
+    # Eski xabarni o'chir
+    old_mid = custom_checklist_message_ids.get(cl_id)
+    if old_mid:
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_mid)
+        except:
+            pass
+
+    # State reset
+    custom_checklist_confirmations[cl_id] = {username: {}}
+    custom_checklist_verified[cl_id] = set()
+    custom_checklist_verify_state[cl_id] = {"verify_msg_id": None}
+
+    task_lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(tasks))
+    agent_info = get_agent_info(username)
+    text = (
+        f"📋 CHECKLIST — {date_str}\n\n"
+        f"{agent_info}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        f"📝 Vazifalar:\n<tg-spoiler>\n{task_lines}\n</tg-spoiler>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "⚠️ Avval o'qing, keyin bosing!\n"
+        "Har bir vazifa bajarilgandan so'ng tugmani bosing"
+    )
+
+    keyboard = []
+    for i, t in enumerate(tasks):
+        keyboard.append([
+            InlineKeyboardButton(f"⬜ {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+            InlineKeyboardButton("⬜ Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+        ])
+
+    sent = await context.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    custom_checklist_message_ids[cl_id] = sent.message_id
+
+    # last_sent yangilash
+    cl["last_sent"] = now.isoformat()
+    save_custom_checklists()
+
+    # Keyingi schedule
+    secs = seconds_until_custom_checklist(cl)
+    context.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl_id}", data={"cl_id": cl_id})
+
+async def cheklistyaratish_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    user_id = update.effective_user.id
+    all_agents = list(AGENTS_DATA.keys())
+    keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ccl_new_agent_{u}")] for u in all_agents]
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text="👷 Qaysi xodim uchun checklist?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    custom_checklist_state[user_id] = {"step": "agent", "messages": [sent.message_id]}
+    if update.message:
+        custom_checklist_state[user_id]["messages"].append(update.message.message_id)
+
+async def cheklistyaratish_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    await query.answer()
+
+    if data == "ccl_new_cancel":
+        msgs = custom_checklist_state.pop(user_id, {}).get("messages", [])
+        for mid in msgs:
+            try:
+                await context.bot.delete_message(chat_id=user_id, message_id=mid)
+            except:
+                pass
+        sent = await context.bot.send_message(chat_id=user_id, text="❌ Bekor qilindi.")
+        schedule_delete(context.bot, user_id, [sent.message_id])
+        return
+
+    if user_id not in custom_checklist_state:
+        return
+    s = custom_checklist_state[user_id]
+
+    if data.startswith("ccl_new_agent_"):
+        username = data[14:]
+        s["username"] = username
+        s["step"] = "repeat"
+        keyboard = [
+            [InlineKeyboardButton("📅 Har kuni", callback_data="ccl_new_repeat_daily")],
+            [InlineKeyboardButton("📅 Kun ora", callback_data="ccl_new_repeat_interval")],
+            [InlineKeyboardButton("📅 Haftada bir", callback_data="ccl_new_repeat_weekly")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+        ]
+        sent = await context.bot.send_message(chat_id=user_id, text="🔄 Qanday takrorlansin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data == "ccl_new_repeat_daily":
+        s["repeat"] = "daily"
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data == "ccl_new_repeat_interval":
+        s["repeat"] = "interval"
+        s["step"] = "interval_days"
+        keyboard = [
+            [InlineKeyboardButton("2 kun", callback_data="ccl_new_idays_2"), InlineKeyboardButton("5 kun", callback_data="ccl_new_idays_5")],
+            [InlineKeyboardButton("10 kun", callback_data="ccl_new_idays_10"), InlineKeyboardButton("15 kun", callback_data="ccl_new_idays_15")],
+            [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+        ]
+        sent = await context.bot.send_message(chat_id=user_id, text="🔢 Necha kunda bir yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_idays_"):
+        s["interval_days"] = int(data[14:])
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data == "ccl_new_repeat_weekly":
+        s["repeat"] = "weekly"
+        s["step"] = "weekday"
+        keyboard = [[InlineKeyboardButton(label, callback_data=f"ccl_new_wd_{idx}")] for label, idx in WEEKDAY_BUTTONS]
+        keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+        sent = await context.bot.send_message(chat_id=user_id, text="📅 Qaysi kuni yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_wd_"):
+        s["weekday"] = int(data[11:])
+        s["step"] = "hour"
+        await _ccl_ask_hour(context, user_id, s)
+
+    elif data.startswith("ccl_new_hour_"):
+        s["hour"] = int(data[13:])
+        s["step"] = "supervisor"
+        # Nazoratchi tanlash — xodimdan boshqalar
+        username = s["username"]
+        sups = [u for u in AGENTS_DATA.keys() if u != username]
+        keyboard = [[InlineKeyboardButton(f"👤 {AGENTS_DATA[u]['name']}", callback_data=f"ccl_new_sup_{u}")] for u in sups]
+        keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+        sent = await context.bot.send_message(chat_id=user_id, text="🧑 Nazorat qiluvchi hodimni tanlang:", reply_markup=InlineKeyboardMarkup(keyboard))
+        s["messages"].append(sent.message_id)
+
+    elif data.startswith("ccl_new_sup_"):
+        s["supervisor"] = data[12:]
+        s["step"] = "tasks"
+        s["tasks"] = []
+        sent = await context.bot.send_message(
+            chat_id=user_id,
+            text="✏️ 1-vazifani kiriting:",
+        )
+        s["messages"].append(sent.message_id)
+
+    elif data == "ccl_new_task_done":
+        if not s.get("tasks"):
+            await query.answer("❌ Kamida 1 ta vazifa kiriting!", show_alert=True)
+            return
+        s["step"] = "confirm"
+        await _ccl_show_confirm(context, user_id, s)
+
+async def _ccl_ask_hour(context, user_id, s):
+    hours = list(range(8, 24))
+    keyboard = []
+    row = []
+    for h in hours:
+        row.append(InlineKeyboardButton(f"⏰ {h:02d}:00", callback_data=f"ccl_new_hour_{h}"))
+        if len(row) == 4:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")])
+    sent = await context.bot.send_message(chat_id=user_id, text="🕐 Qaysi soatda yuborilsin?", reply_markup=InlineKeyboardMarkup(keyboard))
+    s["messages"].append(sent.message_id)
+
+async def _ccl_show_confirm(context, user_id, s):
+    username = s["username"]
+    supervisor = s["supervisor"]
+    repeat = s["repeat"]
+    hour = s["hour"]
+    tasks = s["tasks"]
+    name = AGENTS_DATA.get(username, {}).get("name", username)
+    sup_name = AGENTS_DATA.get(supervisor, {}).get("name", supervisor)
+
+    if repeat == "daily":
+        repeat_str = "Har kuni"
+    elif repeat == "interval":
+        repeat_str = f"Har {s['interval_days']} kunda bir"
+    else:
+        repeat_str = f"Haftada bir — {WEEKDAY_UZ[s['weekday']]}"
+
+    task_lines = "\n".join(f"{i+1}. {t}" for i, t in enumerate(tasks))
+    text = (
+        f"📋 Yangi checklist:\n\n"
+        f"👤 Xodim: {name}\n"
+        f"🧑 Nazoratchi: {sup_name}\n"
+        f"🔄 Takrorlanish: {repeat_str}\n"
+        f"🕐 Soat: {hour:02d}:00\n"
+        f"📝 Vazifalar:\n{task_lines}\n\n"
+        f"Yuborilsinmi?"
+    )
+    keyboard = [
+        [InlineKeyboardButton("✅ Tasdiqlash", callback_data="ccl_new_confirm")],
+        [InlineKeyboardButton("❌ Bekor", callback_data="ccl_new_cancel")],
+    ]
+    sent = await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
+    s["messages"].append(sent.message_id)
+
+async def cheklistyaratish_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+
+    if query.data != "ccl_new_confirm":
+        return
+    if user_id not in custom_checklist_state:
+        return
+    s = custom_checklist_state.pop(user_id)
+
+    cl_id = get_next_cl_id()
+    cl = {
+        "id": cl_id,
+        "username": s["username"],
+        "supervisor": s["supervisor"],
+        "repeat": s["repeat"],
+        "hour": s["hour"],
+        "tasks": s["tasks"],
+        "last_sent": None,
     }
-    renderOrg();
-  }
+    if s["repeat"] == "interval":
+        cl["interval_days"] = s["interval_days"]
+    if s["repeat"] == "weekly":
+        cl["weekday"] = s["weekday"]
 
-  function orgCard(node){
-    var menuOpen = orgMenuOpen === node.id;
-    var detailOpen = orgDetailOpen === node.id;
-    var draggable = orgIsAdmin() && node.parentId;
-    return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" id="org-node-${node.id}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')"
-        ${draggable?`draggable="true" ondragstart="orgDragStart(event,'${node.id}')" ondragover="orgDragOver(event,'${node.id}')" ondragleave="orgDragLeave(event,'${node.id}')" ondrop="orgDrop(event,'${node.id}')" ondragend="orgDragEnd(event)"`:''}>
-        <div style="flex:1;min-width:0">
-          <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
-          ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
-        </div>
-        ${orgIsAdmin()?`<button class="abtn" onclick="event.stopPropagation();orgOpenMenu('${node.id}')" style="margin-left:6px${node.color==='#ffffff'?';border-color:rgba(22,87,58,0.15);background:rgba(22,87,58,0.06);color:#16573a':''}">⋮</button>`:''}
-      </div>
-      <div id="org-form-${node.id}"></div>
-      <div id="org-children-${node.id}"></div>
-    </div>`;
-  }
-  var orgDragSrcId = null;
-  function orgIsDescendant(parentId, childId){
-    var n = orgData.find(x=>x.id===childId);
-    while(n && n.parentId){
-      if(n.parentId===parentId) return true;
-      n = orgData.find(x=>x.id===n.parentId);
-    }
-    return false;
-  }
-  function orgDragStart(ev, id){
-    orgDragSrcId = id;
-    ev.dataTransfer.effectAllowed = 'move';
-    try{ ev.dataTransfer.setData('text/plain', id); }catch(e){}
-  }
-  function orgDragOver(ev, id){
-    if(!orgDragSrcId || orgDragSrcId===id) return;
-    if(id===orgDragSrcId || orgIsDescendant(orgDragSrcId, id)) return;
-    ev.preventDefault();
-    var el = document.getElementById('org-node-'+id);
-    if(el) el.style.outline = '2px dashed var(--lime)';
-  }
-  function orgDragLeave(ev, id){
-    var el = document.getElementById('org-node-'+id);
-    if(el) el.style.outline = '';
-  }
-  function orgDrop(ev, id){
-    ev.preventDefault();
-    var el = document.getElementById('org-node-'+id);
-    if(el) el.style.outline = '';
-    if(!orgDragSrcId || orgDragSrcId===id) return;
-    if(orgIsDescendant(orgDragSrcId, id)){ notify("O'z bolasi ostiga ko'chirib bo'lmaydi!"); return; }
-    var srcNode = orgData.find(n=>n.id===orgDragSrcId);
-    if(!srcNode) return;
-    srcNode.parentId = id;
-    orgSave(); renderOrg();
-    notify('Ko\'chirildi ✓');
-    orgDragSrcId = null;
-  }
-  function orgDragEnd(ev){
-    document.querySelectorAll('.section-item').forEach(function(el){ el.style.outline=''; });
-    orgDragSrcId = null;
-  }
+    custom_checklists.append(cl)
+    save_custom_checklists()
 
-  function orgCloseModal(){
-    document.getElementById('org-modal-bg').style.display='none';
-    document.getElementById('org-modal').style.display='none';
-    document.getElementById('org-modal').innerHTML='';
-    orgMenuOpen=null; orgDetailOpen=null;
-    orgInfoOpen=null; orgInfoMenuOpen=null;
-    orgTasksOpen=null; orgTasksMenuOpen=null;
-  }
-  function orgShowModal(html){
-    document.getElementById('org-modal').innerHTML=html;
-    document.getElementById('org-modal').style.display='block';
-    document.getElementById('org-modal-bg').style.display='block';
-  }
-  function orgToggleDetail(id){
-    orgCloseModal();
-    var node=orgData.find(n=>n.id===id);
-    if(!node) return;
-    var telDisplay = (node.tels&&node.tels.length)?node.tels.join(', '):(node.tel||'—');
-    var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
-      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
-        <div><span class="flbl">F.I.O</span><br><span style="color:var(--white-80)">${esc(node.fio||'—')}</span></div>
-        <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(telDisplay)}</span></div>
-        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(tgDisplay)}</span></div>
-        <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>
-        <div><span class="flbl">Ishga kirgan sana</span><br><span style="color:var(--white-80)">${esc(node.startdate||'—')}</span></div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
-        <button class="add-item-btn" style="margin-top:0" onclick="orgResetChecklistTmp();orgShowChecklistModal('${id}')">Cheklist</button>
-        ${orgIsAdmin()?`<button class="add-item-btn" style="margin-top:0" onclick="orgShowEditModal('${id}')">Tahrirlash</button>`:''}
-        <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
-      </div>`;
-    orgShowModal(html);
-  }
-  function orgShowTasksModal(id){
-    var node=orgData.find(n=>n.id===id);
-    var tasksHtml=(node.tasks&&node.tasks.length)?node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
-      <span style="flex:1;color:var(--white-80)">${i+1}. ${esc(t)}</span>
-      ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelTaskModal('${id}',${i})">x</button>`:''}
-    </div>`).join(''):'<div style="color:var(--white-50);padding:12px 0">Vazifalar yo\'q</div>';
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)} — Vazifalar</div>
-      <div style="margin-bottom:12px">${tasksHtml}</div>
-      ${orgIsAdmin()?`<div class="frow"><input class="fi" id="org-task-inp" placeholder="Yangi vazifa..."></div>
-      <div class="fbtns"><button class="fsave" onclick="orgAddTaskModal('${id}')">Qo'shish</button></div>`:''}
-      <button class="fcancel" style="margin-top:8px" onclick="orgCloseModal()">Yopish</button>`;
-    orgShowModal(html);
-  }
-  function orgAddTaskModal(id){
-    var inp=document.getElementById('org-task-inp');
-    var val=inp.value.trim(); if(!val){notify('Matn kiriting!');return;}
-    var node=orgData.find(n=>n.id===id);
-    if(!node.tasks)node.tasks=[];
-    node.tasks.push(val);
-    orgSave(); orgShowTasksModal(id);
-  }
-  function orgDelTaskModal(id,idx){
-    var node=orgData.find(n=>n.id===id);
-    node.tasks.splice(idx,1);
-    orgSave(); orgShowTasksModal(id);
-  }
-  var orgChecklistTmpDays=[], orgChecklistTmpText='', orgChecklistTmpStart='09:00', orgChecklistTmpEnd='10:00';
-  var ORG_CL_DAY_LABELS=[['mon','Dush'],['tue','Sesh'],['wed','Chor'],['thu','Pay'],['fri','Jum'],['sat','Shan'],['sun','Yak']];
-  function orgResetChecklistTmp(){
-    orgChecklistTmpDays=[]; orgChecklistTmpText=''; orgChecklistTmpStart='09:00'; orgChecklistTmpEnd='10:00';
-  }
-  function orgShowChecklistModal(id){
-    var node=orgData.find(n=>n.id===id);
-    var list=node.checklist||[];
-    var itemsHtml = list.length ? list.map((c,i)=>{
-      var daysStr=(c.days||[]).map(d=>{var f=ORG_CL_DAY_LABELS.find(x=>x[0]===d);return f?f[1]:d;}).join(', ');
-      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
-        <div style="flex:1">
-          <div style="color:var(--white-80)">${i+1}. ${esc(c.text)}</div>
-          <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.start||'')}-${esc(c.end||'')} • ${esc(daysStr)}</div>
-        </div>
-        ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelChecklistModal('${id}',${i})">x</button>`:''}
-      </div>`;
-    }).join('') : '<div style="color:var(--white-50);padding:12px 0">Cheklist bo&#39;sh</div>';
+    # Schedule
+    secs = seconds_until_custom_checklist(cl)
+    context.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl_id}", data={"cl_id": cl_id})
 
-    var daysHtml = ORG_CL_DAY_LABELS.map(([key,label])=>{
-      var active=orgChecklistTmpDays.includes(key);
-      return `<button onclick="orgToggleChecklistDay('${id}','${key}')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;background:${active?'var(--lime)':'var(--white-06)'};color:${active?'var(--green-dark)':'var(--white-50)'}">${label}</button>`;
-    }).join('');
+    msgs = s.get("messages", [])
+    for mid in msgs:
+        try:
+            await context.bot.delete_message(chat_id=user_id, message_id=mid)
+        except:
+            pass
 
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)} — Cheklist</div>
-      <div style="margin-bottom:12px">${itemsHtml}</div>
-      ${orgIsAdmin()?`
-      <div class="frow"><label class="flbl">Vazifa matni</label><input class="fi" id="org-cl-text" placeholder="Vazifa matni..." value="${esc(orgChecklistTmpText)}"></div>
-      <div class="frow">
-        <label class="flbl">Vaqt oralig'i</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-          <input class="fi" type="time" id="org-cl-start" value="${esc(orgChecklistTmpStart)}" style="margin-top:0">
-          <span style="color:var(--white-50)">—</span>
-          <input class="fi" type="time" id="org-cl-end" value="${esc(orgChecklistTmpEnd)}" style="margin-top:0">
-        </div>
-      </div>
-      <div class="frow">
-        <label class="flbl">Kunlar</label>
-        <div style="display:flex;gap:4px;margin-top:5px">${daysHtml}</div>
-      </div>
-      <div class="fbtns"><button class="fsave" onclick="orgAddChecklistModal('${id}')">Qo'shish</button></div>
-      `:''}
-      <button class="fcancel" style="margin-top:8px" onclick="orgCloseModal();orgResetChecklistTmp()">Yopish</button>`;
-    orgShowModal(html);
-  }
-  function orgToggleChecklistDay(id, key){
-    var textEl=document.getElementById('org-cl-text');
-    var startEl=document.getElementById('org-cl-start');
-    var endEl=document.getElementById('org-cl-end');
-    if(textEl) orgChecklistTmpText=textEl.value;
-    if(startEl) orgChecklistTmpStart=startEl.value;
-    if(endEl) orgChecklistTmpEnd=endEl.value;
-    var idx=orgChecklistTmpDays.indexOf(key);
-    if(idx>-1) orgChecklistTmpDays.splice(idx,1); else orgChecklistTmpDays.push(key);
-    orgShowChecklistModal(id);
-  }
-  function orgAddChecklistModal(id){
-    var text=document.getElementById('org-cl-text').value.trim();
-    var start=document.getElementById('org-cl-start').value;
-    var end=document.getElementById('org-cl-end').value;
-    if(!text){notify('Matn kiriting!');return;}
-    if(!orgChecklistTmpDays.length){notify('Kamida bitta kun tanlang!');return;}
-    var node=orgData.find(n=>n.id===id);
-    if(!node.checklist)node.checklist=[];
-    node.checklist.push({text,start,end,days:orgChecklistTmpDays.slice()});
-    orgSave(); notify('Saqlandi ✓');
-    orgResetChecklistTmp();
-    orgShowChecklistModal(id);
-  }
-  function orgDelChecklistModal(id, idx){
-    askConfirm("Cheklist punktini o'chirasizmi?",()=>{
-      var node=orgData.find(n=>n.id===id);
-      node.checklist.splice(idx,1);
-      orgSave(); orgShowChecklistModal(id);
-    });
-  }
-  function orgOpenMenu(id){
-    var node=orgData.find(n=>n.id===id);
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;gap:8px">
-          <button class="abtn" style="flex:1;padding:10px" onclick="orgShowEditModal('${id}')">✏ Tahrirlash</button>
-          <button class="abtn abtn-red" style="flex:1;padding:10px" onclick="orgDelModal('${id}')">✕ O'chirish</button>
-        </div>
-        <button class="add-item-btn" style="margin-top:0" onclick="orgAddChildModal('${id}')">⬇ Pastiga qo'shish</button>
-        <div style="display:flex;gap:8px">
-          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSiblingModal('${id}','left')">⬅ Chapga</button>
-          <button class="add-item-btn" style="flex:1;margin-top:0" onclick="orgAddSiblingModal('${id}','right')">O'ngga ➡</button>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="orgSetColorModal('${id}','#7f1d1d')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#7f1d1d;color:white;cursor:pointer;font-weight:600">Qizil</button>
-          <button onclick="orgSetColorModal('${id}','#713f12')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#713f12;color:white;cursor:pointer;font-weight:600">Sariq</button>
-          <button onclick="orgSetColorModal('${id}','#1e3a5f')" style="flex:1;padding:10px;border:none;border-radius:10px;background:#1e3a5f;color:white;cursor:pointer;font-weight:600">Ko'k</button>
-          <button onclick="orgSetColorModal('${id}','#ffffff')" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;background:#ffffff;color:#16573a;cursor:pointer;font-weight:600">Oq</button>
-          ${node.color?`<button class="abtn" onclick="orgSetColorModal('${id}','')">✕</button>`:''}
-        </div>
-        <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
-      </div>`;
-    orgShowModal(html);
-  }
-  function orgTelHtml(tels){
-    var arr = (tels&&tels.length)?tels:[''];
-    return arr.map(function(v,i){
-      return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
-        +'<input class="fi" id="oem-tel-'+i+'" value="'+esc(v||'+998')+'" style="margin-top:0;flex:1">'
-        +(i>0?'<button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>':'')
-        +'</div>';
-    }).join('');
-  }
-  function orgTgHtml(tgs){
-    var arr = (tgs&&tgs.length)?tgs:[''];
-    return arr.map(function(v,i){
-      return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
-        +'<input class="fi" id="oem-tg-'+i+'" value="'+esc(v||'')+'" placeholder="@username" style="margin-top:0;flex:1">'
-        +(i>0?'<button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>':'')
-        +'</div>';
-    }).join('');
-  }
-  function orgAddTel(id){
-    var wrap=document.getElementById('oem-tels-'+id);
-    var count=wrap.querySelectorAll('input').length;
-    var div=document.createElement('div');
-    div.style.cssText='display:flex;gap:6px;margin-top:4px';
-    div.innerHTML='<input class="fi" id="oem-tel-'+count+'" value="+998" style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>';
-    wrap.appendChild(div);
-  }
-  function orgAddTg(id){
-    var wrap=document.getElementById('oem-tgs-'+id);
-    var count=wrap.querySelectorAll('input').length;
-    var div=document.createElement('div');
-    div.style.cssText='display:flex;gap:6px;margin-top:4px';
-    div.innerHTML='<input class="fi" id="oem-tg-'+count+'" placeholder="@username" style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">✕</button>';
-    wrap.appendChild(div);
-  }
-  function orgShowEditModal(id){
-    var node=orgData.find(n=>n.id===id);
-    var days=node.workdays||[];
-    var tels = node.tels||(node.tel?[node.tel]:['+998']);
-    var tgs = node.tgs||(node.tg?[node.tg]:[]);
-    var dayLabels=[['mon','Dush'],['tue','Sesh'],['wed','Chor'],['thu','Pay'],['fri','Jum'],['sat','Shan'],['sun','Yak']];
-    var daysHtml=dayLabels.map(([key,label])=>{
-      var active=days.includes(key);
-      return `<button onclick="orgToggleDay('${id}','${key}')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;background:${active?'var(--lime)':'var(--white-06)'};color:${active?'var(--green-dark)':'var(--white-50)'}">${label}</button>`;
-    }).join('');
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Tahrirlash</div>
-      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oem-name" value="${esc(node.name)}"></div>
-      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oem-fio" value="${esc(node.fio||'')}"></div>
-      <div class="frow"><label class="flbl">Tel raqam</label>
-        <div id="oem-tels-${id}">${orgTelHtml(tels)}</div>
-        <button class="abtn" style="margin-top:6px" onclick="orgAddTel('${id}')">+ Tel qo'shish</button>
-      </div>
-      <div class="frow"><label class="flbl">Telegram</label>
-        <div id="oem-tgs-${id}">${orgTgHtml(tgs)}</div>
-        <button class="abtn" style="margin-top:6px" onclick="orgAddTg('${id}')">+ Telegram qo'shish</button>
-      </div>
-      <div class="frow">
-        <label class="flbl">Ish kunlari</label>
-        <div id="oem-days-${id}" style="display:flex;gap:4px;margin-top:5px">${daysHtml}</div>
-      </div>
-      <div class="frow">
-        <label class="flbl">Ish vaqti</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-          <input class="fi" type="time" id="oem-start" value="${esc(node.workstart||'09:00')}" style="margin-top:0">
-          <span style="color:var(--white-50)">—</span>
-          <input class="fi" type="time" id="oem-end" value="${esc(node.workend||'18:00')}" style="margin-top:0">
-        </div>
-      </div>
-      <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="oem-startdate" value="${esc(node.startdate||'')}"></div>
-      <div class="fbtns">
-        <button class="fsave" onclick="orgSaveEditModal('${id}')">Saqlash</button>
-        <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
-      </div>`;
-    orgShowModal(html);
-    if(!node._tmpDays) node._tmpDays = days.slice();
-  }
-  function orgToggleDay(id, key){
-    var node=orgData.find(n=>n.id===id);
-    if(!node._tmpDays) node._tmpDays = (node.workdays||[]).slice();
-    var idx=node._tmpDays.indexOf(key);
-    if(idx>-1) node._tmpDays.splice(idx,1); else node._tmpDays.push(key);
-    node.workdays = node._tmpDays;
-    orgShowEditModal(id);
-  }
-  var ORG_DAY_LABELS={mon:'Dush',tue:'Sesh',wed:'Chor',thu:'Pay',fri:'Jum',sat:'Shan',sun:'Yak'};
-  var ORG_DAY_ORDER=['mon','tue','wed','thu','fri','sat','sun'];
-  function orgBuildWorkhoursText(node){
-    var days=(node.workdays||[]).slice().sort((a,b)=>ORG_DAY_ORDER.indexOf(a)-ORG_DAY_ORDER.indexOf(b));
-    if(!days.length) return '';
-    var dayStr=days.map(d=>ORG_DAY_LABELS[d]).join(', ');
-    var start=node.workstart||'', end=node.workend||'';
-    var timeStr = (start&&end) ? `${start}-${end}` : '';
-    return timeStr ? `${dayStr}, ${timeStr}` : dayStr;
-  }
-  function orgSaveEditModal(id){
-    var node=orgData.find(n=>n.id===id);
-    var name=document.getElementById('oem-name').value.trim();
-    if(!name){notify('Nom kiriting!');return;}
-    node.name=name;
-    node.fio=document.getElementById('oem-fio').value.trim();
-    // Tel raqamlar
-    var telWrap=document.getElementById('oem-tels-'+id);
-    var tels=telWrap?Array.from(telWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
-    node.tels=tels;
-    node.tel=tels[0]||'';
-    // Telegram
-    var tgWrap=document.getElementById('oem-tgs-'+id);
-    var tgs=tgWrap?Array.from(tgWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
-    node.tgs=tgs;
-    node.tg=tgs[0]||'';
-    node.workdays = node._tmpDays || node.workdays || [];
-    node.workstart = document.getElementById('oem-start').value;
-    node.workend = document.getElementById('oem-end').value;
-    node.workhours = orgBuildWorkhoursText(node);
-    delete node._tmpDays;
-    node.startdate=document.getElementById('oem-startdate').value.trim();
-    orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
-  }
-  function orgAddChildModal(id){
-    orgCloseModal();
-    var cont=document.getElementById('org-form-'+id);
-    if(!cont){renderOrg();setTimeout(()=>orgAddChildModal(id),100);return;}
-    cont.innerHTML=`<div class="form-box fade" style="width:240px;margin:8px auto">
-      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oa-name-${id}" placeholder="Lavozim nomi..."></div>
-      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oa-fio-${id}" placeholder="F.I.O..."></div>
-      <div class="fbtns"><button class="fsave" onclick="orgSaveAdd('${id}')">Saqlash</button><button class="fcancel" onclick="renderOrg()">Bekor</button></div>
-    </div>`;
-  }
-  function orgAddSiblingModal(id,dir){
-    orgCloseModal();
-    var ref=orgData.find(n=>n.id===id);
-    var pid=ref.parentId||'null';
-    var cont=document.getElementById('org-form-'+id);
-    if(!cont){renderOrg();setTimeout(()=>orgAddSiblingModal(id,dir),100);return;}
-    cont.innerHTML=`<div class="form-box fade" style="width:240px;margin:8px auto">
-      <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="os-name-${id}" placeholder="Lavozim nomi..."></div>
-      <div class="frow"><label class="flbl">FIO</label><input class="fi" id="os-fio-${id}" placeholder="F.I.O..."></div>
-      <div class="fbtns"><button class="fsave" onclick="orgSaveSibling('${id}','${dir}')">Saqlash</button><button class="fcancel" onclick="renderOrg()">Bekor</button></div>
-    </div>`;
-  }
-  function orgSaveAdd(parentId){
-    var name=document.getElementById('oa-name-'+parentId).value.trim();
-    var fio=document.getElementById('oa-fio-'+parentId).value.trim();
-    if(!name){notify('Nom kiriting!');return;}
-    orgData.push({id:'o'+Date.now(),name,fio,parentId:parentId==='null'?null:parentId});
-    orgSave();notify('Saqlandi ✓');renderOrg();
-  }
-  function orgSaveSibling(refId,dir){
-    var name=document.getElementById('os-name-'+refId).value.trim();
-    var fio=document.getElementById('os-fio-'+refId).value.trim();
-    if(!name){notify('Nom kiriting!');return;}
-    var ref=orgData.find(n=>n.id===refId);
-    var newNode={id:'o'+Date.now(),name,fio,parentId:ref.parentId};
-    var idx=orgData.indexOf(ref);
-    orgData.splice(dir==='left'?idx:idx+1,0,newNode);
-    orgSave();notify('Saqlandi ✓');renderOrg();
-  }
-  function orgDelModal(id){
-    orgCloseModal();
-    askConfirm("Lavozimni o'chirasizmi?",()=>{
-      function collect(pid){var ids=[pid];orgData.filter(n=>n.parentId===pid).forEach(c=>{ids=ids.concat(collect(c.id));});return ids;}
-      orgData=orgData.filter(n=>!collect(id).includes(n.id));
-      orgSave();renderOrg();notify("O'chirildi ✓");
-    });
-  }
-  function orgSetColorModal(id,color){
-    var node=orgData.find(n=>n.id===id);
-    if(color)node.color=color;else delete node.color;
-    orgSave();orgCloseModal();renderOrg();
-  }
-  function orgToggleMenu(id){ orgOpenMenu(id); }
-  function orgSetColor(id,color){ orgSetColorModal(id,color); }
+    name = AGENTS_DATA.get(cl["username"], {}).get("name", cl["username"])
+    sent = await context.bot.send_message(chat_id=user_id, text=f"✅ Checklist yaratildi!\n👤 {name}\n🕐 {cl['hour']:02d}:00")
+    schedule_delete(context.bot, user_id, [sent.message_id], delay=30)
 
-  function orgRenderChildren(parentId, container){
-    var children = orgData.filter(n=>n.parentId===parentId);
-    if(!children.length){ container.innerHTML = ''; return; }
-    var gap = 24;
-    var count = children.length;
-    var h = `<div style="width:1px;height:20px;background:var(--white-20);margin:0 auto"></div>`;
-    h += `<div style="display:flex;gap:${gap}px;justify-content:center;align-items:flex-start;position:relative">`;
-    if(count > 1){
-      h += `<div style="position:absolute;top:0;left:0;right:0;height:1px;background:rgba(255,255,255,0.2)"></div>`;
-    }
-    children.forEach(c=>{
-      h += `<div style="display:flex;flex-direction:column;align-items:center">
-        <div style="width:1px;height:20px;background:rgba(255,255,255,0.2)"></div>
-        ${orgCard(c)}
-      </div>`;
-    });
-    h += `</div>`;
-    container.innerHTML = h;
-  }
+async def custom_checklist_text_handler(user_id, text, context):
+    """Custom checklist task kiritish"""
+    if user_id not in custom_checklist_state:
+        return False
+    s = custom_checklist_state[user_id]
+    if s.get("step") != "tasks":
+        return False
 
-  function renderOrg(){
-    var root = orgData.find(n=>!n.parentId);
-    var wrap = document.getElementById('org-tree');
-    if(!root){ wrap.innerHTML = '<div style="text-align:center;padding:32px;color:var(--white-50)">Ma\'lumot yo\'q</div>'; return; }
-    wrap.innerHTML = orgCard(root);
-    function go(node){
-      var formCont = document.getElementById('org-form-'+node.id);
-      if(formCont) formCont.innerHTML='';
-      var cont = document.getElementById('org-children-'+node.id);
-      orgRenderChildren(node.id, cont);
-      orgData.filter(n=>n.parentId===node.id).forEach(go);
-    }
-    go(root);
-  }
+    s["tasks"].append(text)
+    task_num = len(s["tasks"]) + 1
+    keyboard = [[InlineKeyboardButton("✅ Tayyor", callback_data="ccl_new_task_done")]]
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text=f"✏️ {task_num}-vazifani kiriting:\n(Tugatish uchun \"Tayyor\" bosing)",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    s["messages"].append(sent.message_id)
+    return True
 
-  function orgEdit(id){ orgShowEditModal(id); }
-  function orgAddChild(id){ orgAddChildModal(id); }
-  function orgAddSibling(id,dir){ orgAddSiblingModal(id,dir); }
-  function orgDel(id){ orgDelModal(id); }
+async def ccl_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Custom checklist Bajardim va Tekshirdim tugmalari"""
+    query = update.callback_query
+    data = query.data
+    await query.answer()
 
-  setTimeout(function(){
-    renderOrg();
-    setTimeout(function(){
-      var pan = document.getElementById('org-pan-wrap');
-      if(pan) pan.scrollLeft = (pan.scrollWidth - pan.clientWidth) / 2;
-    }, 100);
-  }, 0);
-  </script>
-</div>
+    # BAJARDIM
+    if data.startswith("ccl_") and not data.startswith("ccl_verify_") and not data.startswith("ccl_new_"):
+        parts = data[4:].split("_")
+        cl_id = int(parts[0])
+        username = parts[1]
+        task_index = int(parts[2])
+        presser = query.from_user.username
 
-<div class="page" id="p-entry2">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Bo'limlar</span>
-    </div>
-  </div>
-  <div class="cards-grid" id="bolim-cards-grid"></div>
-</div>
+        if presser != username:
+            return
 
-<div class="page" id="p-home">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry2')">← Orqaga</button>
-      <span class="page-title" id="p-home-title">Support bo'limi</span>
-    </div>
-  </div>
-  <div class="home-header">
-    <div class="home-title">Kim nima ishni<br><span>qanday qiladi?</span></div>
-    <div class="home-sub">Bo'limni tanlang</div>
-  </div>
-  <div id="sections-grid" class="cards-grid"></div>
-  <div id="section-form"></div>
-</div>
-<div class="page" id="p-section">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-section"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-home')">← Orqaga</button><span class="page-title" id="section-title"></span></div></div>
-  <div class="search-wrap"><input class="search-inp" id="search-cats" placeholder="🔍 Qidirish..." oninput="renderCats()"></div>
-  <div id="cats-list" class="section-list"></div><div id="cat-form"></div>
-</div>
-<div class="page" id="p-cat">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-cat"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-section')">← Orqaga</button><span class="page-title" id="cat-title"></span></div></div>
-  <div class="search-wrap"><input class="search-inp" id="search-flows" placeholder="🔍 Qidirish..." oninput="renderFlows()"></div>
-  <div id="flows-list" class="section-list"></div><div id="flow-form"></div>
-</div>
-<div class="page" id="p-flow">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-flow"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-cat')">← Orqaga</button><span class="page-title" id="flow-title"></span><div id="flow-admin-btns" style="display:none;margin-left:auto;gap:4px;flex-shrink:0"><button class="abtn" onclick="editFlowName()">✏</button><button class="abtn abtn-red" onclick="deleteFlow()">✕</button></div></div></div>
-  <div id="flow-name-form" style="display:none;margin-bottom:14px"></div>
-  <div class="tree-wrap" id="tree-wrap"></div><div id="root-form"></div>
-</div>
-<div class="page" id="p-acad-cats">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-cats"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-home')">← Orqaga</button><span class="page-title" id="acad-sec-title"></span></div></div>
-  <div id="acad-cats-list" class="section-list"></div><div id="acad-cats-form"></div>
-</div>
-<div class="page" id="p-acad-items">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-items"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-acad-cats')">← Orqaga</button><span class="page-title" id="acad-cat-title"></span></div></div>
-  <div id="acad-cat-intro-box"></div><div id="acad-items-list" class="section-list"></div><div id="acad-items-form"></div>
-</div>
-<div class="page" id="p-acad-detail">
-  <div class="page-topbar"><div class="breadcrumb" id="bc-acad-detail"></div><div class="page-header"><button class="back-btn" onclick="goBack('p-acad-items')">← Orqaga</button><span class="page-title" id="acad-item-title"></span></div></div>
-  <div id="acad-detail-body"></div>
-</div>
+        cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+        if not cl:
+            return
 
-<div class="img-modal" id="img-modal" onclick="closeImg()"><img id="img-src" src="" alt=""></div>
-<div class="notif" id="notif"></div>
+        custom_checklist_confirmations.setdefault(cl_id, {}).setdefault(username, {})
+        user_conf = custom_checklist_confirmations[cl_id][username]
+        if user_conf.get(task_index, False):
+            return
+        user_conf[task_index] = True
 
-<div class="confirm-bg" id="confirm-modal"><div class="confirm-box"><div class="confirm-msg" id="confirm-msg">O'chirasizmi?</div><div class="confirm-btns"><button class="confirm-yes" id="confirm-yes">O'chirish</button><button class="confirm-no" id="confirm-no" onclick="closeConfirm()">Bekor</button></div></div></div>
+        verified_set = custom_checklist_verified.get(cl_id, set())
+        tasks = cl["tasks"]
 
-<div id="org-modal-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150" onclick="orgCloseModal()"></div>
-<div id="org-modal" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--green-card);border-radius:20px 20px 0 0;padding:20px;z-index:151;max-height:80vh;overflow-y:auto"></div>
-</div>
+        # Keyboard yangilash
+        keyboard = []
+        for i, t in enumerate(tasks):
+            done = user_conf.get(i, False)
+            verified = i in verified_set
+            keyboard.append([
+                InlineKeyboardButton(f"{'✅' if done else '⬜'} {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+                InlineKeyboardButton(f"{'✅' if verified else '⬜'} Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+            ])
+        try:
+            await query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+        except:
+            pass
 
-<script>
-if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+        # Barcha vazifalar bajariladimi?
+        all_done = all(user_conf.get(i, False) for i in range(len(tasks)))
+        if all_done:
+            name = AGENTS_DATA.get(username, {}).get("name", username)
+            vs = custom_checklist_verify_state.get(cl_id, {})
+            old_vmid = vs.get("verify_msg_id")
+            if old_vmid:
+                try:
+                    await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_vmid)
+                except:
+                    pass
+            sent_v = await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"✅ {name} barcha vazifalarni bajardi!\n@{ADMIN_USERNAME} checklistdan tekshiring"
+            )
+            custom_checklist_verify_state[cl_id] = {"verify_msg_id": sent_v.message_id}
+        return
 
-var CURRENT_APP = null;
-var USER_ID = 'guest';
-var CURRENT_USER_TG = '';
-var CURRENT_USER_ORG_ID = '';
-var USER_PERMS = null;
-var SIRLY_USERS = { 'umid': 'umid2025' };
-var ADMIN_LOGIN = 'admin';
-var ADMIN_PAROL = 'admin2025';
-var CURRENT_ADMIN_TAB = 'sirly';
-function hasPerm(key){
-  if(isAdmin) return true;
-  if(!USER_PERMS) return true;
-  return USER_PERMS[key]!==false;
-}
-function hasSectionPerm(secId){
-  if(isAdmin) return true;
-  if(curBolim!==0) return true;
-  if(!USER_PERMS || !USER_PERMS.sections) return true;
-  return USER_PERMS.sections.includes(secId);
-}
-function applyEntryCardPerms(){
-  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar','card-sekretar':'sekretar','card-chat':'chat'};
-  Object.keys(map).forEach(function(cid){
-    var el=document.getElementById(cid);
-    if(el) el.style.display = hasPerm(map[cid]) ? '' : 'none';
-  });
-}
+    # TEKSHIRDIM
+    if data.startswith("ccl_verify_") and not data.startswith("ccl_verify_"):
+        pass
 
-var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
-var CHAT_ID = -1003914304171;
-var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
-var SB_H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
+    if data.startswith("ccl_verify_"):
+        if query.from_user.username != ADMIN_USERNAME:
+            return
+        parts = data[11:].split("_")
+        cl_id = int(parts[0])
+        task_index = int(parts[1])
 
-async function umaApiLoad(uid){
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-    var rows = await r.json();
-    return (rows && rows[0] && rows[0].data) ? rows[0].data : null;
-  }catch(e){ return null; }
-}
-async function umaApiSave(uid, payload){
-  try{
-    var h = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
-    var r = await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {headers:h});
-    var rows = await r.json();
-    if(rows && rows.length){
-      await fetch(SB_URL+'/rest/v1/uma_data?id=eq.'+uid, {method:'PATCH', headers:h, body:JSON.stringify({data:payload})});
-    } else {
-      await fetch(SB_URL+'/rest/v1/uma_data', {method:'POST', headers:h, body:JSON.stringify({id:uid, data:payload})});
-    }
-  }catch(e){ console.error('Uma save error:',e); }
-}
+        cl = next((c for c in custom_checklists if c["id"] == cl_id), None)
+        if not cl:
+            return
 
-function showLogin(app){
-  CURRENT_APP = 'sirly';
-  var ls = document.getElementById('login-screen');
-  ls.className = 'sirly-theme';
-  ls.style.display = 'flex';
-  document.getElementById('login-error').style.display = 'none';
-  document.getElementById('login-input').value = '';
-  document.getElementById('parol-input').value = '';
-  document.getElementById('login-logo').textContent = '📋';
-  document.getElementById('login-app-name').textContent = 'Sirly';
-  document.getElementById('login-sub').textContent = 'Biznes jarayonlar';
-  setTimeout(function(){ document.getElementById('login-input').focus(); }, 200);
-}
-document.getElementById('login-btn').addEventListener('click', doAppLogin);
-document.getElementById('parol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doAppLogin(); });
+        custom_checklist_verified.setdefault(cl_id, set()).add(task_index)
+        verified_set = custom_checklist_verified[cl_id]
+        tasks = cl["tasks"]
+        username = cl["username"]
+        user_conf = custom_checklist_confirmations.get(cl_id, {}).get(username, {})
 
-document.getElementById('admin-logout').addEventListener('click', function(){
-  document.getElementById('admin-screen').style.display = 'none';
-  showLogin('sirly');
-});
+        # Keyboard yangilash
+        keyboard = []
+        for i, t in enumerate(tasks):
+            done = user_conf.get(i, False)
+            verified = i in verified_set
+            keyboard.append([
+                InlineKeyboardButton(f"{'✅' if done else '⬜'} {i+1} — Bajardim", callback_data=f"ccl_{cl_id}_{username}_{i}"),
+                InlineKeyboardButton(f"{'✅' if verified else '⬜'} Tekshirdim", callback_data=f"ccl_verify_{cl_id}_{i}")
+            ])
+        msg_id = custom_checklist_message_ids.get(cl_id)
+        if msg_id:
+            try:
+                await context.bot.edit_message_reply_markup(chat_id=CHAT_ID, message_id=msg_id, reply_markup=InlineKeyboardMarkup(keyboard))
+            except:
+                pass
 
-document.querySelectorAll('.admin-tab').forEach(function(tab){
-  tab.addEventListener('click', function(){
-    CURRENT_ADMIN_TAB = this.getAttribute('data-app');
-    document.querySelectorAll('.admin-tab').forEach(function(t){
-      t.style.border = '2px solid #ccc';
-      t.style.background = 'white';
-      t.style.color = '#555';
-    });
-    this.style.border = '2px solid #558237';
-    this.style.background = '#e8f5e0';
-    this.style.color = '#1e5927';
-    loadAdminList();
-  });
-});
+        # Barcha tekshirildimi?
+        all_verified = all(i in verified_set for i in range(len(tasks)))
+        if all_verified:
+            vs = custom_checklist_verify_state.get(cl_id, {})
+            vmid = vs.get("verify_msg_id")
+            if vmid:
+                async def del_v():
+                    await asyncio.sleep(1)
+                    try:
+                        await context.bot.delete_message(chat_id=CHAT_ID, message_id=vmid)
+                    except:
+                        pass
+                asyncio.create_task(del_v())
+                custom_checklist_verify_state[cl_id]["verify_msg_id"] = None
+        return
 
-async function showAdminPanel(){
-  document.getElementById('admin-screen').style.display = 'block';
-  CURRENT_ADMIN_TAB = 'sirly';
-  loadAdminList();
-  orgLoad().catch(function(){});
-  load().catch(function(){});
-}
-document.getElementById('admin-new-profile-btn').addEventListener('click', adminShowNewProfileForm);
-async function adminShowNewProfileForm(){
-  var formEl = document.getElementById('admin-new-profile-form');
-  if(formEl.innerHTML){ formEl.innerHTML=''; return; }
-  var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
-  if(!emps.length){
-    formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;color:#888;font-size:13px;text-align:center;">Org strukturada FIO to&#39;ldirilgan xodimlar topilmadi</div>';
-    return;
-  }
-  var options = emps.map(e=>'<option value="'+e.id+'">'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
-  var permsHtml = await adminPermsHtmlAsync(null);
-  formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;">'+
-    '<div style="font-size:13px;font-weight:700;color:#1e5927;margin-bottom:10px;">Yangi profil</div>'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
-    '<select id="anp-emp" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+options+'</select>'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Login</label>'+
-    '<input id="anp-login" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;" autocapitalize="none">'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Parol</label>'+
-    '<input id="anp-parol" type="text" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Rol</label>'+
-    '<select id="anp-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
-      '<option value="guest">👁 Guest</option><option value="editor">✏ Editor</option>'+
-    '</select>'+
-    permsHtml+
-    '<div id="anp-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
-    '<button id="anp-save" style="width:100%;background:#558237;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
-  '</div>';
-  document.getElementById('anp-save').addEventListener('click', adminCreateProfile);
-}
-function escAdmin(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function adminPermsHtml(perms, allBolimSections){
-  perms = perms || {};
-  allBolimSections = allBolimSections || [{title: bolimTitles[0], sections: db.sections||[]}];
-  var bolimlarChecked = perms.bolimlar!==false;
-  var secHtml = allBolimSections.map(function(bolim){
-    if(!bolim.sections||!bolim.sections.length) return '';
-    return '<div style="padding:4px 0 2px 8px;font-size:11px;font-weight:700;color:#16573a;margin-top:4px">'+escAdmin(bolim.title)+'</div>'
-      + bolim.sections.map(function(s){
-          var checked = !perms.sections || perms.sections.includes(s.id);
-          return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:3px 0 3px 18px;"><input type="checkbox" class="aperm-sec" value="'+escAdmin(s.id)+'" '+(checked?'checked':'')+'> '+escAdmin(s.title)+'</label>';
-        }).join('');
-  }).join('');
-  function chk(key,label,checked){
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:4px 0;font-weight:600;"><input type="checkbox" id="aperm-'+key+'" '+(checked?'checked':'')+(key==='bolimlar'?' onchange="document.getElementById(\'aperm-sections-wrap\').style.opacity=this.checked?1:.4;document.getElementById(\'aperm-sections-wrap\').style.pointerEvents=this.checked?\'\':\'none\'"':'')+'> '+label+'</label>';
-  }
-  return '<div style="border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:10px;">'+
-    '<div style="font-size:12px;color:#888;margin-bottom:4px;font-weight:700;">Ko&#39;rinadigan bo&#39;limlar</div>'+
-    chk('org','Org struktura', perms.org!==false)+
-    chk('kaiten','Kaiten', perms.kaiten!==false)+
-    chk('hujjatlar','Hujjatlar', perms.hujjatlar!==false)+
-    chk('sekretar','Sekretar', perms.sekretar!==false)+
-    chk('chat','Chat', perms.chat!==false)+
-    chk('bolimlar','Bo&#39;limlar', bolimlarChecked)+
-    '<div id="aperm-sections-wrap" style="'+(bolimlarChecked?'':'opacity:.4;pointer-events:none')+'">'+secHtml+'</div>'+
-  '</div>';
-}
-async function adminPermsHtmlAsync(perms){
-  // Load all 3 bolim sections from Supabase in parallel
-  var allBolimSections = [];
-  await Promise.all(BOLIM_IDS.map(async function(key, i){
-    try{
-      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key, {headers:SB_H});
-      var rows = await r.json();
-      var sections = (rows&&rows.length&&rows[0].data&&rows[0].data.sections) ? rows[0].data.sections : [];
-      allBolimSections[i] = {title: bolimTitles[i]||('Bo\'lim '+(i+1)), sections: sections};
-    }catch(e){ allBolimSections[i] = {title: bolimTitles[i]||('Bo\'lim '+(i+1)), sections:[]}; }
-  }));
-  return adminPermsHtml(perms, allBolimSections);
-}
-function adminReadPerms(){
-  var sections = [].slice.call(document.querySelectorAll('.aperm-sec:checked')).map(function(el){return el.value;});
-  return {
-    org: document.getElementById('aperm-org').checked,
-    kaiten: document.getElementById('aperm-kaiten').checked,
-    hujjatlar: document.getElementById('aperm-hujjatlar').checked,
-    sekretar: document.getElementById('aperm-sekretar').checked,
-    chat: document.getElementById('aperm-chat').checked,
-    bolimlar: document.getElementById('aperm-bolimlar').checked,
-    sections: sections
-  };
-}
-async function adminCreateProfile(){
-  var empId = document.getElementById('anp-emp').value;
-  var login = document.getElementById('anp-login').value.trim().toLowerCase();
-  var parol = document.getElementById('anp-parol').value.trim();
-  var role = document.getElementById('anp-role').value;
-  var errEl = document.getElementById('anp-error');
-  errEl.style.display='none';
-  if(!login || !parol){
-    errEl.textContent = "Login va parolni to'ldiring";
-    errEl.style.display='block';
-    return;
-  }
-  if(parol.length < 4){
-    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
-    errEl.style.display='block';
-    return;
-  }
-  var node = orgData.find(n=>n.id===empId);
-  if(!node){
-    errEl.textContent = "Xodim topilmadi";
-    errEl.style.display='block';
-    return;
-  }
-  document.getElementById('anp-save').textContent = 'Saqlanmoqda...';
-  document.getElementById('anp-save').disabled = true;
-  try{
-    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&login=eq.'+login, {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    var existing = await check.json();
-    if(existing && existing.length){
-      errEl.textContent = "Bu login allaqachon band";
-      errEl.style.display='block';
-      document.getElementById('anp-save').textContent = 'Saqlash';
-      document.getElementById('anp-save').disabled = false;
-      return;
-    }
-    var id = 'app_' + Date.now();
-    var tg = (node.tg||'').replace(/^@/,'');
-    var resp = await fetch(SB_URL+'/rest/v1/applications', {
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({id:id, app:CURRENT_ADMIN_TAB, login:login, parol:parol, ism:node.fio, tg:tg, orgNodeId:node.id, role:role, status:'approved', permissions:adminReadPerms()})
-    });
-    if(!resp.ok){
-      var errBody = await resp.text();
-      errEl.textContent = 'Xatolik ('+resp.status+'): '+errBody;
-      errEl.style.display='block';
-      document.getElementById('anp-save').textContent = 'Saqlash';
-      document.getElementById('anp-save').disabled = false;
-      return;
-    }
-    document.getElementById('admin-new-profile-form').innerHTML='';
-    loadAdminList();
-    // Botga xabar yuborish
-    var msgText = '👤 Yangi profil yaratildi\nIsm: '+(node.fio||'—')+'\nLogin: '+login+'\nParol: '+parol;
-    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'prof'+Date.now(),text:msgText,status:'pending'})}).catch(function(){});
-  }catch(e){
-    errEl.textContent = 'Xatolik: '+e.message;
-    errEl.style.display='block';
-    document.getElementById('anp-save').textContent = 'Saqlash';
-    document.getElementById('anp-save').disabled = false;
-  }
-}
+async def checklist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username != ADMIN_USERNAME:
+        return
+    await send_checklist_now(update, context)
 
-async function adminShowEditProfileForm(u){
-  document.getElementById('admin-new-profile-form').innerHTML='';
-  var formEl = document.getElementById('admin-edit-profile-form');
-  if(!formEl){
-    formEl = document.createElement('div');
-    formEl.id = 'admin-edit-profile-form';
-    document.getElementById('admin-new-profile-form').parentNode.insertBefore(formEl, document.getElementById('admin-list'));
-  }
-  if(formEl.innerHTML){ formEl.innerHTML=''; return; }
-  var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
-  var options = emps.map(e=>'<option value="'+e.id+'"'+(e.id===u.orgNodeId?' selected':'')+'>'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
-  var permsHtml = await adminPermsHtmlAsync(u.permissions);
-  formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;border:2px solid #2563a8;">'+
-    '<div style="font-size:13px;font-weight:700;color:#2563a8;margin-bottom:10px;">Profilni tahrirlash</div>'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
-    '<select id="aep-emp" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;"><option value="">— bog&#39;lanmagan —</option>'+options+'</select>'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Login</label>'+
-    '<input id="aep-login" value="'+escAdmin(u.login)+'" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;" autocapitalize="none">'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Parol (bo&#39;sh qoldirsangiz o&#39;zgarmaydi)</label>'+
-    '<input id="aep-parol" type="text" placeholder="••••••" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:13px;">'+
-    '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Rol</label>'+
-    '<select id="aep-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
-      '<option value="guest"'+((u.role||'guest')==='guest'?' selected':'')+'>👁 Guest</option>'+
-      '<option value="editor"'+(u.role==='editor'?' selected':'')+'>✏ Editor</option>'+
-    '</select>'+
-    permsHtml+
-    '<div id="aep-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
-    '<div style="display:flex;gap:8px;">'+
-    '<button id="aep-save" style="flex:1;background:#2563a8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
-    '<button id="aep-cancel" style="flex:1;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Bekor</button>'+
-    '</div>'+
-  '</div>';
-  document.getElementById('aep-cancel').addEventListener('click', function(){ formEl.innerHTML=''; });
-  document.getElementById('aep-save').addEventListener('click', function(){ adminSaveEditProfile(u.id); });
-  formEl.scrollIntoView({behavior:'smooth', block:'center'});
-}
-async function adminSaveEditProfile(id){
-  var empId = document.getElementById('aep-emp').value;
-  var login = document.getElementById('aep-login').value.trim().toLowerCase();
-  var parol = document.getElementById('aep-parol').value.trim();
-  var role = document.getElementById('aep-role').value;
-  var errEl = document.getElementById('aep-error');
-  errEl.style.display='none';
-  if(!login){
-    errEl.textContent = "Loginni to'ldiring";
-    errEl.style.display='block';
-    return;
-  }
-  if(parol && parol.length < 4){
-    errEl.textContent = "Parol kamida 4 ta belgi bo'lsin";
-    errEl.style.display='block';
-    return;
-  }
-  document.getElementById('aep-save').textContent = 'Saqlanmoqda...';
-  document.getElementById('aep-save').disabled = true;
-  try{
-    var check = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&login=eq.'+login, {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    var existing = await check.json();
-    if(existing && existing.length && existing.some(function(r){return r.id!==id;})){
-      errEl.textContent = "Bu login allaqachon band";
-      errEl.style.display='block';
-      document.getElementById('aep-save').textContent = 'Saqlash';
-      document.getElementById('aep-save').disabled = false;
-      return;
-    }
-    var patch = {login:login, role:role, permissions:adminReadPerms()};
-    if(parol) patch.parol = parol;
-    if(empId){
-      var node = orgData.find(n=>n.id===empId);
-      if(node){
-        patch.orgNodeId = node.id;
-        patch.ism = node.fio;
-        patch.tg = (node.tg||'').replace(/^@/,'');
-      }
-    } else {
-      patch.orgNodeId = null;
-    }
-    var patchResp = await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
-      method:'PATCH',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify(patch)
-    });
-    if(!patchResp.ok){
-      var errBody2 = await patchResp.text();
-      errEl.textContent = 'Xatolik ('+patchResp.status+'): '+errBody2;
-      errEl.style.display='block';
-      document.getElementById('aep-save').textContent = 'Saqlash';
-      document.getElementById('aep-save').disabled = false;
-      return;
-    }
-    document.getElementById('admin-edit-profile-form').innerHTML='';
-    loadAdminList();
-  }catch(e){
-    errEl.textContent = 'Xatolik: '+e.message;
-    errEl.style.display='block';
-    document.getElementById('aep-save').textContent = 'Saqlash';
-    document.getElementById('aep-save').disabled = false;
-  }
-}
+async def send_checklist_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    time_key = "10:15"
+    active = CHECKLIST_AGENTS
 
-async function loadAdminList(){
-  var listEl = document.getElementById('admin-list');
-  listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#888;">Yuklanmoqda...</div>';
-  
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_ADMIN_TAB+'&order=created_at.desc', {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    var rows = await r.json();
-    
-    if(!rows || !rows.length){
-      listEl.innerHTML = "<div style='text-align:center;padding:32px;color:#888;'>Arizalar yo'q</div>";
-      return;
-    }
-    
-    var pending = rows.filter(function(r){ return r.status==='pending'; });
-    var approved = rows.filter(function(r){ return r.status==='approved'; });
-    var rejected = rows.filter(function(r){ return r.status==='rejected'; });
-    
-    var h = '';
-    
-    if(pending.length){
-      h += '<div style="font-size:13px;font-weight:700;color:#AA7B08;text-transform:uppercase;margin-bottom:8px;">⏳ Kutmoqda ('+pending.length+')</div>';
-      pending.forEach(function(u){ h += adminCard(u); });
-    }
-    if(approved.length){
-      h += '<div style="font-size:13px;font-weight:700;color:#558237;text-transform:uppercase;margin:16px 0 8px;">✅ Tasdiqlangan ('+approved.length+')</div>';
-      approved.forEach(function(u){ h += adminCard(u); });
-    }
-    if(rejected.length){
-      h += '<div style="font-size:13px;font-weight:700;color:#c0392b;text-transform:uppercase;margin:16px 0 8px;">❌ Rad etilgan ('+rejected.length+')</div>';
-      rejected.forEach(function(u){ h += adminCard(u); });
-    }
-    
-    listEl.innerHTML = h;
-    
-    listEl.querySelectorAll('[data-approve]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var id = this.getAttribute('data-approve');
-        await updateStatus(id, 'approved');
-        loadAdminList();
-      });
-    });
-    listEl.querySelectorAll('[data-reject]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var id = this.getAttribute('data-reject');
-        await updateStatus(id, 'rejected');
-        loadAdminList();
-      });
-    });
-    listEl.querySelectorAll('[data-editor]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var id = this.getAttribute('data-editor');
-        await updateRole(id, 'editor');
-        loadAdminList();
-      });
-    });
-    listEl.querySelectorAll('[data-guest]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var id = this.getAttribute('data-guest');
-        await updateRole(id, 'guest');
-        loadAdminList();
-      });
-    });
-    listEl.querySelectorAll('[data-delete]').forEach(function(btn){
-      btn.addEventListener('click', async function(){
-        var id = this.getAttribute('data-delete');
-        if(!confirm("O'chirasizmi?")) return;
-        await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
-          method:'DELETE',
-          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-        });
-        loadAdminList();
-      });
-    });
-    listEl.querySelectorAll('[data-editprofile]').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var id = this.getAttribute('data-editprofile');
-        var u = rows.find(function(r){ return r.id===id; });
-        if(u) adminShowEditProfileForm(u);
-      });
-    });
-    
-  }catch(e){
-    listEl.innerHTML = '<div style="text-align:center;padding:32px;color:#c0392b;">Xatolik: '+e.message+'<br><small>'+SB_URL+'</small></div>';
-  }
-}
+    # Eski checklistni o'chir
+    old_msg_id = state["checklist_message_ids"].get(time_key)
+    if old_msg_id:
+        try:
+            await context.bot.delete_message(chat_id=CHAT_ID, message_id=old_msg_id)
+        except:
+            pass
 
-function adminCard(u){
-  var date = u.created_at ? new Date(u.created_at).toLocaleDateString('uz') : '';
-  var role = u.role || 'guest';
-  var roleBadge = role === 'editor' 
-    ? '<span style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;">✏ Editor</span>'
-    : '<span style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:6px;padding:2px 8px;font-size:11px;">👁 Guest</span>';
-  var btns = '';
-  if(u.status === 'pending'){
-    btns = '<button data-approve="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✅ Tasdiqlash</button>'+
-           '<button data-reject="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;">❌ Rad etish</button>';
-  } else if(u.status === 'approved'){
-    if(role === 'editor'){
-      btns = '<button data-guest="'+u.id+'" style="background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">👁 Guest qilish</button>';
-    } else {
-      btns = '<button data-editor="'+u.id+'" style="background:#e8f5e0;color:#1e5927;border:1px solid #558237;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✏ Editor qilish</button>';
-    }
-    btns += '<button data-editprofile="'+u.id+'" style="background:#eef6fb;color:#2563a8;border:1px solid #b6d4ee;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;margin-right:6px;">✏ Tahrirlash</button>';
-    btns += '<button data-delete="'+u.id+'" style="background:#fdecea;color:#c0392b;border:1px solid #e88;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑</button>';
-  } else {
-    btns = '<button data-delete="'+u.id+'" style="background:#f5f5f5;color:#888;border:1px solid #ddd;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;">🗑 O\'chirish</button>';
-  }
-  return '<div style="background:white;border:1px solid #e2e8de;border-radius:12px;padding:14px;margin-bottom:10px;">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-    '<div style="font-size:15px;font-weight:600;color:#1a1a1a;">'+u.ism+'</div>'+roleBadge+'</div>'+
-    '<div style="font-size:13px;color:#888;margin-bottom:4px;">@'+u.login+' · '+date+'</div>'+
-    '<div style="font-size:12px;color:#555;margin-bottom:10px;">Parol: <span style="font-weight:700;color:#16573a;letter-spacing:1px">'+esc(u.parol||'—')+'</span></div>'+
-    btns+'</div>';
-}
+    state["checklist_confirmations"][time_key] = {u: {} for u in active}
+    state.setdefault("checklist_verified", {})[time_key] = set()
+    for u in active:
+        vkey = f"{time_key}_{u}"
+        checklist_verify_state[vkey] = {"pending_items": [], "verify_msg_id": None}
 
-async function updateStatus(id, status){
-  await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
-    method:'PATCH',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({status:status})
-  });
-}
+    sent = await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=build_checklist_text(time_key, active),
+        reply_markup=build_checklist_keyboard(time_key, active, state["checklist_confirmations"][time_key]),
+        parse_mode="HTML"
+    )
+    state["checklist_message_ids"][time_key] = sent.message_id
 
-async function updateRole(id, role){
-  await fetch(SB_URL+'/rest/v1/applications?id=eq.'+id, {
-    method:'PATCH',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({role:role})
-  });
-}
+    if update.effective_chat.id != CHAT_ID:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="✅ Checklist guruhga yuborildi."
+        )
 
-async function doAppLogin(){
-  var login = document.getElementById('login-input').value.trim().toLowerCase();
-  var parol = document.getElementById('parol-input').value;
-  if(!CURRENT_APP) CURRENT_APP = 'sirly';
-  
-  if(login === ADMIN_LOGIN && parol === ADMIN_PAROL){
-    document.getElementById('login-screen').style.display = 'none';
-    showAdminPanel();
-    return;
-  }
-  
-  var users = SIRLY_USERS;
-  if(users[login] && users[login] === parol){
-    USER_ID = CURRENT_APP + '_' + login;
-    STORAGE_KEY = 'umatizim_data_' + USER_ID;
-    localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:'editor'}));
-    document.getElementById('login-screen').style.display = 'none';
-    startApp(CURRENT_APP, 'editor');
-    return;
-  }
-  
-  document.getElementById('login-btn').textContent = 'Tekshirilmoqda...';
-  document.getElementById('login-btn').disabled = true;
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/applications?app=eq.'+CURRENT_APP+'&login=eq.'+login, {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    var rows = await r.json();
-    var user = rows && rows.find(function(u){ return u.parol === parol; });
-    if(user){
-      if(user.status === 'approved'){
-        USER_ID = CURRENT_APP + '_' + login;
-        STORAGE_KEY = 'umatizim_data_' + USER_ID;
-        var userRole = user.role || 'guest';
-        CURRENT_USER_TG = user.tg || '';
-        CURRENT_USER_ORG_ID = user.orgNodeId || '';
-        USER_PERMS = user.permissions || null;
-        localStorage.setItem('app_login', JSON.stringify({app:CURRENT_APP, login:login, parol:parol, role:userRole, tg:CURRENT_USER_TG, orgNodeId:CURRENT_USER_ORG_ID, permissions:USER_PERMS}));
-        document.getElementById('login-screen').style.display = 'none';
-        startApp(CURRENT_APP, userRole);
-      } else if(user.status === 'pending'){
-        document.getElementById('login-error').textContent = '⏳ Arizangiz hali tasdiqlanmagan';
-        document.getElementById('login-error').style.display = 'block';
-      } else {
-        document.getElementById('login-error').textContent = '❌ Arizangiz rad etilgan';
-        document.getElementById('login-error').style.display = 'block';
-      }
-    } else {
-      document.getElementById('login-error').textContent = "Login yoki parol noto'g'ri";
-      document.getElementById('login-error').style.display = 'block';
-    }
-  }catch(e){
-    document.getElementById('login-error').textContent = 'Xatolik yuz berdi';
-    document.getElementById('login-error').style.display = 'block';
-  }
-  document.getElementById('login-btn').textContent = 'Kirish';
-  document.getElementById('login-btn').disabled = false;
-}
+# =========================
+# MAIN
+# =========================
 
-function startApp(app, role){
-  document.getElementById('sirly-app').style.display = 'block';
-  sirlyStart(role);
-}
+def main():
+    application = Application.builder().token(TOKEN).build()
+    state["cycle_id"] += 1
 
-showLogin('sirly');
+    # Hujjatlar -> "Botga yuborish" navbati
+    application.job_queue.run_repeating(check_file_send_requests_job, interval=1, first=1)
 
-(function(){
-  var saved = localStorage.getItem('app_login');
-  if(!saved) return;
-  try{
-    var u = JSON.parse(saved);
-    var users = u.app === 'uma' ? UMA_USERS : SIRLY_USERS;
-    if(users[u.login] && users[u.login] === u.parol){
-      CURRENT_APP = u.app;
-      USER_ID = u.app + '_' + u.login;
-      STORAGE_KEY = 'umatizim_data_' + USER_ID;
-      CURRENT_USER_TG = u.tg || '';
-      CURRENT_USER_ORG_ID = u.orgNodeId || '';
-      USER_PERMS = u.permissions || null;
-          startApp(u.app, u.role || 'guest');
-    }
-  }catch(e){ localStorage.removeItem('app_login'); }
-})();
+    # Sekretar -> uchrashuv eslatmalari
+    application.job_queue.run_repeating(check_bot_reminders_job, interval=30, first=10)
 
-function doLogoutAll(){
-  localStorage.removeItem('app_login');
-  document.getElementById('sirly-app').style.display = 'none';
-  USER_ID = 'guest'; CURRENT_APP = null; CURRENT_USER_TG = ''; CURRENT_USER_ORG_ID = ''; USER_PERMS = null;
-  window.scrollTo(0,0);
-  showLogin('sirly');
-}
+    # Kaiten -> guruhga vazifa xabari
+    application.job_queue.run_repeating(check_group_messages_job, interval=2, first=2)
 
-var acadDb={sections:[]};
-var hujjatDb={items:[]};
-var curHujjat=null;
-var HUJJAT_KEY='hujjatlar_db_v1';
-var HUJJAT_BUCKET='hujjatlar';
-async function hujjatSave(){try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.hujjatlar',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:hujjatDb})});}catch(e){localStorage.setItem(HUJJAT_KEY,JSON.stringify(hujjatDb));}}
-async function hujjatLoad(){try{var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.hujjatlar',{headers:SB_H});var rows=await r.json();if(rows&&rows.length&&rows[0].data&&rows[0].data.items){hujjatDb=rows[0].data;}else{var d=localStorage.getItem(HUJJAT_KEY);if(d)hujjatDb=JSON.parse(d);try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'hujjatlar',data:hujjatDb})});}catch(e2){}}}catch(e){var d=localStorage.getItem(HUJJAT_KEY);if(d)hujjatDb=JSON.parse(d);}}
-function renderHujjatlar(){
-  var q=(document.getElementById('search-hujjat')?.value||'').trim().toLowerCase();
-  var filtered=q?hujjatDb.items.filter(it=>it.title.toLowerCase().includes(q)):hujjatDb.items;
-  var h='';
-  filtered.forEach((it,i)=>{
-    h+=`<div class="section-item" onclick="openHujjat('${it.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div class="section-name">${esc(it.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${`<button class="abtn" onclick="event.stopPropagation();hujjatSendAllToBot('${it.id}')">📤</button>`}${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editHujjat('${it.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delHujjat('${it.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;
-  });
-  if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':"Hujjatlar yo'q"}</div>`;
-  document.getElementById('hujjat-list').innerHTML=h;
-  if(isAdmin){
-    document.getElementById('hujjat-form').innerHTML=`<button class="add-item-btn" onclick="showHujjatForm()">＋ Hujjat qo'shish</button>`;
-    if(!q){
-      var listEl=document.getElementById('hujjat-list');
-      initDrag(listEl,()=>hujjatDb.items,arr=>{hujjatDb.items=arr;hujjatSave();renderHujjatlar();});
-      initTouchDrag(listEl,()=>hujjatDb.items,arr=>{hujjatDb.items=arr;hujjatSave();renderHujjatlar();});
-    }
-  }else document.getElementById('hujjat-form').innerHTML='';
-}
-function showHujjatForm(id){
-  var it=id?hujjatDb.items.find(x=>x.id===id):null;
-  document.getElementById('hujjat-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="hf-title" value="${esc(it?.title||'')}" placeholder="Masalan: Bank rekvizitlari"></div><div class="fbtns"><button class="fsave" onclick="saveHujjat('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderHujjatlar()">Bekor</button></div></div>`;
-  document.getElementById('hf-title').focus();
-}
-function editHujjat(id){ showHujjatForm(id); }
-function saveHujjat(id){
-  var title=document.getElementById('hf-title').value.trim();
-  if(!title){ notify('Nom kiriting!'); return; }
-  if(id){ var it=hujjatDb.items.find(x=>x.id===id); if(it) it.title=title; }
-  else hujjatDb.items.push({id:'hj'+Date.now(), title, text:'', link:'', files:[]});
-  hujjatSave(); notify('Saqlandi ✓'); renderHujjatlar();
-}
-function delHujjat(id){
-  askConfirm("Hujjatni o'chirasizmi?",()=>{
-    hujjatDb.items=hujjatDb.items.filter(x=>x.id!==id);
-    hujjatSave(); renderHujjatlar(); notify("O'chirildi ✓");
-  });
-}
-function openHujjat(id){ curHujjat=id; goTo('p-hujjat-detail'); }
-function getHujjat(){ return hujjatDb.items.find(x=>x.id===curHujjat); }
-function renderHujjatDetail(){
-  var it=getHujjat(); if(!it) return;
-  document.getElementById('hujjat-detail-title').textContent=it.title;
-  var filesHtml = (it.files||[]).map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
-      <a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:13px;text-decoration:none">📎 ${esc(f.name)}</a>
-      ${isAdmin?`<button class="abtn abtn-red" onclick="hujjatDelFile(${i})">✕</button>`:''}
-    </div>`).join('');
-  if(!filesHtml) filesHtml=`<div style="color:var(--white-50);font-size:12px;padding:8px 0">Fayllar yo&#39;q</div>`;
-  var html = `
-    <div class="form-box" style="margin-top:10px">
-      <div class="flbl" style="margin-bottom:6px">Ma'lumot</div>
-      <div id="hujjat-text-view" style="font-size:13px;color:var(--white-80);white-space:pre-wrap;line-height:1.6;${it.text?'':'opacity:.5'}">${it.text?esc(it.text):"Ma'lumot kiritilmagan"}</div>
-      ${isAdmin?`<button class="abtn" style="margin-top:10px" onclick="showHujjatEditForm()">✏ Tahrirlash</button>`:''}
-      <div id="hujjat-edit-form"></div>
-    </div>
-    <div class="form-box" style="margin-top:10px">
-      <div class="flbl" style="margin-bottom:6px">Link</div>
-      ${it.link?`<a href="${esc(it.link)}" target="_blank" style="color:var(--lime);font-size:13px;word-break:break-all">${esc(it.link)}</a>`:`<div style="color:var(--white-50);font-size:12px">Link yo&#39;q</div>`}
-    </div>
-    <div class="form-box" style="margin-top:10px">
-      <div class="flbl" style="margin-bottom:6px">Fayllar</div>
-      ${filesHtml}
-      ${isAdmin?`<label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ ${(it.files&&it.files.length?it.files.length+1:1)}-faylni yuklang<input type="file" style="display:none" onchange="hujjatUploadFile(this)"></label>`:''}
-    </div>
-  `;
-  document.getElementById('hujjat-detail-body').innerHTML=html;
-}
-function showHujjatEditForm(){
-  var it=getHujjat(); if(!it) return;
-  document.getElementById('hujjat-edit-form').innerHTML=`<div class="frow"><label class="flbl">Ma'lumot</label><textarea class="fi" id="hj-text" style="min-height:120px;resize:vertical">${esc(it.text||'')}</textarea></div><div class="frow"><label class="flbl">Link</label><input class="fi" id="hj-link" value="${esc(it.link||'')}" placeholder="https://..."></div><div class="fbtns"><button class="fsave" onclick="saveHujjatDetail()">Saqlash</button><button class="fcancel" onclick="renderHujjatDetail()">Bekor</button></div>`;
-}
-function saveHujjatDetail(){
-  var it=getHujjat(); if(!it) return;
-  it.text=document.getElementById('hj-text').value;
-  it.link=document.getElementById('hj-link').value.trim();
-  hujjatSave(); notify('Saqlandi ✓'); renderHujjatDetail();
-}
-function hujjatSafeFilename(name){
-  var dot = name.lastIndexOf('.');
-  var base = dot>0 ? name.slice(0,dot) : name;
-  var ext = dot>0 ? name.slice(dot).replace(/[^a-zA-Z0-9.]/g,'') : '';
-  base = base.replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'');
-  if(!base) base='file';
-  return base+ext;
-}
-async function hujjatUploadFile(input){
-  var file=input.files[0]; if(!file) return;
-  var it=getHujjat(); if(!it) return;
-  notify('Yuklanmoqda...');
-  try{
-    var path=it.id+'/'+Date.now()+'_'+hujjatSafeFilename(file.name);
-    var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream'},
-      body:file
-    });
-    if(!r.ok){ var err=await r.text(); notify('Xatolik: '+err); return; }
-    var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
-    if(!it.files) it.files=[];
-    it.files.push({name:file.name, url, path});
-    hujjatSave(); notify('Yuklandi ✓'); renderHujjatDetail();
-  }catch(e){ notify('Xatolik: '+e.message); }
-}
-function hujjatGetTgUser(){
-  return window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user;
-}
-async function hujjatPostSendRequest(payload){
-  await fetch(SB_URL+'/rest/v1/file_send_requests',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'fsr'+Date.now()+'_'+Math.random().toString(36).slice(2,7), status:'pending', ...payload})});
-}
-async function hujjatSendAllToBot(id){
-  var it=hujjatDb.items.find(x=>x.id===id); if(!it) return;
-  var tgUser = hujjatGetTgUser();
-  if(!tgUser || !tgUser.id){ notify("Bu funksiya faqat Telegram ilovasida ishlaydi"); return; }
-  notify('Yuborilmoqda...');
-  try{
-    var lines=['📄 '+it.title];
-    if(it.text && it.text.trim()){ lines.push(''); lines.push(it.text.trim()); }
-    if(it.link && it.link.trim()){ lines.push(''); lines.push('🔗 '+it.link.trim()); }
-    await hujjatPostSendRequest({chat_id:tgUser.id, kind:'message', message_text:lines.join('\n')});
-    var files=it.files||[];
-    for(var i=0;i<files.length;i++){
-      await hujjatPostSendRequest({chat_id:tgUser.id, kind:'file', file_url:files[i].url, file_name:files[i].name});
-    }
-    notify('Yuborildi ✓');
-  }catch(e){ notify('Xatolik: '+e.message); }
-}
-async function hujjatDelFile(idx){
-  var it=getHujjat(); if(!it) return;
-  var f=it.files[idx]; if(!f) return;
-  askConfirm("Faylni o'chirasizmi?",async()=>{
-    try{ await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+f.path,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}); }catch(e){}
-    it.files.splice(idx,1);
-    hujjatSave(); renderHujjatDetail(); notify("O'chirildi ✓");
-  });
-}
+    # Chat -> shaxsiy xabar yuborish
+    application.job_queue.run_repeating(check_personal_messages_job, interval=2, first=2)
 
-// =========================
-// SEKRETAR
-// =========================
+    # Kaiten -> kunlik statistika (10:00 va 20:00)
+    for _hour, _label in [(10, "Ertalab"), (20, "Kechki")]:
+        application.job_queue.run_once(
+            _daily_stats_once,
+            when=seconds_until_time(_hour, 0),
+            name=f"kaiten_stats_{_hour}",
+            data={"hour": _hour, "label": _label}
+        )
 
-var sekretarDb={items:[],archive:[]};
-var sekretarDraft=null;
-var sekretarEditId=null;
-function sekretarKey(){ return 'sekretar_'+USER_ID; }
-async function sekretarSave(){
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+sekretarKey(),{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:sekretarDb})});}
-  catch(e){localStorage.setItem(sekretarKey(),JSON.stringify(sekretarDb));}
-}
-async function sekretarLoad(){
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+sekretarKey(),{headers:SB_H});
-    var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data){
-      sekretarDb=rows[0].data;
-      if(!sekretarDb.items) sekretarDb.items=[];
-      if(!sekretarDb.archive) sekretarDb.archive=[];
-    }else{
-      var d=localStorage.getItem(sekretarKey());
-      sekretarDb=d?JSON.parse(d):{items:[],archive:[]};
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:sekretarKey(),data:sekretarDb})});}catch(e2){}
-    }
-  }catch(e){
-    var d=localStorage.getItem(sekretarKey());
-    sekretarDb=d?JSON.parse(d):{items:[],archive:[]};
-  }
-}
-function sekretarSortKey(it){
-  return (it.date||'9999-99-99')+'T'+(it.time||'99:99');
-}
-function renderSekretar(){
-  var items=(sekretarDb.items||[]).slice().sort(function(a,b){
-    var ka=sekretarSortKey(a), kb=sekretarSortKey(b);
-    return ka<kb?-1:(ka>kb?1:0);
-  });
-  var h=items.map(sekretarCard).join('');
-  if(!h) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Vazifalar yo&#39;q</div>';
-  document.getElementById('sekretar-list').innerHTML=h;
-  document.getElementById('sekretar-form').innerHTML='';
-  sekretarDraft=null; sekretarEditId=null;
-}
-var SEKRETAR_MONTHS=['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentyabr','Oktyabr','Noyabr','Dekabr'];
-var SEKRETAR_WEEKDAYS=['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba'];
-function sekretarFormatDateTime(date,time){
-  if(!date) return '';
-  var parts=date.split('-');
-  if(parts.length!==3) return date+(time?' Soat '+time:'');
-  var y=+parts[0], m=+parts[1], d=+parts[2];
-  var dt=new Date(y,m-1,d);
-  var s=d+' - '+SEKRETAR_MONTHS[m-1]+' ('+SEKRETAR_WEEKDAYS[dt.getDay()]+')';
-  if(time) s+=' Soat '+time;
-  return s;
-}
-function sekretarCard(it){
-  var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
-  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" class="sek-link">Fayl: ${esc(f.name)}</a>`;}).join('');
-  return `<div class="sek-card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-      <div class="sek-date">${esc(sekretarFormatDateTime(it.date,it.time))}</div>
-      <button class="sek-abtn" onclick="sekretarFinish('${it.id}')">Yakunlash</button>
-    </div>
-    ${it.place?`<div class="sek-row"><span class="sek-lbl">Joy:</span> ${esc(it.place)}</div>`:''}
-    ${person?`<div class="sek-row"><span class="sek-lbl">Kishi:</span> ${esc(person)}</div>`:''}
-    ${it.purpose?`<div class="sek-row sek-purpose"><span class="sek-lbl">Maqsad:</span> ${esc(it.purpose)}</div>`:''}
-    ${it.link?`<a href="${esc(it.link)}" target="_blank" class="sek-link">Link: ${esc(it.link)}</a>`:''}
-    ${filesHtml}
-    ${it.note?`<div class="sek-row sek-note"><span class="sek-lbl">Eslatma:</span> ${esc(it.note)}</div>`:''}
-    <div class="sek-btns">
-      <button class="sek-abtn" onclick="showSekretarForm('${it.id}')">Tahrirlash</button>
-      <button class="sek-abtn sek-abtn-red" onclick="sekretarDelete('${it.id}')">O'chirish</button>
-    </div>
-  </div>`;
-}
-function renderSekretarArchive(){
-  var items=(sekretarDb.archive||[]);
-  var h=items.map(sekretarArchiveCard).join('');
-  if(!h) h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Arxiv bo&#39;sh</div>';
-  document.getElementById('sekretar-archive-list').innerHTML=h;
-}
-function sekretarArchiveCard(it){
-  var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
-  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" class="sek-link">Fayl: ${esc(f.name)}</a>`;}).join('');
-  return `<div class="sek-card" style="opacity:.7">
-    <div class="sek-date">Bajarildi — ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
-    ${it.place?`<div class="sek-row"><span class="sek-lbl">Joy:</span> ${esc(it.place)}</div>`:''}
-    ${person?`<div class="sek-row"><span class="sek-lbl">Kishi:</span> ${esc(person)}</div>`:''}
-    ${it.purpose?`<div class="sek-row sek-purpose"><span class="sek-lbl">Maqsad:</span> ${esc(it.purpose)}</div>`:''}
-    ${it.link?`<a href="${esc(it.link)}" target="_blank" class="sek-link">Link: ${esc(it.link)}</a>`:''}
-    ${filesHtml}
-    ${it.note?`<div class="sek-row sek-note"><span class="sek-lbl">Eslatma:</span> ${esc(it.note)}</div>`:''}
-    <div class="sek-btns">
-      <button class="sek-abtn sek-abtn-red" onclick="sekretarDeleteFromArchive('${it.id}')">O'chirish</button>
-    </div>
-  </div>`;
-}
-function sekretarFinish(id){
-  var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Uchrashuv yakunlandimi?</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="fsave" onclick="sekretarArchiveItem('${id}')">Bajarildi</button>
-      <button class="abtn-red" style="padding:10px;border-radius:10px;border:none;color:#fff;background:#e53935;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit" onclick="sekretarDeleteItem('${id}')">Bekor bo'ldi</button>
-      <button class="fcancel" onclick="orgCloseModal()">Yopish</button>
-    </div>`;
-  orgShowModal(html);
-}
-function sekretarArchiveItem(id){
-  var idx=sekretarDb.items.findIndex(x=>x.id===id);
-  if(idx<0) return;
-  var item=sekretarDb.items.splice(idx,1)[0];
-  if(!sekretarDb.archive) sekretarDb.archive=[];
-  sekretarDb.archive.unshift(item);
-  sekretarCancelReminder(item);
-  sekretarSave(); orgCloseModal(); renderSekretar(); notify("Arxivga ko'chirildi ✓");
-}
-function sekretarDeleteItem(id){
-  var item=sekretarDb.items.find(x=>x.id===id);
-  sekretarDb.items=sekretarDb.items.filter(x=>x.id!==id);
-  if(item) sekretarCancelReminder(item);
-  sekretarSave(); orgCloseModal(); renderSekretar(); notify("O'chirildi ✓");
-}
-function sekretarDelete(id){
-  askConfirm("Vazifani o'chirasizmi?",function(){
-    var item=sekretarDb.items.find(x=>x.id===id);
-    sekretarDb.items=sekretarDb.items.filter(x=>x.id!==id);
-    if(item) sekretarCancelReminder(item);
-    sekretarSave(); renderSekretar(); notify("O'chirildi ✓");
-  });
-}
-function sekretarDeleteFromArchive(id){
-  askConfirm("Arxivdan butunlay o'chirilsinmi?",function(){
-    sekretarDb.archive=sekretarDb.archive.filter(x=>x.id!==id);
-    sekretarSave(); renderSekretarArchive(); notify("O'chirildi ✓");
-  });
-}
-function showSekretarForm(id){
-  if(id){
-    var it=sekretarDb.items.find(x=>x.id===id);
-    if(!it) return;
-    sekretarDraft=JSON.parse(JSON.stringify(it));
-    sekretarEditId=id;
-  }else{
-    sekretarDraft={id:'sk'+Date.now(), files:[]};
-    sekretarEditId=null;
-  }
-  sekretarRefreshForm();
-  document.getElementById('sekretar-form').scrollIntoView({behavior:'smooth', block:'center'});
-}
-function sekretarRefreshForm(){
-  document.getElementById('sekretar-form').innerHTML=`<div class="form-box fade">${sekretarFieldsHtml(sekretarDraft)}</div>`;
-}
-function sekretarFieldsHtml(d){
-  var filesHtml=(d.files||[]).map(function(f,i){
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--white-10)"><a href="${esc(f.url)}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lime);font-size:12px;text-decoration:none">📎 ${esc(f.name)}</a><button class="abtn abtn-red" onclick="sekretarDelFile(${i})">✕</button></div>`;
-  }).join('');
-  return `
-    <div class="frow"><label class="flbl">Sana</label><input type="date" class="fi" id="sk-date" value="${esc(d.date||'')}"></div>
-    <div class="frow"><label class="flbl">Vaqt</label><input type="time" class="fi" id="sk-time" value="${esc(d.time||'')}"></div>
-    <div class="frow"><label class="flbl">Joy</label><input class="fi" id="sk-place" value="${esc(d.place||'')}" placeholder="Manzil..."></div>
-    <div class="frow"><label class="flbl">Kishi — ismi</label><input class="fi" id="sk-pname" value="${esc(d.personName||'')}"></div>
-    <div class="frow"><label class="flbl">Kishi — lavozimi</label><input class="fi" id="sk-prole" value="${esc(d.personRole||'')}"></div>
-    <div class="frow"><label class="flbl">Kishi — tel raqami</label><input class="fi" id="sk-pphone" value="${esc(d.personPhone||'')}"></div>
-    <div class="frow"><label class="flbl">Maqsad</label><textarea class="fi" id="sk-purpose" style="min-height:60px;resize:vertical">${esc(d.purpose||'')}</textarea></div>
-    <div class="frow"><label class="flbl">Link</label><input class="fi" id="sk-link" value="${esc(d.link||'')}" placeholder="https://..."></div>
-    <div class="frow"><label class="flbl">Eslatma</label><textarea class="fi" id="sk-note" style="min-height:50px;resize:vertical">${esc(d.note||'')}</textarea></div>
-    <div class="frow">
-      <label class="flbl">Fayllar</label>
-      ${filesHtml||'<div style="color:var(--white-50);font-size:12px;padding:6px 0">Fayl yo&#39;q</div>'}
-      <label class="add-item-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer">＋ ${(d.files&&d.files.length?d.files.length+1:1)}-faylni yuklang<input type="file" style="display:none" onchange="sekretarUploadFile(this)"></label>
-    </div>
-    <div class="fbtns"><button class="fsave" onclick="saveSekretarForm()">Saqlash</button><button class="fcancel" onclick="sekretarCancelForm()">Bekor</button></div>
-  `;
-}
-function sekretarSyncDraftFromForm(){
-  if(!sekretarDraft) return;
-  sekretarDraft.date=document.getElementById('sk-date').value;
-  sekretarDraft.time=document.getElementById('sk-time').value;
-  sekretarDraft.place=document.getElementById('sk-place').value.trim();
-  sekretarDraft.personName=document.getElementById('sk-pname').value.trim();
-  sekretarDraft.personRole=document.getElementById('sk-prole').value.trim();
-  sekretarDraft.personPhone=document.getElementById('sk-pphone').value.trim();
-  sekretarDraft.purpose=document.getElementById('sk-purpose').value.trim();
-  sekretarDraft.link=document.getElementById('sk-link').value.trim();
-  sekretarDraft.note=document.getElementById('sk-note').value;
-}
-function sekretarCancelForm(){
-  sekretarDraft=null; sekretarEditId=null;
-  document.getElementById('sekretar-form').innerHTML='';
-}
-async function sekretarUploadFile(input){
-  var file=input.files[0]; if(!file) return;
-  if(!sekretarDraft) return;
-  sekretarSyncDraftFromForm();
-  notify('Yuklanmoqda...');
-  try{
-    var path='sekretar/'+sekretarDraft.id+'/'+Date.now()+'_'+hujjatSafeFilename(file.name);
-    var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream'},
-      body:file
-    });
-    if(!r.ok){ var err=await r.text(); notify('Xatolik: '+err); return; }
-    var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
-    if(!sekretarDraft.files) sekretarDraft.files=[];
-    sekretarDraft.files.push({name:file.name, url, path});
-    notify('Yuklandi ✓');
-    sekretarRefreshForm();
-  }catch(e){ notify('Xatolik: '+e.message); }
-}
-function sekretarDelFile(i){
-  if(!sekretarDraft) return;
-  sekretarSyncDraftFromForm();
-  var f=sekretarDraft.files[i];
-  if(f){
-    fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+f.path,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).catch(function(){});
-    sekretarDraft.files.splice(i,1);
-  }
-  sekretarRefreshForm();
-}
-async function saveSekretarForm(){
-  if(!sekretarDraft) return;
-  sekretarSyncDraftFromForm();
-  if(!sekretarDraft.date || !sekretarDraft.time){ notify('Sana va vaqtni kiriting!'); return; }
-  if(!sekretarDraft.personName){ notify('Kishi ismini kiriting!'); return; }
-  if(!sekretarDraft.purpose){ notify('Maqsadni kiriting!'); return; }
-  if(sekretarEditId){
-    var idx=sekretarDb.items.findIndex(x=>x.id===sekretarEditId);
-    if(idx>=0) sekretarDb.items[idx]=sekretarDraft;
-  }else{
-    sekretarDb.items.push(sekretarDraft);
-  }
-  sekretarSave();
-  sekretarScheduleReminder(sekretarDraft);
-  notify('Saqlandi ✓');
-  renderSekretar();
-}
-async function sekretarScheduleReminder(it){
-  var tgUser=hujjatGetTgUser();
-  if(!tgUser || !tgUser.id) return;
-  try{
-    var iso=new Date(it.date+'T'+it.time+':00').toISOString();
-    var lines=['🔔 Eslatma: uchrashuv vaqti yetdi!','','📅 '+it.date+' 🕐 '+it.time];
-    if(it.place) lines.push('📍 '+it.place);
-    var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
-    if(person) lines.push('👤 '+person);
-    if(it.purpose) lines.push('🎯 '+it.purpose);
-    if(it.link) lines.push('🔗 '+it.link);
-    await fetch(SB_URL+'/rest/v1/bot_reminders?on_conflict=id',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal,resolution=merge-duplicates'},body:JSON.stringify({id:'rem_'+it.id, chat_id:tgUser.id, text:lines.join(String.fromCharCode(10)), remind_at:iso, status:'pending'})});
-  }catch(e){}
-}
-function sekretarCancelReminder(it){
-  fetch(SB_URL+'/rest/v1/bot_reminders?id=eq.rem_'+it.id,{method:'DELETE',headers:SB_H}).catch(function(){});
-}
-document.getElementById('logout-btn').addEventListener('click', function(){
-  doLogoutAll();
-});
+    # ✅ CHECKLIST JOB — har kuni avtomatik ishlaydi
+    for time_key in CHECKLIST_TIMES:
+        h, m = map(int, time_key.split(":"))
+        application.job_queue.run_once(
+            checklist_job,
+            when=seconds_until_time(h, m),
+            name=f"checklist_{time_key}",
+            data={"cycle_id": state["cycle_id"], "time_key": time_key}
+        )
 
-var confirmCallback=null;
-function askConfirm(msg,cb,yesLabel,noLabel){confirmCallback=cb;document.getElementById('confirm-msg').textContent=msg;document.getElementById('confirm-yes').textContent=yesLabel||"O'chirish";document.getElementById('confirm-no').textContent=noLabel||'Bekor';document.getElementById('confirm-modal').classList.add('open');document.getElementById('confirm-yes').onclick=()=>{closeConfirm();cb();};}
-function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
+    # Davomat jobs
+    for username in ATTENDANCE_AGENTS:
+        code_time, _ = get_attendance_code_time(username)
+        if code_time:
+            h, m = map(int, code_time.split(":"))
+            application.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(h, m), name=f"att_code_{username}", data={"username": username})
+        else:
+            application.job_queue.run_once(send_attendance_code_job, when=seconds_until_time(5, 0), name=f"att_code_{username}", data={"username": username})
 
-var ADMIN_L='testlogin',ADMIN_P='test26';
-var isAdmin=false;
-var DB_KEY='biznes_db_v1';
-var db={sections:[]};
-var curSection=null,curCat=null,curFlow=null;
-var navStack=['p-entry1'];
-var BOLIM_IDS=['main','main2','main3'];
-var curBolim=0;
-var bolimTitles=["Support bo'limi","Support bo'limi 2","Support bo'limi 3"];
+    # Screenshot reminder jobs
+    for time_key, agents in SCREENSHOT_SCHEDULE.items():
+        h, m = map(int, time_key.split(":"))
+        application.job_queue.run_once(screenshot_reminder_job, when=seconds_until_time(h, m), name=f"ss_reminder_{time_key}", data={"time_key": time_key, "agents": agents})
 
-async function save(){
-  var key=BOLIM_IDS[curBolim];
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:db})});}
-  catch(e){localStorage.setItem(DB_KEY+'_'+key,JSON.stringify(db));}
-}
-async function load(){
-  var key=BOLIM_IDS[curBolim];
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-    var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections)db=rows[0].data;
-    else{
-      var d=localStorage.getItem(DB_KEY+'_'+key);
-      db=d?JSON.parse(d):{sections:[]};
-      if(key==='main'&&!d){var old=localStorage.getItem(DB_KEY);if(old)db=JSON.parse(old);}
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:db})});}catch(e2){}
-    }
-  }catch(e){
-    var d=localStorage.getItem(DB_KEY+'_'+key);
-    db=d?JSON.parse(d):{sections:[]};
-    if(key==='main'&&!d){var old=localStorage.getItem(DB_KEY);if(old)db=JSON.parse(old);}
-  }
-}
-async function bolimTitlesLoad(){
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.bolim_titles',{headers:SB_H});
-    var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data&&rows[0].data.titles) bolimTitles=rows[0].data.titles;
-    else{
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'bolim_titles',data:{titles:bolimTitles}})});}catch(e2){}
-    }
-  }catch(e){}
-}
-async function bolimTitlesSave(){
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.bolim_titles',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{titles:bolimTitles}})});}catch(e){}
-}
-function renderBolimCards(){
-  var g=document.getElementById('bolim-cards-grid');
-  if(!g) return;
-  var h='';
-  bolimTitles.forEach(function(title,i){
-    h+=`<div class="nav-card" onclick="openBolim(${i})">${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="editBolimTitle(${i})">✏</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(title)}</div><div class="nav-card-arrow">→</div></div>`;
-  });
-  g.innerHTML=h;
-}
-function editBolimTitle(i){
-  var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Bo'lim nomini o'zgartirish</div>
-    <div class="frow"><input class="fi" id="bolim-title-inp" value="${esc(bolimTitles[i])}"></div>
-    <div class="fbtns"><button class="fsave" onclick="saveBolimTitle(${i})">Saqlash</button><button class="fcancel" onclick="orgCloseModal()">Bekor</button></div>`;
-  orgShowModal(html);
-}
-function saveBolimTitle(i){
-  var val=document.getElementById('bolim-title-inp').value.trim();
-  if(!val){ notify('Nom kiriting!'); return; }
-  bolimTitles[i]=val;
-  bolimTitlesSave(); orgCloseModal(); renderBolimCards(); notify('Saqlandi ✓');
-  if(curBolim===i){
-    var th=document.getElementById('p-home-title');
-    if(th) th.textContent=val;
-  }
-}
-function openBolim(i){
-  curBolim=i;
-  db={sections:[]};
-  acadDb={sections:[]};
-  var th=document.getElementById('p-home-title');
-  if(th) th.textContent=bolimTitles[i];
-  Promise.all([load(), acadLoad()]).then(function(){
-    goTo('p-home');
-    renderSections();
-    updateBc();
-  });
-}
+    # Custom checklist jobs
+    load_custom_checklists()
+    for cl in custom_checklists:
+        secs = seconds_until_custom_checklist(cl)
+        application.job_queue.run_once(custom_checklist_job, when=secs, name=f"ccl_{cl['id']}", data={"cl_id": cl["id"]})
 
-function goTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active','fade');if(navStack[navStack.length-1]!==p)navStack.push(p);sirlyRender(p);updateLogoutBtn(p);window.scrollTo(0,0);}
-function goBack(p){while(navStack[navStack.length-1]!==p&&navStack.length>1)navStack.pop();document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(p).classList.add('active');sirlyRender(p);updateLogoutBtn(p);window.scrollTo(0,0);}
-function updateLogoutBtn(p){document.getElementById('logout-btn').style.display=(p==='p-entry1')?'block':'none';}
-function sirlyRender(p){
-  if(p==='p-entry2'){
-    renderBolimCards();
-    bolimTitlesLoad().catch(function(){}).then(renderBolimCards);
-  }
-  else if(p==='p-home')renderSections();
-  else if(p==='p-section')renderCats();
-  else if(p==='p-cat')renderFlows();
-  else if(p==='p-flow')renderTree();
-  else if(p==='p-acad-cats')renderAcadCats();
-  else if(p==='p-acad-items')renderAcadItems();
-  else if(p==='p-acad-detail')renderAcadDetail();
-  else if(p==='p-kaiten')renderKaiten();
-  else if(p==='p-hujjatlar')renderHujjatlar();
-  else if(p==='p-hujjat-detail')renderHujjatDetail();
-  else if(p==='p-sekretar')renderSekretar();
-  else if(p==='p-sekretar-arxiv')renderSekretarArchive();
-  else if(p==='p-chat-group')renderChatGroup();
-  else if(p==='p-chat-personal-list')renderChatContacts();
-  updateBc();
-}
-function updateBc(){
-  var sec=db.sections.find(s=>s.id===curSection);var cat=sec?.cats.find(c=>c.id===curCat);var flow=cat?.flows.find(f=>f.id===curFlow);
-  var map={'p-home':'Bosh sahifa','p-section':sec?.title||'','p-cat':cat?.title||'','p-flow':flow?.title||''};
-  navStack.forEach((p,i)=>{if(p.startsWith('p-acad'))return;var el=document.getElementById('bc-'+p.replace('p-',''));if(!el)return;var html='';navStack.slice(0,i+1).forEach((pp,ii)=>{if(pp.startsWith('p-acad'))return;if(ii<i)html+=`<span class="bc-item" onclick="goBack('${pp}')">${map[pp]||''}</span><span class="bc-sep">›</span>`;else html+=`<span class="bc-cur">${map[pp]||''}</span>`;});el.innerHTML=html;});
-}
-function showAcadSecForm(id){var sec=id?acadDb.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Akademiya bo'limi nomi</label><input class="fi" id="asf-title" value="${esc(sec?.title||'')}" placeholder="Masalan: Support Akademiyasi"></div><div class="fbtns"><button class="fsave" onclick="saveAcadSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('asf-title').focus();}
-function saveAcadSection(id){var title=document.getElementById('asf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(!acadDb.sections)acadDb.sections=[];if(id){var s=acadDb.sections.find(x=>x.id===id);if(s)s.title=title;}else acadDb.sections.push({id:'as'+Date.now(),title,cats:[]});acadSave();notify('Saqlandi ✓');renderSections();}
-function editAcadSection(id){showAcadSecForm(id)}
-function delAcadSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{acadDb.sections=acadDb.sections.filter(s=>s.id!==id);acadSave();notify("O'chirildi ✓");renderSections();});}
-function initDrag(listEl,getItems,setItems){var items=listEl.querySelectorAll('[draggable="true"]');items.forEach((el,i)=>{el.addEventListener('dragstart',e=>{dragSrcIndex=i;dragContext={getItems,setItems};e.dataTransfer.effectAllowed='move';setTimeout(()=>el.classList.add('dragging'),0);});el.addEventListener('dragend',()=>{el.classList.remove('dragging');listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));});el.addEventListener('dragover',e=>{e.preventDefault();listEl.querySelectorAll('[draggable="true"]').forEach(x=>x.classList.remove('drag-over'));el.classList.add('drag-over');});el.addEventListener('drop',e=>{e.preventDefault();if(dragSrcIndex===null||dragSrcIndex===i)return;var arr=dragContext.getItems();var moved=arr.splice(dragSrcIndex,1)[0];arr.splice(i,0,moved);dragContext.setItems(arr);save();dragSrcIndex=null;dragContext=null;});});}
-function initTouchDrag(listEl,getItems,setItems,selector='[draggable="true"]'){var ti=null,clone=null,startY=0;var items=()=>listEl.querySelectorAll(selector);listEl.addEventListener('touchstart',e=>{var handle=e.target.closest('.drag-handle,.nav-card-drag');if(!handle)return;var item=handle.closest(selector);var all=[...items()];ti=all.indexOf(item);startY=e.touches[0].clientY;clone=item.cloneNode(true);var rect=item.getBoundingClientRect();clone.style.cssText=`position:fixed;z-index:9999;width:${item.offsetWidth}px;opacity:0.8;pointer-events:none;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);top:${rect.top}px;left:${rect.left}px`;document.body.appendChild(clone);item.style.opacity='0.4';},{passive:true});listEl.addEventListener('touchmove',e=>{if(ti===null||!clone)return;e.preventDefault();var y=e.touches[0].clientY;var dy=y-startY;var rect=[...items()][ti].getBoundingClientRect();clone.style.top=(rect.top+dy)+'px';[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();el.classList.toggle('drag-over',i!==ti&&y>r.top&&y<r.bottom);});},{passive:false});listEl.addEventListener('touchend',e=>{if(ti===null)return;if(clone){clone.remove();clone=null;}[...items()].forEach(x=>{x.classList.remove('drag-over');x.style.opacity='';});var y=e.changedTouches[0].clientY;var target=ti;[...items()].forEach((el,i)=>{var r=el.getBoundingClientRect();if(y>r.top&&y<r.bottom&&i!==ti)target=i;});if(target!==ti){var arr=getItems();var moved=arr.splice(ti,1)[0];arr.splice(target,0,moved);setItems(arr);save();}ti=null;},{passive:true});}
+    application.add_handler(MessageHandler(filters.PHOTO & filters.Chat(CHAT_ID), photo_handler))
+    application.add_handler(MessageHandler(filters.Document.IMAGE & filters.Chat(CHAT_ID), photo_handler))
 
-function renderSections(){
-  var g=document.getElementById('sections-grid');var h='';
-  var ordKey='cards_order_'+BOLIM_IDS[curBolim];
-  var allCards=[...db.sections.filter(s=>hasSectionPerm(s.id)).map(s=>({...s,_type:'process'})),...(acadDb.sections||[]).map(s=>({...s,_type:'academy'}))];
-  var savedOrder=JSON.parse(localStorage.getItem(ordKey)||'null');var ordered=allCards;
-  if(savedOrder){var map=Object.fromEntries(allCards.map(s=>[s.id,s]));ordered=[...savedOrder.map(id=>map[id]).filter(Boolean),...allCards.filter(s=>!savedOrder.includes(s.id))];}
-  ordered.forEach(s=>{var isAcad=s._type==='academy';var onclick=isAcad?`openAcadSection('${s.id}')`:`openSection('${s.id}')`;var editFn=isAcad?`editAcadSection('${s.id}')`:`editSection('${s.id}')`;var delFn=isAcad?`delAcadSection('${s.id}')`:`delSection('${s.id}')`;h+=`<div class="nav-card${isAcad?' acad-card':''}" onclick="${onclick}" draggable="${isAdmin?'true':'false'}">${isAdmin?`<div class="nav-card-drag" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''} ${isAdmin?`<div class="nav-card-actions" onclick="event.stopPropagation()"><button class="abtn" onclick="${editFn}">✏</button><button class="abtn abtn-red" onclick="${delFn}">✕</button></div>`:''}<div class="nav-card-title" style="margin-top:${isAdmin?'20px':'4px'}">${esc(s.title)}</div><div class="nav-card-arrow">→</div></div>`;});
-  if(isAdmin)h+=`<button class="add-btn" onclick="showSecForm()" style="grid-column:1/-1">＋ Jarayon bo'limi</button><button class="add-btn" onclick="showAcadSecForm()" style="grid-column:1/-1;margin-top:0">＋ Akademiya bo'limi</button>`;
-  g.innerHTML=h;document.getElementById('section-form').innerHTML='';
-  if(isAdmin){initDrag(g,()=>ordered,arr=>{localStorage.setItem(ordKey,JSON.stringify(arr.map(s=>s.id)));renderSections();});initTouchDrag(g,()=>ordered,arr=>{localStorage.setItem(ordKey,JSON.stringify(arr.map(s=>s.id)));renderSections();},'[draggable="true"]');}
-}
-function openSection(id){curSection=id;goTo('p-section')}
-function showSecForm(id){var sec=id?db.sections.find(s=>s.id===id):null;document.getElementById('section-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="sf-title" value="${esc(sec?.title||'')}" placeholder="Bo'lim nomi..."></div><div class="fbtns"><button class="fsave" onclick="saveSection('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderSections()">Bekor</button></div></div>`;document.getElementById('sf-title').focus();}
-function saveSection(id){var title=document.getElementById('sf-title').value.trim();if(!title){notify('Nom kiriting!');return;}if(id){var s=db.sections.find(x=>x.id===id);if(s)s.title=title;}else db.sections.push({id:'s'+Date.now(),title,cats:[]});save();notify('Saqlandi ✓');renderSections();}
-function editSection(id){showSecForm(id)}
-function delSection(id){askConfirm("Bo'limni o'chirasizmi?",()=>{db.sections=db.sections.filter(s=>s.id!==id);save();notify("O'chirildi ✓");renderSections();});}
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("umidstop", umidstop_command))
+    application.add_handler(CommandHandler("checklist", checklist_command))
+    application.add_handler(CommandHandler("cheklistyaratish", cheklistyaratish_command))
+    application.add_handler(CommandHandler("addagent", addagent_command))
+    application.add_handler(CommandHandler("editagent", editagent_command))
+    application.add_handler(CommandHandler("delagent", delagent_command))
 
-function renderCats(){var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;document.getElementById('section-title').textContent=sec.title;var q=(document.getElementById('search-cats')?.value||'').trim().toLowerCase();var filtered=q?sec.cats.filter(c=>c.title.toLowerCase().includes(q)):sec.cats;var h='';filtered.forEach((c,i)=>{h+=`<div class="section-item" onclick="openCat('${c.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div class="section-name">${esc(c.title)}</div>${c.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.desc)}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editCat('${c.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delCat('${c.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Kategoriyalar yo\'q'}</div>`;document.getElementById('cats-list').innerHTML=h;if(isAdmin){document.getElementById('cat-form').innerHTML=`<button class="add-item-btn" onclick="showCatForm()">＋ Kategoriya qo'shish</button>`;if(!q){var listEl=document.getElementById('cats-list');initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;renderCats();});}}else document.getElementById('cat-form').innerHTML='';}
-function openCat(id){curCat=id;goTo('p-cat')}
-function showCatForm(id){var sec=db.sections.find(s=>s.id===curSection);var cat=id?sec?.cats.find(c=>c.id===id):null;document.getElementById('cat-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="cf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div><div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="cf-desc" value="${esc(cat?.desc||'')}" placeholder="Qisqacha tavsif..."></div><div class="fbtns"><button class="fsave" onclick="saveCat('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderCats()">Bekor</button></div></div>`;document.getElementById('cf-title').focus();}
-function saveCat(id){var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;var title=document.getElementById('cf-title').value.trim();if(!title){notify('Nom kiriting!');return;}var desc=document.getElementById('cf-desc')?.value.trim()||'';if(id){var c=sec.cats.find(x=>x.id===id);if(c){c.title=title;c.desc=desc;}}else sec.cats.push({id:'c'+Date.now(),title,desc,flows:[]});save();notify('Saqlandi ✓');renderCats();}
-function editCat(id){showCatForm(id)}
-function delCat(id){askConfirm("Kategoriyani o'chirasizmi?",()=>{var sec=db.sections.find(s=>s.id===curSection);if(!sec)return;sec.cats=sec.cats.filter(c=>c.id!==id);save();notify("O'chirildi ✓");renderCats();});}
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, universal_text_handler))
 
-function getCat(){var sec=db.sections.find(s=>s.id===curSection);return sec?.cats.find(c=>c.id===curCat);}
-function renderFlows(){var cat=getCat();if(!cat)return;document.getElementById('cat-title').textContent=cat.title;var q=(document.getElementById('search-flows')?.value||'').trim().toLowerCase();var filtered=q?cat.flows.filter(f=>f.title.toLowerCase().includes(q)):cat.flows;var h='';filtered.forEach((f,i)=>{h+=`<div class="section-item" onclick="openFlow('${f.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div style="min-width:0"><div class="section-name">${esc(f.title)}</div>${f.desc?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(f.desc)}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();editFlowItem('${f.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delFlowItem('${f.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!filtered.length)h=`<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">${q?'Topilmadi':'Jarayonlar yo\'q'}</div>`;document.getElementById('flows-list').innerHTML=h;if(isAdmin){document.getElementById('flow-form').innerHTML=`<button class="add-item-btn" onclick="showFlowForm()">＋ Jarayon qo'shish</button>`;if(!q){var listEl=document.getElementById('flows-list');initDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});initTouchDrag(listEl,()=>cat.flows,arr=>{cat.flows=arr;renderFlows();});}}else document.getElementById('flow-form').innerHTML='';}
-function openFlow(id){curFlow=id;goTo('p-flow')}
-function showFlowForm(id){var cat=getCat();var flow=id?cat?.flows.find(f=>f.id===id):null;document.getElementById('flow-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="ff-title" value="${esc(flow?.title||'')}" placeholder="Jarayon nomi..."></div><div class="frow"><label class="flbl">Tavsif</label><input class="fi" id="ff-desc" value="${esc(flow?.desc||'')}" placeholder="Qisqacha tavsif..."></div><div class="fbtns"><button class="fsave" onclick="saveFlowItem('${id||''}')">Saqlash</button><button class="fcancel" onclick="renderFlows()">Bekor</button></div></div>`;document.getElementById('ff-title').focus();}
-function saveFlowItem(id){var cat=getCat();if(!cat)return;var title=document.getElementById('ff-title').value.trim();if(!title){notify('Nom kiriting!');return;}var fdesc=document.getElementById('ff-desc')?.value.trim()||'';if(id){var f=cat.flows.find(x=>x.id===id);if(f){f.title=title;f.desc=fdesc;}}else cat.flows.push({id:'f'+Date.now(),title,desc:fdesc,nodes:[]});save();notify('Saqlandi ✓');renderFlows();}
-function editFlowItem(id){showFlowForm(id)}
-function delFlowItem(id){askConfirm("Jarayonni o'chirasizmi?",()=>{var cat=getCat();if(!cat)return;cat.flows=cat.flows.filter(f=>f.id!==id);save();notify("O'chirildi ✓");renderFlows();});}
+    application.add_handler(CallbackQueryHandler(addagent_callback, pattern="^(addday_|adddays_done|addconfirm_yes|add_cancel)"))
+    application.add_handler(CallbackQueryHandler(editagent_callback, pattern="^(edit_)"))
+    application.add_handler(CallbackQueryHandler(delagent_callback, pattern="^(delagent_)"))
+    application.add_handler(CallbackQueryHandler(cheklistyaratish_callback, pattern="^ccl_new_"))
+    application.add_handler(CallbackQueryHandler(cheklistyaratish_confirm_callback, pattern="^ccl_new_confirm$"))
+    application.add_handler(CallbackQueryHandler(ccl_button_callback, pattern="^ccl_"))
+    application.add_handler(CallbackQueryHandler(button_callback))
 
-function getFlow(){var cat=getCat();return cat?.flows.find(f=>f.id===curFlow);}
-function renderTree(){var flow=getFlow();if(!flow)return;document.getElementById('flow-title').textContent=flow.title;var fab=document.getElementById('flow-admin-btns');fab.style.display=isAdmin?'flex':'none';document.getElementById('flow-name-form').style.display='none';document.getElementById('root-form').innerHTML='';var h='<div class="tree-col">';flow.nodes.forEach((n,i)=>{if(i>0)h+='<div style="border-top:1.5px dashed var(--white-10);margin:4px 0 12px 0;width:100vw;position:relative;left:-16px"></div>';h+=nodeHTML(n,String(i+1).padStart(2,'00'));});h+='</div>';if(isAdmin)h+=`<button class="add-root-btn" onclick="showNodeForm(null,null)">＋ Harakat qo'shish</button>`;document.getElementById('tree-wrap').innerHTML=h;}
-function nodeHTML(n,num){var ab=isAdmin?`<div class="node-corner">${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''} ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}<button class="corner-btn" onclick="showNodeForm('${n.id}',null,true)">✏</button><button class="corner-btn" style="color:#ff7070" onclick="delNode('${n.id}')">✕</button></div>`:(n.link||n.img?`<div class="node-corner">${n.link?`<button class="corner-btn always" onclick="navigator.clipboard.writeText('${esc(n.link)}').then(()=>notify('Link nusxa ✓'))">🔗</button>`:''} ${n.img?`<button class="corner-btn always" onclick="openImg('${n.id}')">🖼</button>`:''}</div>`:'');var card=`<div class="node-card" id="nc-${n.id}"><div class="node-num">${num}</div>${ab}<div class="node-name">${esc(n.name)}</div>${n.msg?`<div class="node-msg node-msg-collapsed" id="nm-wrap-${n.id}">${esc(n.msg)}<div class="node-msg-btns"><button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('nm-${n.id}').textContent).then(()=>notify('Nusxa ✓'))">⧉</button><button class="expand-btn" id="nm-btn-${n.id}" onclick="toggleMsg('${n.id}')">▼</button></div><span id="nm-${n.id}" style="display:none">${esc(n.msg)}</span></div>`:''} ${n.link?`<div class="node-link"><a href="${esc(n.link)}" target="_blank">🔗 Link</a></div>`:''}</div>`;var hasC=n.children?.length>0;var ch='';if(hasC||isAdmin){ch+=`<div class="connector"><div class="vbar-wrap"><div class="vbar"></div></div><div class="children-col">`;n.children?.forEach((c,ci)=>{ch+=`<div class="child-row"><div class="hbar"></div>${nodeHTML(c,String(ci+1).padStart(2,'00'))}</div>`;});if(isAdmin)ch+=`<div style="display:flex;align-items:center"><div class="hbar"></div><button class="add-child-btn" onclick="showNodeForm('${n.id}',null)">＋ Variant</button></div><div id="cf-${n.id}"></div>`;ch+=`</div></div>`;}return `<div class="node-row" id="nr-${n.id}"><div style="display:flex;flex-direction:column">${card}<div id="ef-${n.id}"></div></div>${ch}</div>`;}
-function editFlowName(){var flow=getFlow();if(!flow)return;var f=document.getElementById('flow-name-form');f.style.display='block';f.innerHTML=`<div class="form-box fade"><div class="frow"><input class="fi" id="fn-title" value="${esc(flow.title)}"></div><div class="fbtns"><button class="fsave" onclick="saveFlowName()">Saqlash</button><button class="fcancel" onclick="document.getElementById('flow-name-form').style.display='none'">Bekor</button></div></div>`;document.getElementById('fn-title').focus();}
-function saveFlowName(){var flow=getFlow();if(!flow)return;var t=document.getElementById('fn-title').value.trim();if(!t)return;flow.title=t;save();document.getElementById('flow-title').textContent=t;document.getElementById('flow-name-form').style.display='none';notify('Saqlandi ✓');updateBc();}
-function deleteFlow(){askConfirm("Jarayonni o'chirasizmi?",()=>{var cat=getCat();if(!cat)return;cat.flows=cat.flows.filter(f=>f.id!==curFlow);curFlow=null;save();notify("O'chirildi ✓");goBack('p-cat');});}
-function showNodeForm(pid,_,edit){var isE=!!edit;var flow=getFlow();var node=isE?findNode(flow.nodes,pid):null;var fid=isE?`ef-${pid}`:(pid&&pid!=='null'?`cf-${pid}`:'root-form');var t=document.getElementById(fid);if(!t)return;t.innerHTML=`<div class="node-form fade"><div class="frow"><label class="flbl">Nomi</label><input class="fi" id="${fid}_n" value="${esc(node?.name||'')}"></div><div class="frow"><label class="flbl">Xabar matni</label><textarea class="fi" id="${fid}_m" style="min-height:60px;resize:vertical;font-size:11px">${esc(node?.msg||'')}</textarea></div><div class="frow"><label class="flbl">Link</label><input class="fi" id="${fid}_l" value="${esc(node?.link||'')}" placeholder="https://..."></div><div class="frow"><label class="flbl">Rasm</label><input type="file" accept="image/*" id="${fid}_i" style="font-size:11px;width:100%;color:var(--white-80)">${node?.img?'<div style="font-size:11px;color:var(--lime);margin-top:3px">✓ Rasm bor</div>':''}</div><div class="fbtns"><button class="fsave" onclick="${isE?`saveEditNode('${pid}','${fid}')`:`saveNewNode('${pid}','${fid}')`}">Saqlash</button><button class="fcancel" onclick="renderTree()">Bekor</button></div></div>`;document.getElementById(fid+'_n').focus();}
-function saveNewNode(pid,fid){var name=document.getElementById(fid+'_n').value.trim();var msg=document.getElementById(fid+'_m').value.trim();var link=document.getElementById(fid+'_l').value.trim();if(!name){notify('Nom kiriting!');return;}var imgF=document.getElementById(fid+'_i')?.files[0];var go=(img)=>{var n={id:'n'+Date.now(),name,msg,link,img:img||'',children:[]};var flow=getFlow();if(!pid||pid==='null')flow.nodes.push(n);else{var p=findNode(flow.nodes,pid);if(p)p.children.push(n);}save();notify('Saqlandi ✓');renderTree();};if(imgF){var r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');}
-function saveEditNode(nid,fid){var name=document.getElementById(fid+'_n').value.trim();var msg=document.getElementById(fid+'_m').value.trim();var link=document.getElementById(fid+'_l').value.trim();if(!name){notify('Nom kiriting!');return;}var imgF=document.getElementById(fid+'_i')?.files[0];var flow=getFlow();var n=findNode(flow.nodes,nid);if(!n)return;var go=(img)=>{n.name=name;n.msg=msg;n.link=link;if(img)n.img=img;save();notify('Saqlandi ✓');renderTree();};if(imgF){var r=new FileReader();r.onload=e=>go(e.target.result);r.readAsDataURL(imgF);}else go('');}
-function delNode(id){askConfirm("Harakatni o'chirasizmi?",()=>{var flow=getFlow();flow.nodes=rmNode(flow.nodes,id);save();notify("O'chirildi ✓");renderTree();});}
-function findNode(ns,id){for(var n of ns){if(n.id===id)return n;var f=findNode(n.children||[],id);if(f)return f;}return null;}
-function rmNode(ns,id){return ns.filter(n=>n.id!==id).map(n=>({...n,children:rmNode(n.children||[],id)}));}
-function openImg(nid){var flow=getFlow();var n=findNode(flow.nodes,nid);if(!n?.img)return;document.getElementById('img-src').src=n.img;document.getElementById('img-modal').classList.add('open');}
-function closeImg(){document.getElementById('img-modal').classList.remove('open');document.getElementById('img-src').src='';}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function notify(m){var n=document.getElementById('notif');n.textContent=m;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2000);}
+    logger.info("Bot starting...")
+    application.run_polling(drop_pending_updates=True)
 
-var ACAD_IDS=['academy','academy2','academy3'];
-var ACAD_KEY='academy_db_v1';
-var curAcadSec=null,curAcadCat=null,curAcadItem=null;
-
-async function acadSave(){
-  var key=ACAD_IDS[curBolim];
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:acadDb})});}
-  catch(e){localStorage.setItem(ACAD_KEY+'_'+key,JSON.stringify(acadDb));}
-}
-async function acadLoad(){
-  var key=ACAD_IDS[curBolim];
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-    var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data&&rows[0].data.sections){acadDb=rows[0].data;}
-    else{
-      var d=localStorage.getItem(ACAD_KEY+'_'+key);
-      acadDb=d?JSON.parse(d):{sections:[]};
-      if(key==='academy'&&!d){var old=localStorage.getItem(ACAD_KEY);if(old)acadDb=JSON.parse(old);}
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:acadDb})});}catch(e2){}
-    }
-  }catch(e){
-    var d=localStorage.getItem(ACAD_KEY+'_'+key);
-    acadDb=d?JSON.parse(d):{sections:[]};
-    if(key==='academy'&&!d){var old=localStorage.getItem(ACAD_KEY);if(old)acadDb=JSON.parse(old);}
-  }
-}
-
-function formatAcadText(t){if(!t)return '';var s=esc(t);s=s.split('**').map((p,i)=>i%2===1?'<b>'+p+'</b>':p).join('');var lines=s.split('\n');var out=[],inList=false;lines.forEach(line=>{if(line.startsWith('* ')){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+line.slice(2)+'</li>');}else{if(inList){out.push('</ul>');inList=false;}out.push(line?(line+'<br>'):'<br>');}});if(inList)out.push('</ul>');return out.join('');}
-function openAcadSection(id){curAcadSec=id;curAcadCat=null;curAcadItem=null;goTo('p-acad-cats');}
-function renderAcadCats(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;document.getElementById('acad-sec-title').textContent=sec.title;var h='';(sec.cats||[]).forEach((cat,i)=>{h+=`<div class="section-item" onclick="openAcadCat('${cat.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div style="min-width:0"><div class="section-name">${esc(cat.title)}</div>${cat.intro?`<div style="font-size:11px;color:var(--white-50);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat.intro.substring(0,60))}${cat.intro.length>60?'...':''}</div>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();showAcadCatForm('${curAcadSec}','${cat.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delAcadCat('${curAcadSec}','${cat.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!sec.cats||!sec.cats.length)h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Kategoriyalar yo\'q</div>';document.getElementById('acad-cats-list').innerHTML=h;if(isAdmin){document.getElementById('acad-cats-form').innerHTML=`<button class="add-item-btn" onclick="showAcadCatForm('${curAcadSec}')">＋ Kategoriya qo'shish</button>`;var listEl=document.getElementById('acad-cats-list');initDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});initTouchDrag(listEl,()=>sec.cats,arr=>{sec.cats=arr;acadSave();renderAcadCats();});}else document.getElementById('acad-cats-form').innerHTML='';updateAcadBc();}
-function openAcadCat(id){curAcadCat=id;curAcadItem=null;goTo('p-acad-items');}
-function renderAcadItems(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;var cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;document.getElementById('acad-cat-title').textContent=cat.title;var introBox=document.getElementById('acad-cat-intro-box');introBox.innerHTML=cat.intro?`<div class="acad-intro">${formatAcadText(cat.intro)}</div>`:'';var h='';(cat.items||[]).forEach((item,i)=>{h+=`<div class="section-item" onclick="openAcadItem('${item.id}')" ${isAdmin?'draggable="true"':''}><div style="display:flex;align-items:center;flex:1;min-width:0">${isAdmin?`<div class="drag-handle" onclick="event.stopPropagation()"><span></span><span></span><span></span></div>`:''}<div class="section-num">${String(i+1).padStart(2,'00')}</div><div class="section-name">${esc(item.title)}</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${isAdmin?`<div class="action-btns"><button class="abtn" onclick="event.stopPropagation();showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}')">✏</button><button class="abtn abtn-red" onclick="event.stopPropagation();delAcadItem('${curAcadSec}','${curAcadCat}','${item.id}')">✕</button></div>`:''}<span class="chevron">›</span></div></div>`;});if(!cat.items||!cat.items.length)h='<div style="text-align:center;padding:32px;color:var(--white-50);font-size:13px">Mavzular yo\'q</div>';document.getElementById('acad-items-list').innerHTML=h;if(isAdmin){document.getElementById('acad-items-form').innerHTML=`<button class="add-item-btn" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}')">＋ Mavzu qo'shish</button>`;var listEl=document.getElementById('acad-items-list');initDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});initTouchDrag(listEl,()=>cat.items,arr=>{cat.items=arr;acadSave();renderAcadItems();});}else document.getElementById('acad-items-form').innerHTML='';updateAcadBc();}
-function openAcadItem(id){curAcadItem=id;goTo('p-acad-detail');}
-function renderAcadDetail(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);if(!sec)return;var cat=sec.cats.find(c=>c.id===curAcadCat);if(!cat)return;var item=cat.items.find(i=>i.id===curAcadItem);if(!item)return;document.getElementById('acad-item-title').textContent=item.title;var h='';if(item.standard)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-standard">Standart</div><div class="acad-content">${formatAcadText(item.standard)}</div></div>`;if(item.violation)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-violation">Qoidabuzarlik</div><div class="acad-content">${formatAcadText(item.violation)}</div></div>`;if(item.decision)h+=`<div class="acad-section-block"><div class="acad-section-label acad-label-decision">Qaror va harakat</div><div class="acad-content">${formatAcadText(item.decision)}</div></div>`;if(!item.standard&&!item.violation&&!item.decision&&item.content)h+=`<div class="acad-content" style="padding:4px 0;line-height:1.9;font-size:14px">${formatAcadText(item.content)}</div>`;if(isAdmin)h+=`<div style="margin-top:16px"><button class="fsave" onclick="showAcadItemForm('${curAcadSec}','${curAcadCat}','${item.id}',true)">✏ Tahrirlash</button></div><div id="acad-detail-form" style="margin-top:8px"></div>`;document.getElementById('acad-detail-body').innerHTML=h;updateAcadBc();}
-function updateAcadBc(){var sec=acadDb.sections.find(s=>s.id===curAcadSec);var cat=sec?.cats?.find(c=>c.id===curAcadCat);var item=cat?.items?.find(i=>i.id===curAcadItem);var pages=['p-acad-cats','p-acad-items','p-acad-detail'];var titles={'p-home':'Bosh sahifa','p-acad-cats':sec?.title||'','p-acad-items':cat?.title||'','p-acad-detail':item?.title||''};pages.forEach(p=>{var el=document.getElementById('bc-'+p.replace('p-',''));if(!el)return;var stack=['p-home',...pages.slice(0,pages.indexOf(p)+1)];var html='';stack.forEach((pp,ii)=>{if(ii<stack.length-1)html+=`<span class="bc-item" onclick="goBack('${pp}')">${titles[pp]}</span><span class="bc-sep">›</span>`;else html+=`<span class="bc-cur">${titles[pp]}</span>`;});el.innerHTML=html;});}
-function showAcadCatForm(secId,catId){var sec=acadDb.sections.find(s=>s.id===secId);var cat=catId?sec?.cats.find(c=>c.id===catId):null;document.getElementById('acad-cats-form').innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Kategoriya nomi</label><input class="fi" id="acf-title" value="${esc(cat?.title||'')}" placeholder="Kategoriya nomi..."></div><div class="frow"><label class="flbl">Kirish matni</label><textarea class="fi" id="acf-intro" style="min-height:80px;resize:vertical" placeholder="Bu bo'limda nima o'rganiladi...">${esc(cat?.intro||'')}</textarea></div><div class="fbtns"><button class="fsave" onclick="saveAcadCat('${secId}','${catId||''}')">Saqlash</button><button class="fcancel" onclick="renderAcadCats()">Bekor</button></div></div>`;document.getElementById('acf-title').focus();}
-function saveAcadCat(secId,catId){var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var title=document.getElementById('acf-title').value.trim();var intro=document.getElementById('acf-intro').value.trim();if(!title){notify('Nom kiriting!');return;}if(!sec.cats)sec.cats=[];if(catId){var c=sec.cats.find(x=>x.id===catId);if(c){c.title=title;c.intro=intro;}}else sec.cats.push({id:'ac'+Date.now(),title,intro,items:[]});acadSave();notify('Saqlandi ✓');renderAcadCats();}
-function delAcadCat(secId,catId){askConfirm("Kategoriyani o'chirasizmi?",()=>{var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;sec.cats=sec.cats.filter(c=>c.id!==catId);acadSave();notify("O'chirildi ✓");renderAcadCats();});}
-function showAcadItemForm(secId,catId,itemId,inDetail){var sec=acadDb.sections.find(s=>s.id===secId);var cat=sec?.cats.find(c=>c.id===catId);var item=itemId?cat?.items.find(i=>i.id===itemId):null;var containerId=inDetail?'acad-detail-form':'acad-items-form';document.getElementById(containerId).innerHTML=`<div class="form-box fade"><div class="frow"><label class="flbl">Mavzu nomi</label><input class="fi" id="afi-title" value="${esc(item?.title||'')}" placeholder="Mavzu nomi..."></div><div class="frow"><label class="flbl" style="color:#a5b4fc">Standart</label><textarea class="fi" id="afi-standard" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qoida va ruxsat chegaralari...">${esc(item?.standard||'')}</textarea></div><div class="frow"><label class="flbl" style="color:#ff9090">Qoidabuzarlik</label><textarea class="fi" id="afi-violation" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qachon buzilgan hisoblanadi...">${esc(item?.violation||'')}</textarea></div><div class="frow"><label class="flbl" style="color:var(--lime)">Qaror va harakat</label><textarea class="fi" id="afi-decision" style="min-height:100px;resize:vertical;font-size:12px;font-family:monospace" placeholder="Qaror va harakatlar...">${esc(item?.decision||'')}</textarea></div><div class="fbtns"><button class="fsave" onclick="saveAcadItem('${secId}','${catId}','${itemId||''}','${inDetail||''}')">Saqlash</button><button class="fcancel" onclick="${inDetail?'renderAcadDetail()':'renderAcadItems()'}">Bekor</button></div></div>`;document.getElementById('afi-title').focus();}
-function saveAcadItem(secId,catId,itemId,inDetail){var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var cat=sec.cats.find(c=>c.id===catId);if(!cat)return;var title=document.getElementById('afi-title').value.trim();var standard=document.getElementById('afi-standard').value.trim();var violation=document.getElementById('afi-violation').value.trim();var decision=document.getElementById('afi-decision').value.trim();if(!title){notify('Nom kiriting!');return;}if(!cat.items)cat.items=[];if(itemId){var it=cat.items.find(x=>x.id===itemId);if(it){it.title=title;it.standard=standard;it.violation=violation;it.decision=decision;}}else cat.items.push({id:'ai'+Date.now(),title,standard,violation,decision});acadSave();notify('Saqlandi ✓');if(inDetail)renderAcadDetail();else renderAcadItems();}
-function delAcadItem(secId,catId,itemId){askConfirm("Mavzuni o'chirasizmi?",()=>{var sec=acadDb.sections.find(s=>s.id===secId);if(!sec)return;var cat=sec.cats.find(c=>c.id===catId);if(!cat)return;cat.items=cat.items.filter(i=>i.id!==itemId);acadSave();notify("O'chirildi ✓");renderAcadItems();});}
-function toggleMsg(id){var wrap=document.getElementById('nm-wrap-'+id);var btn=document.getElementById('nm-btn-'+id);if(!wrap)return;var collapsed=wrap.classList.contains('node-msg-collapsed');if(collapsed){wrap.classList.remove('node-msg-collapsed');btn.textContent='▲';}else{wrap.classList.add('node-msg-collapsed');btn.textContent='▼';}}
-
-// =================== KAITEN ===================
-var KAITEN_DEPTS = ["Sotuv bo'limi","Partnership bo'limi","Support bo'limi","IT bo'limi","Buxgalteriya bo'limi","Yuridik bo'limi"];
-var KAITEN_ROLE_LABELS = {ijrochi:'Ijrochi', nazoratchi:'Nazoratchi', yaratuvchi:'Yaratuvchi', other:'Boshqa'};
-var kaitenChatOpen = null;
-var kaitenAlarmFormOpen=null;
-function kaitenToggleAlarmForm(id){
-  kaitenAlarmFormOpen = (kaitenAlarmFormOpen===id) ? null : id;
-  renderKaiten();
-}
-function kaitenSaveAlarm(id){
-  var t = kaitenTasks.find(x=>x.id===id);
-  if(!t) return;
-  var dateEl = document.getElementById('alarm-date-'+id);
-  var timeEl = document.getElementById('alarm-time-'+id);
-  var textEl = document.getElementById('alarm-text-'+id);
-  var date = dateEl.value, time = timeEl.value;
-  if(!date || !time){ notify("Sana va vaqtni kiriting!"); return; }
-  var iso = date+'T'+time;
-  var remindAtUTC = new Date(iso).toISOString();
-  var sabab = textEl.value.trim();
-  t.alarm = iso;
-  kaitenSave();
-  kaitenAlarmFormOpen = null;
-  renderKaiten();
-  notify('Budilnik qo\'yildi ✓');
-  var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
-  if(sabab) lines.push('Sabab: '+sabab);
-  var msgText = lines.join(String.fromCharCode(10));
-  fetch(SB_URL+'/rest/v1/bot_group_messages?on_conflict=id',{
-    method:'POST',
-    headers:{...SB_H,'Prefer':'resolution=merge-duplicates,return=minimal'},
-    body:JSON.stringify({id:'kalarm_'+t.id, text:msgText, send_at:remindAtUTC, status:'pending'})
-  }).then(function(r){ if(!r.ok) r.text().then(function(t2){ console.error('alarm save failed', r.status, t2); }); }).catch(function(e){ console.error('alarm fetch error', e); });
-}
-function kaitenConfirmRemoveAlarm(id){
-  askConfirm("Budilnikni o'chirishni xohlaysizmi?", function(){ kaitenRemoveAlarm(id); }, 'Ha', "Yo'q");
-}
-function kaitenRemoveAlarm(id){
-  var t = kaitenTasks.find(x=>x.id===id);
-  if(!t) return;
-  delete t.alarm;
-  kaitenSave();
-  renderKaiten();
-  notify("Budilnik o'chirildi");
-  fetch(SB_URL+'/rest/v1/bot_group_messages?id=eq.kalarm_'+id,{method:'DELETE',headers:SB_H}).catch(function(){});
-}
-function kaitenToggleChat(id){
-  kaitenChatOpen = (kaitenChatOpen===id) ? null : id;
-  if(kaitenChatOpen===id){
-    var t = kaitenTasks.find(x=>x.id===id);
-    var count = (t&&t.comments)?t.comments.length:0;
-    try{ localStorage.setItem('kaiten_seen_'+id, String(count)); }catch(e){}
-  }
-  renderKaiten();
-}
-function kaitenHasUnread(t){
-  var count = (t.comments)?t.comments.length:0;
-  if(!count) return false;
-  var seen = 0;
-  try{ seen = parseInt(localStorage.getItem('kaiten_seen_'+t.id)||'0'); }catch(e){}
-  return count > seen;
-}
-function kaitenMyFio(){
-  if(CURRENT_USER_ORG_ID){
-    var byId = orgData.find(n => n.id === CURRENT_USER_ORG_ID);
-    if(byId) return byId.fio;
-  }
-  if(!CURRENT_USER_TG) return null;
-  var norm = kaitenNorm(CURRENT_USER_TG.replace(/^@/,''));
-  if(!norm) return null;
-  var node = orgData.find(n => n.tg && kaitenNorm(n.tg.replace(/^@/,'')) === norm);
-  return node ? node.fio : null;
-}
-function kaitenMyRoleForTask(t){
-  var myFio = kaitenMyFio();
-  if(myFio){
-    if(t.empFio && kaitenNorm(t.empFio)===kaitenNorm(myFio)) return 'ijrochi';
-    if(t.nazFio && kaitenNorm(t.nazFio)===kaitenNorm(myFio)) return 'nazoratchi';
-  }
-  return isAdmin ? 'yaratuvchi' : 'other';
-}
-function kaitenAddComment(id){
-  var inp=document.getElementById('kc-text-'+id);
-  var text=inp.value.trim();
-  if(!text){ notify('Matn kiriting!'); return; }
-  var t=kaitenTasks.find(x=>x.id===id);
-  if(!t.comments)t.comments=[];
-  t.comments.push({role:kaitenMyRoleForTask(t), text, time:new Date().toISOString()});
-  kaitenSave(); renderKaiten();
-}
-function kaitenDelComment(id, idx){
-  askConfirm("Xabarni o'chirasizmi?",()=>{
-    var t=kaitenTasks.find(x=>x.id===id);
-    t.comments.splice(idx,1);
-    kaitenSave(); renderKaiten();
-  });
-}
-var kaitenTasks = [];
-var kaitenColumns = [
-  {id:'todo', title:'Topshiriqlar'},
-  {id:'progress', title:'Jarayonda'},
-  {id:'done', title:'Bajarildi'},
-  {id:'accepted', title:'Qabul qilindi'}
-];
-function kaitenNorm(s){ return String(s||'').toLowerCase().replace(/['’ʻ`]/g,'').replace(/\s+/g,' ').trim(); }
-async function kaitenSave(){
-  var payload = {tasks:kaitenTasks, columns:kaitenColumns};
-  try{await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:payload})});}
-  catch(e){localStorage.setItem('kaiten_tasks',JSON.stringify(payload));}
-}
-async function kaitenLoad(){
-  try{
-    var r=await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.kaiten',{headers:SB_H});
-    var rows=await r.json();
-    if(rows&&rows.length&&rows[0].data){
-      kaitenApplyData(rows[0].data);
-    }else{
-      var d=localStorage.getItem('kaiten_tasks');
-      kaitenApplyData(d?JSON.parse(d):null);
-      try{await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'kaiten',data:{tasks:kaitenTasks, columns:kaitenColumns}})});}catch(e2){}
-    }
-  }catch(e){
-    var d=localStorage.getItem('kaiten_tasks');
-    kaitenApplyData(d?JSON.parse(d):null);
-  }
-}
-function kaitenApplyData(data){
-  if(!data){ kaitenTasks=[]; return; }
-  if(Array.isArray(data)){ kaitenTasks=data; return; } // legacy format: plain tasks array
-  kaitenTasks = data.tasks || [];
-  if(data.columns && data.columns.length) kaitenColumns = data.columns;
-}
-function kaitenGetEmployees(deptName){
-  return orgData.filter(function(n){ return n.fio && n.fio.trim(); }).map(function(n){
-    var parent = orgData.find(function(p){ return p.id===n.parentId; });
-    return {fio:n.fio, name:n.name, role:n.name, dept:parent?parent.name:'', tg:n.tg||''};
-  });
-}
-function kaitenGetAllEmployees(){
-  return orgData.filter(function(n){ return n.fio && n.fio.trim(); }).map(function(n){
-    var parent = orgData.find(function(p){ return p.id===n.parentId; });
-    return {fio:n.fio, role:n.name, dept:parent?parent.name:'', tg:n.tg||''};
-  });
-}
-function kaitenFieldsHtml(prefix, task){
-  task = task || {};
-  var dept = task.dept || kaitenFilterDept;
-  var allEmps = kaitenGetAllEmployees();
-  var nazOptions = allEmps.map(function(e){
-    var val = e.fio+'|'+e.role+'|'+e.dept;
-    return '<option value="'+esc(val)+'">'+esc(e.fio)+' ('+esc(e.role)+' \u2014 '+esc(e.dept)+')</option>';
-  }).join('');
-  var dateVal='', timeVal='';
-  if(task.deadline){
-    var parts = task.deadline.split('T');
-    dateVal = parts[0]||''; timeVal=(parts[1]||'').slice(0,5);
-  }
-  var links = task.links||[''];
-  var linksHtml = links.map(function(l,i){
-    return '<div style="display:flex;gap:6px;margin-top:'+(i===0?'5':'4')+'px">'
-      +'<input class="fi" type="url" id="'+prefix+'-link-'+i+'" value="'+esc(l)+'" placeholder="https://..." style="margin-top:0;flex:1">'
-      +(i>0?'<button class="abtn abtn-red" onclick="kaitenRemoveLink(\''+prefix+'\','+i+')" style="margin-top:0">\u2715</button>':'')
-      +'</div>';
-  }).join('');
-  var contacts = task.contacts||[{name:'',role:'',tel:''}];
-  var contactsHtml = contacts.map(function(c,i){
-    return '<div class="kaiten-contact-row" id="'+prefix+'-contact-'+i+'" style="border:1px solid var(--white-10);border-radius:8px;padding:8px;margin-top:'+(i===0?'5':'4')+'px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
-      +'<span style="font-size:11px;color:var(--white-50)">'+(i+1)+'-kontakt</span>'
-      +(i>0?'<button class="abtn abtn-red" onclick="kaitenRemoveContact(\''+prefix+'\','+i+')" style="padding:2px 6px">\u2715</button>':'')
-      +'</div>'
-      +'<input class="fi" id="'+prefix+'-cname-'+i+'" value="'+esc(c.name||'')+'" placeholder="Ismi" style="margin-top:0;margin-bottom:4px">'
-      +'<input class="fi" id="'+prefix+'-crole-'+i+'" value="'+esc(c.role||'')+'" placeholder="Lavozimi" style="margin-top:0;margin-bottom:4px">'
-      +'<input class="fi" id="'+prefix+'-ctel-'+i+'" value="'+esc(c.tel||'')+'" placeholder="Tel raqami" style="margin-top:0">'
-      +'</div>';
-  }).join('');
-  var files = task.files||[];
-  var filesHtml = files.map(function(f,i){
-    return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
-      +'<a href="'+esc(f.url)+'" target="_blank" style="font-size:12px;color:var(--lime);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\ud83d\udcce '+esc(f.name)+'</a>'
-      +'<button class="abtn abtn-red" onclick="kaitenRemoveExistingFile(\''+prefix+'\','+i+')" style="padding:2px 6px">\u2715</button>'
-      +'</div>';
-  }).join('');
-  return ''
-    +'<input type="hidden" id="'+prefix+'-dept" value="'+esc(dept)+'">'
-    +'<input type="hidden" id="'+prefix+'-link-count" value="'+links.length+'">'
-    +'<input type="hidden" id="'+prefix+'-contact-count" value="'+contacts.length+'">'
-    +'<div class="frow"><label class="flbl">Vazifa matni <span style="color:#ff7070">*</span></label>'
-    +'<textarea class="fi" id="'+prefix+'-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi...">'+esc(task.text||'')+'</textarea></div>'
-    +'<div class="frow"><label class="flbl">Xodim <span style="color:#ff7070">*</span></label>'
-    +'<select class="fi" id="'+prefix+'-emp"><option value="">\u2014 tanlang \u2014</option></select></div>'
-    +'<div class="frow"><label class="flbl">Yakuniy muddat <span style="color:#ff7070">*</span></label>'
-    +'<div style="display:flex;gap:8px;margin-top:5px">'
-    +'<input class="fi" type="date" id="'+prefix+'-deadline-date" value="'+esc(dateVal)+'" style="margin-top:0">'
-    +'<input class="fi" type="time" id="'+prefix+'-deadline-time" value="'+esc(timeVal)+'" style="margin-top:0">'
-    +'</div></div>'
-    +'<div class="frow"><label class="flbl">Nazoratchi xodim</label>'
-    +'<select class="fi" id="'+prefix+'-naz"><option value="">\u2014 tanlanmagan \u2014</option>'+nazOptions+'</select></div>'
-    +'<div class="frow"><label class="flbl">Linklar</label>'
-    +'<div id="'+prefix+'-links-wrap">'+linksHtml+'</div>'
-    +'<button class="abtn" style="margin-top:6px" onclick="kaitenAddLink(\''+prefix+'\')">+ Link qo\'shish</button></div>'
-    +'<div class="frow"><label class="flbl">Fayllar</label>'
-    +'<div id="'+prefix+'-files-list">'+filesHtml+'</div>'
-    +'<input type="file" id="'+prefix+'-file-inp" multiple style="display:none" onchange="kaitenUploadFiles(\''+prefix+'\')">'
-    +'<button class="abtn" style="margin-top:6px" onclick="document.getElementById(\''+prefix+'-file-inp\').click()">+ Fayl yuklash</button>'
-    +'<div id="'+prefix+'-file-status" style="font-size:11px;color:var(--lime);margin-top:4px"></div></div>'
-    +'<div class="frow"><label class="flbl">Kontaktlar</label>'
-    +'<div id="'+prefix+'-contacts-wrap">'+contactsHtml+'</div>'
-    +'<button class="abtn" style="margin-top:6px" onclick="kaitenAddContact(\''+prefix+'\')">+ Kontakt qo\'shish</button></div>';
-}
-function kaitenAddLink(prefix){
-  var wrap=document.getElementById(prefix+'-links-wrap');
-  var countEl=document.getElementById(prefix+'-link-count');
-  var i=parseInt(countEl.value); countEl.value=i+1;
-  var div=document.createElement('div');
-  div.style.cssText='display:flex;gap:6px;margin-top:4px';
-  div.innerHTML='<input class="fi" type="url" id="'+prefix+'-link-'+i+'" placeholder="https://..." style="margin-top:0;flex:1"><button class="abtn abtn-red" onclick="this.parentNode.remove()" style="margin-top:0">\u2715</button>';
-  wrap.appendChild(div);
-}
-function kaitenRemoveLink(prefix,i){
-  var el=document.getElementById(prefix+'-link-'+i);
-  if(el&&el.parentNode) el.parentNode.remove();
-}
-function kaitenAddContact(prefix){
-  var wrap=document.getElementById(prefix+'-contacts-wrap');
-  var countEl=document.getElementById(prefix+'-contact-count');
-  var i=parseInt(countEl.value); countEl.value=i+1;
-  var div=document.createElement('div');
-  div.id=prefix+'-contact-'+i;
-  div.style.cssText='border:1px solid var(--white-10);border-radius:8px;padding:8px;margin-top:4px';
-  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;color:var(--white-50)">'+(i+1)+'-kontakt</span><button class="abtn abtn-red" onclick="this.closest(\'[id]\').remove()" style="padding:2px 6px">\u2715</button></div>'
-    +'<input class="fi" id="'+prefix+'-cname-'+i+'" placeholder="Ismi" style="margin-top:0;margin-bottom:4px">'
-    +'<input class="fi" id="'+prefix+'-crole-'+i+'" placeholder="Lavozimi" style="margin-top:0;margin-bottom:4px">'
-    +'<input class="fi" id="'+prefix+'-ctel-'+i+'" placeholder="Tel raqami" style="margin-top:0">';
-  wrap.appendChild(div);
-}
-function kaitenRemoveContact(prefix,i){
-  var el=document.getElementById(prefix+'-contact-'+i);
-  if(el) el.remove();
-}
-var kaitenUploadedFiles={};
-async function kaitenUploadFiles(prefix){
-  var inp=document.getElementById(prefix+'-file-inp');
-  var status=document.getElementById(prefix+'-file-status');
-  var list=document.getElementById(prefix+'-files-list');
-  if(!inp||!inp.files.length) return;
-  if(!kaitenUploadedFiles[prefix]) kaitenUploadedFiles[prefix]=[];
-  status.textContent='Yuklanmoqda...';
-  for(var f of inp.files){
-    try{
-      var safeName=hujjatSafeFilename(f.name);
-      var path='kaiten/'+Date.now()+'_'+safeName;
-      var r=await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},body:f});
-      if(r.ok){
-        var url=SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
-        kaitenUploadedFiles[prefix].push({name:f.name,url:url});
-        var idx2=kaitenUploadedFiles[prefix].length-1;
-        var div=document.createElement('div');
-        div.style.cssText='display:flex;align-items:center;gap:6px;margin-top:4px';
-        div.innerHTML='<a href="'+url+'" target="_blank" style="font-size:12px;color:var(--lime);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\ud83d\udcce '+f.name+'</a><button class="abtn abtn-red" onclick="kaitenRemoveUploadedFile(\''+prefix+'\','+idx2+',this.parentNode)" style="padding:2px 6px">\u2715</button>';
-        list.appendChild(div);
-      }
-    }catch(e){}
-  }
-  status.textContent='Yuklandi \u2713';
-  inp.value='';
-}
-function kaitenRemoveExistingFile(prefix,i){
-  var list=document.getElementById(prefix+'-files-list');
-  if(list&&list.children[i]) list.children[i].remove();
-}
-function kaitenRemoveUploadedFile(prefix,i,el){
-  if(kaitenUploadedFiles[prefix]) kaitenUploadedFiles[prefix].splice(i,1);
-  if(el) el.remove();
-}
-function kaitenFillFormValues(prefix, task){
-  task = task || {};
-  var deptSel=document.getElementById(prefix+'-dept');
-  if(deptSel) deptSel.value = task.dept||'';
-  var presetEmp = (task.empFio && task.empRole) ? (task.empFio+'|'+task.empRole) : '';
-  kaitenUpdateEmpOptions(prefix, presetEmp);
-  var nazSel=document.getElementById(prefix+'-naz');
-  if(nazSel && task.nazFio){
-    nazSel.value = task.nazFio+'|'+task.nazRole+'|'+(task.nazDept||'');
-  }
-}
-function kaitenShowAddForm(){
-  document.getElementById('kaiten-add-form').innerHTML = `<div class="form-box fade">
-    ${kaitenFieldsHtml('kt', {})}
-    <div class="fbtns">
-      <button class="fsave" onclick="kaitenAddTask()">Saqlash</button>
-      <button class="fcancel" onclick="document.getElementById('kaiten-add-form').innerHTML=''">Bekor</button>
-    </div>
-  </div>`;
-  kaitenUpdateEmpOptions('kt');
-}
-function kaitenShowEditForm(id){
-  var t = kaitenTasks.find(function(x){return x.id===id;});
-  if(!t) return;
-  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Vazifani tahrirlash</div>
-    ${kaitenFieldsHtml('ke', t)}
-    <div class="fbtns">
-      <button class="fsave" onclick="kaitenSaveEdit('${id}')">Saqlash</button>
-      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
-    </div>`;
-  orgShowModal(html);
-  kaitenFillFormValues('ke', t);
-}
-function kaitenUpdateEmpOptions(prefix, presetVal){
-  var empSel = document.getElementById(prefix+'-emp');
-  if(!empSel) return;
-  var emps = kaitenGetAllEmployees();
-  if(!emps.length){ empSel.innerHTML = '<option value="">— xodim topilmadi —</option>'; return; }
-  empSel.innerHTML = '<option value="">— tanlang —</option>' + emps.map(function(e){
-    var val = e.fio+'|'+e.role+'|'+(e.tg||'');
-    var label = e.fio+(e.role?' ('+e.role+')':'')+(e.dept?' — '+e.dept:'');
-    var sel = (presetVal && presetVal.split('|').slice(0,2).join('|')===val.split('|').slice(0,2).join('|')) ? 'selected' : '';
-    return '<option value="'+esc(val)+'" '+sel+'>'+esc(label)+'</option>';
-  }).join('');
-}
-function kaitenReadFields(prefix){
-  var dept = document.getElementById(prefix+'-dept').value;
-  var empRaw = document.getElementById(prefix+'-emp').value;
-  var nazRaw = document.getElementById(prefix+'-naz').value;
-  var deadlineDate = document.getElementById(prefix+'-deadline-date').value;
-  var deadlineTime = document.getElementById(prefix+'-deadline-time').value;
-  var deadline = deadlineDate ? (deadlineDate + 'T' + (deadlineTime||'00:00')) : '';
-  var text = document.getElementById(prefix+'-text').value.trim();
-  var empFio='', empRole='', empTg='';
-  if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; empTg=p[2]||''; }
-  var nazFio='', nazRole='', nazDept='';
-  if(nazRaw){ var np=nazRaw.split('|'); nazFio=np[0]; nazRole=np[1]||''; nazDept=np[2]||''; }
-  // Links
-  var links=[];
-  var linkWrap=document.getElementById(prefix+'-links-wrap');
-  if(linkWrap){ Array.from(linkWrap.querySelectorAll('input[type=url]')).forEach(function(el){ if(el.value.trim()) links.push(el.value.trim()); }); }
-  // Contacts
-  var contacts=[];
-  var contactWrap=document.getElementById(prefix+'-contacts-wrap');
-  if(contactWrap){ var rows=contactWrap.querySelectorAll('.kaiten-contact-row,[id^="'+prefix+'-contact-"]'); rows.forEach(function(row,i){ var nameEl=row.querySelector('[id$="-cname-'+i+'"],input[id*="cname"]'); var roleEl=row.querySelector('[id$="-crole-'+i+'"],input[id*="crole"]'); var telEl=row.querySelector('[id$="-ctel-'+i+'"],input[id*="ctel"]'); var name=(nameEl&&nameEl.value.trim())||''; var role=(roleEl&&roleEl.value.trim())||''; var tel=(telEl&&telEl.value.trim())||''; if(name||role||tel) contacts.push({name,role,tel}); }); }
-  // Files — existing + newly uploaded
-  var files = kaitenUploadedFiles[prefix]||[];
-  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text,links,contacts,files};
-}
-function kaitenMyId(){
-  // Unique identity key for "who created/owns" a task — prefers org link, falls back to login
-  var fio = kaitenMyFio();
-  if(fio) return 'fio:'+kaitenNorm(fio);
-  return 'user:'+USER_ID;
-}
-function kaitenCanEditTask(t){
-  if(isAdmin) return true;
-  return t.createdBy && t.createdBy === kaitenMyId();
-}
-
-// =========================
-// CHAT MODULE
-// =========================
-var CHAT_BUCKET = 'hujjatlar';
-var chatGroupMessages = [];
-var chatPersonalThreads = {}; // key: otherUsername -> [messages]
-var chatPendingFilesGroup = [];
-var chatPendingFilesPersonal = [];
-var chatPersonalCurrentUsername = null;
-var chatTaggedGroup = null;
-var chatTaggedPersonal = null;
-var chatEditingId = {group:null, personal:null};
-
-function chatMyName(){
-  var fio = kaitenMyFio();
-  if(fio) return fio;
-  return CURRENT_USER_TG ? ('@'+CURRENT_USER_TG.replace(/^@/,'')) : (USER_ID||'Foydalanuvchi');
-}
-function chatMyUsername(){
-  return (CURRENT_USER_TG||'').replace(/^@/,'').toLowerCase();
-}
-async function chatSaveFile(file){
-  var safeName = hujjatSafeFilename(file.name);
-  var path = 'chat/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+safeName;
-  var r = await fetch(SB_URL+'/storage/v1/object/'+CHAT_BUCKET+'/'+path,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
-    body:file
-  });
-  if(!r.ok) throw new Error('upload failed');
-  return {name:file.name, url:SB_URL+'/storage/v1/object/public/'+CHAT_BUCKET+'/'+path};
-}
-function chatFormatTime(iso){
-  try{
-    var d = new Date(iso);
-    var pad = n=>String(n).padStart(2,'0');
-    return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
-  }catch(e){ return ''; }
-}
-function chatHandleKeydown(ev, kind){
-  if(ev.key==='Enter' && ev.shiftKey){
-    ev.preventDefault();
-    if(kind==='group') chatGroupSend(); else chatPersonalSend();
-  }
-  // plain Enter falls through to default (newline)
-}
-function chatAutoGrow(el){
-  el.style.height='auto';
-  el.style.height=Math.min(el.scrollHeight,100)+'px';
-}
-
-// ---- Umumiy chat ----
-async function renderChatGroup(){
-  var listEl = document.getElementById('chat-group-list');
-  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  chatRenderSidebar('chat-group-sidebar', 'group');
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
-    var rows = await r.json();
-    chatGroupMessages = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-  }catch(e){ chatGroupMessages = []; }
-  chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-}
-function chatRenderSidebar(elId, kind){
-  var el = document.getElementById(elId);
-  if(!el) return;
-  var myName = chatMyName();
-  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  var tagged = kind==='group' ? chatTaggedGroup : chatTaggedPersonal;
-  el.innerHTML = '<div class="chat-sidebar-title">Kimga</div>' + emps.map(function(e){
-    var active = tagged===e.fio;
-    return `<div class="chat-sidebar-item${active?' active':''}" onclick="chatToggleTag('${kind}','${esc(e.fio)}')">${esc(e.fio)}</div>`;
-  }).join('');
-}
-function chatToggleTag(kind, fio){
-  if(kind==='group'){
-    chatTaggedGroup = (chatTaggedGroup===fio) ? null : fio;
-    chatRenderSidebar('chat-group-sidebar','group');
-    var inp = document.getElementById('chat-group-text');
-    chatApplyTagToInput(inp, chatTaggedGroup);
-  } else {
-    chatTaggedPersonal = (chatTaggedPersonal===fio) ? null : fio;
-    var inp2 = document.getElementById('chat-personal-text');
-    chatApplyTagToInput(inp2, chatTaggedPersonal);
-  }
-}
-function chatApplyTagToInput(inp, fio){
-  if(!inp) return;
-  var val = inp.value;
-  var stripped = val.replace(/^@\S[^\n]*\n?/,'');
-  inp.value = fio ? ('@'+fio+'\n'+stripped) : stripped;
-  inp.focus();
-}
-function chatRenderMsgList(listEl, messages, kind){
-  var myName = chatMyName();
-  if(!messages.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xabarlar yo&#39;q</div>'; return; }
-  listEl.innerHTML = messages.map(function(m){
-    var mine = m.from===myName;
-    var filesHtml = (m.files||[]).map(function(f){ return `<a href="${esc(f.url)}" target="_blank" class="chat-msg-file" style="color:${mine?'var(--green-dark)':'var(--lime)'}">📎 ${esc(f.name)}</a>`; }).join('');
-    var editingThis = chatEditingId[kind]===m.id;
-    var bodyHtml;
-    if(editingThis){
-      bodyHtml = `<textarea class="fi" id="chat-edit-inp-${m.id}" style="margin-top:0;color:#16573a;background:#fff" rows="2">${esc(m.text||'')}</textarea>
-        <div class="chat-msg-actions">
-          <button onclick="chatSaveEdit('${kind}','${m.id}')">Saqlash</button>
-          <button onclick="chatCancelEdit('${kind}')">Bekor</button>
-        </div>`;
-    } else {
-      bodyHtml = (m.text?esc(m.text).replace(/\n/g,'<br>'):'') + filesHtml;
-    }
-    var actionsHtml = (mine && !editingThis) ? `<div class="chat-msg-actions"><button onclick="chatStartEdit('${kind}','${m.id}')">Tahrirlash</button></div>` : '';
-    return `<div class="chat-msg ${mine?'chat-msg-mine':'chat-msg-other'}">
-      ${!mine?`<div class="chat-msg-meta">${esc(m.from)}</div>`:''}
-      ${bodyHtml}
-      <div class="chat-msg-time">${esc(chatFormatTime(m.time))}</div>
-      ${m.edited?`<div class="chat-msg-edited">tahrirlangan</div>`:''}
-      ${actionsHtml}
-    </div>`;
-  }).join('');
-  listEl.scrollTop = listEl.scrollHeight;
-}
-function chatStartEdit(kind, id){
-  chatEditingId[kind] = id;
-  if(kind==='group') chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  else chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[chatPersonalThreads._currentKey]||[], 'personal');
-}
-function chatCancelEdit(kind){
-  chatEditingId[kind] = null;
-  if(kind==='group') chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  else chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[chatPersonalThreads._currentKey]||[], 'personal');
-}
-async function chatSaveEdit(kind, id){
-  var inp = document.getElementById('chat-edit-inp-'+id);
-  var newText = inp.value.trim();
-  if(!newText){ notify('Matn bo\'sh bo\'lmasin!'); return; }
-  if(kind==='group'){
-    var m = chatGroupMessages.find(function(x){return x.id===id;});
-    if(m){ m.text = newText; m.edited = true; }
-    chatEditingId.group = null;
-    chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatGroupMessages}})}); }catch(e){}
-  } else {
-    var key = chatPersonalThreads._currentKey;
-    var arr = chatPersonalThreads[key]||[];
-    var m2 = arr.find(function(x){return x.id===id;});
-    if(m2){ m2.text = newText; m2.edited = true; }
-    chatEditingId.personal = null;
-    chatRenderMsgList(document.getElementById('chat-personal-list'), arr, 'personal');
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:arr}})}); }catch(e){}
-  }
-}
-async function chatGroupUploadFiles(){
-  var inp = document.getElementById('chat-group-file-inp');
-  if(!inp.files.length) return;
-  for(var f of inp.files){
-    try{
-      var saved = await chatSaveFile(f);
-      chatPendingFilesGroup.push(saved);
-    }catch(e){}
-  }
-  inp.value='';
-  chatRenderPendingFiles('chat-group-pending', chatPendingFilesGroup);
-}
-function chatRenderPendingFiles(elId, arr){
-  var el = document.getElementById(elId);
-  if(!el) return;
-  el.innerHTML = arr.map(function(f,i){ return `<div class="chat-pending-file">📎 ${esc(f.name)}<button class="abtn abtn-red" style="padding:1px 5px" onclick="chatRemovePending('${elId}',${i})">✕</button></div>`; }).join('');
-}
-function chatRemovePending(elId, i){
-  var arr = elId==='chat-group-pending' ? chatPendingFilesGroup : chatPendingFilesPersonal;
-  arr.splice(i,1);
-  chatRenderPendingFiles(elId, arr);
-}
-async function chatGroupSend(){
-  var inp = document.getElementById('chat-group-text');
-  var text = inp.value.trim();
-  if(!text && !chatPendingFilesGroup.length) return;
-  var msg = {id:'cm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), from:chatMyName(), text:text, files:chatPendingFilesGroup.slice(), time:new Date().toISOString()};
-  chatGroupMessages.push(msg);
-  inp.value=''; inp.style.height='auto';
-  chatPendingFilesGroup = [];
-  chatTaggedGroup = null;
-  chatRenderPendingFiles('chat-group-pending', []);
-  chatRenderSidebar('chat-group-sidebar','group');
-  chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatGroupMessages}})});
-  }catch(e){
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})}); }catch(e2){}
-  }
-  var lines = ['💬 '+msg.from, text||'(fayl yuborildi)'];
-  fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
-}
-
-// ---- Shaxsiy xabarlar ----
-function renderChatContacts(){
-  var listEl = document.getElementById('chat-personal-contacts');
-  var myName = chatMyName();
-  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  if(!emps.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xodimlar topilmadi</div>'; return; }
-  listEl.innerHTML = emps.map(function(e){
-    return `<div class="nav-card" style="margin-bottom:8px" onclick="chatOpenPersonal('${esc(e.fio)}','${esc((e.tg||'').replace(/^@/,''))}')">
-      <div class="nav-card-title" style="margin-top:4px">${esc(e.fio)}</div>
-      <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(e.name)}</div>
-      <div class="nav-card-arrow">→</div>
-    </div>`;
-  }).join('');
-}
-function chatThreadKey(myName, otherFio){
-  var a = [myName, otherFio].sort();
-  return 'chat_'+a.join('__').replace(/[^a-zA-Z0-9_]/g,'_');
-}
-async function chatOpenPersonal(otherFio, otherUsername){
-  chatPersonalCurrentUsername = otherUsername;
-  document.getElementById('chat-personal-title').textContent = otherFio;
-  goTo('p-chat-personal');
-  var listEl = document.getElementById('chat-personal-list');
-  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  var key = chatThreadKey(chatMyName(), otherFio);
-  chatPersonalThreads._currentKey = key;
-  chatPersonalThreads._otherFio = otherFio;
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-    var rows = await r.json();
-    chatPersonalThreads[key] = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-  }catch(e){ chatPersonalThreads[key] = []; }
-  chatRenderMsgList(listEl, chatPersonalThreads[key], 'personal');
-}
-async function chatPersonalUploadFiles(){
-  var inp = document.getElementById('chat-personal-file-inp');
-  if(!inp.files.length) return;
-  for(var f of inp.files){
-    try{
-      var saved = await chatSaveFile(f);
-      chatPendingFilesPersonal.push(saved);
-    }catch(e){}
-  }
-  inp.value='';
-  chatRenderPendingFiles('chat-personal-pending', chatPendingFilesPersonal);
-}
-async function chatPersonalSend(){
-  var inp = document.getElementById('chat-personal-text');
-  var text = inp.value.trim();
-  if(!text && !chatPendingFilesPersonal.length) return;
-  var key = chatPersonalThreads._currentKey;
-  var otherFio = chatPersonalThreads._otherFio;
-  if(!key) return;
-  var msg = {id:'cm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), from:chatMyName(), text:text, files:chatPendingFilesPersonal.slice(), time:new Date().toISOString()};
-  if(!chatPersonalThreads[key]) chatPersonalThreads[key]=[];
-  chatPersonalThreads[key].push(msg);
-  inp.value=''; inp.style.height='auto';
-  chatPendingFilesPersonal = [];
-  chatTaggedPersonal = null;
-  chatRenderPendingFiles('chat-personal-pending', []);
-  chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[key], 'personal');
-  try{
-    await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatPersonalThreads[key]}})});
-  }catch(e){
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:{messages:chatPersonalThreads[key]}})}); }catch(e2){}
-  }
-  // Telegram shaxsiy xabar
-  if(chatPersonalCurrentUsername){
-    var lines = ['💬 '+msg.from+' sizga yozdi:', text||'(fayl yuborildi)'];
-    fetch(SB_URL+'/rest/v1/personal_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'pm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), to_username:chatPersonalCurrentUsername, from_name:msg.from, text:lines.join(String.fromCharCode(10)), status:'pending'})})
-      .then(function(r){ if(!r.ok){ notify("Xabar yuborildi, lekin Telegram bildirishnomasi muvaffaqiyatsiz"); } })
-      .catch(function(){});
-    setTimeout(function(){ chatCheckDeliveryStatus(); }, 4000);
-  } else {
-    notify("Xodimning Telegram username'i yo'q, faqat ilova ichida saqlandi");
-  }
-}
-function chatCheckDeliveryStatus(){
-  // Optional: could poll personal_messages status; kept simple for now
-}
-
-function kaitenAddTask(){
-  var f = kaitenReadFields('kt');
-  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
-  if(!f.empFio){ notify('Xodimni tanlang!'); return; }
-  if(!f.deadline){ notify('Yakuniy muddatni kiriting!'); return; }
-  askConfirm("Vazifani aniq tushunarli qilib berdingizmi? Esdan chiqmadimi hech narsa?",()=>{
-    f.id='kt'+Date.now(); f.status='todo';
-    f.createdBy = kaitenMyId();
-    kaitenTasks.push(f);
-    kaitenUploadedFiles['kt']=[];
-    kaitenSave(); notify('Saqlandi ✓');
-    kaitenNotifyGroup(f);
-    document.getElementById('kaiten-add-form').innerHTML='';
-    renderKaiten();
-  }, 'Ha', "Yo'q");
-}
-function kaitenNotifyGroup(t){
-  try{
-    var lines=['🆕 Yangi vazifa — '+t.dept,''];
-    var empLine='👤 Xodim: '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':'');
-    if(t.empTg) empLine+=' — @'+t.empTg.replace(/^@/,'');
-    lines.push(empLine);
-    if(t.nazFio) lines.push('🧭 Nazoratchi: '+t.nazFio+(t.nazRole?' ('+t.nazRole+')':''));
-    lines.push('🎯 '+t.text);
-    if(t.deadline) lines.push('⏰ Muddat: '+kaitenFormatDeadline(t.deadline));
-    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
-  }catch(e){}
-}
-function kaitenSaveEdit(id){
-  var t = kaitenTasks.find(function(x){return x.id===id;});
-  if(!t) return;
-  if(!kaitenCanEditTask(t)){ notify("Bu vazifani tahrirlash huquqingiz yo'q"); return; }
-  var f = kaitenReadFields('ke');
-  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
-  Object.assign(t, f);
-  kaitenSave(); notify('Saqlandi ✓'); orgCloseModal(); renderKaiten();
-}
-function kaitenDelTask(id){
-  var t = kaitenTasks.find(x=>x.id===id);
-  if(!t) return;
-  if(!kaitenCanEditTask(t)){ notify("Bu vazifani o'chirish huquqingiz yo'q"); return; }
-  askConfirm("Vazifani o'chirasizmi?",()=>{
-    kaitenTasks = kaitenTasks.filter(t=>t.id!==id);
-    kaitenSave(); renderKaiten(); notify("O'chirildi ✓");
-  });
-}
-function kaitenMove(id, dir){
-  var order=kaitenColumns.map(c=>c.id);
-  var t = kaitenTasks.find(x=>x.id===id);
-  if(!t) return;
-  var idx = order.indexOf(t.status);
-  if(idx<0) idx=0;
-  var oldTitle = kaitenColumns[idx]?.title || t.status;
-  var newIdx = idx + dir;
-  if(newIdx<0||newIdx>=order.length) return;
-  t.status = order[newIdx];
-  var colTitle = kaitenColumns[newIdx]?.title || t.status;
-  kaitenSave(); renderKaiten();
-  kaitenNotifyMove(t, oldTitle, colTitle);
-}
-function kaitenNotifyMove(t, oldTitle, colTitle){
-  try{
-    var lines=[
-      '📋 Vazifa "'+oldTitle+'" dan "'+colTitle+'" ga o\'tkazildi',
-      '👤 '+(t.empFio||'—')+(t.empRole?' ('+t.empRole+')':''),
-      '🎯 '+t.text
-    ];
-    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'gm'+Date.now()+'_'+Math.random().toString(36).slice(2,7),text:lines.join(String.fromCharCode(10)),status:'pending'})}).catch(function(){});
-  }catch(e){}
-}
-function kaitenFormatDeadline(dl){
-  if(!dl) return '';
-  try{
-    var d=new Date(dl);
-    var pad=n=>String(n).padStart(2,'0');
-    return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
-  }catch(e){ return dl; }
-}
-function kaitenTimeLeft(dl){
-  if(!dl) return null;
-  var end=new Date(dl);
-  if(isNaN(end.getTime())) return null;
-  var diff=end-new Date();
-  if(diff<=0) return {text:"Muddat o'tdi", overdue:true};
-  var days=Math.floor(diff/86400000);
-  var hours=Math.floor((diff%86400000)/3600000);
-  var mins=Math.floor((diff%3600000)/60000);
-  var parts=[];
-  if(days>0) parts.push(days+' kun');
-  if(hours>0||days>0) parts.push(hours+' soat');
-  parts.push(mins+' daqiqa');
-  return {text: parts.join(' ')+' qoldi', overdue:false};
-}
-function kaitenCard(t){
-  var order = kaitenColumns.map(c=>c.id);
-  var idx = order.indexOf(t.status);
-  if(idx<0) idx=0;
-  var canLeft = idx>0, canRight = idx<order.length-1;
-  var canEdit = kaitenCanEditTask(t);
-  var meta = t.empFio?(t.empFio+(t.empRole?` (${t.empRole})`:'')):'';
-  var nazText = t.nazFio ? `Nazoratchi: ${t.nazFio}${t.nazRole?' ('+t.nazRole+')':''}` : '';
-  var tl = kaitenTimeLeft(t.deadline);
-  var comments = t.comments||[];
-  var chatOpen = kaitenChatOpen===t.id;
-  var chatHtml='';
-  if(chatOpen){
-    var msgsHtml = comments.length ? comments.map((c,i)=>`<div style="padding:6px 0;border-bottom:1px solid rgba(22,87,58,0.12)">
-        <div style="font-size:11px;font-weight:700;color:#1e7a4a">${esc(KAITEN_ROLE_LABELS[c.role]||c.role)}
-          <span style="color:#16573a99;font-weight:400">• ${esc(kaitenFormatDeadline(c.time))}</span>
-          ${isAdmin?`<button class="abtn abtn-red" style="float:right;padding:2px 6px" onclick="kaitenDelComment('${t.id}',${i})">x</button>`:''}
-        </div>
-        <div style="font-size:12px;color:#16573a;margin-top:2px">${esc(c.text)}</div>
-      </div>`).join('') : '<div style="color:#16573a99;font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
-    chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(22,87,58,0.12)">
-      ${msgsHtml}
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px;background:rgba(22,87,58,0.06);color:#16573a;border-color:rgba(22,87,58,0.15)">
-        <button class="fsave" style="margin-top:0;padding:8px 10px" onclick="kaitenAddComment('${t.id}')">➤</button>
-      </div>
-    </div>`;
-  }
-  var linksHtml = (t.links&&t.links.length)?t.links.map(function(l){ return `<a href="${esc(l)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">🔗 ${esc(l)}</a>`; }).join(''):'';
-  var filesHtml = (t.files&&t.files.length)?t.files.map(function(f){ return `<a href="${esc(f.url)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">📎 ${esc(f.name)}</a>`; }).join(''):'';
-  var contactsHtml = (t.contacts&&t.contacts.length)?t.contacts.map(function(c){ return `<div style="font-size:11px;color:#16573a99;margin-top:2px">👤 ${esc(c.name)}${c.role?' · '+esc(c.role):''}${c.tel?' · '+esc(c.tel):''}</div>`; }).join(''):'';
-  var alarmHtml = t.alarm ? `<div style="font-size:11px;color:#1e7a4a;font-weight:600;margin-top:2px;display:flex;align-items:center;gap:6px">⏰ Budilnik: ${esc(kaitenFormatDeadline(t.alarm))}<button class="abtn abtn-red" style="padding:1px 6px" onclick="kaitenConfirmRemoveAlarm('${t.id}')">✕</button></div>` : '';
-  var alarmDateVal = '', alarmTimeVal = '';
-  if(t.alarm){ var ap = t.alarm.split('T'); alarmDateVal = ap[0]||''; alarmTimeVal = (ap[1]||'').slice(0,5); }
-  var alarmFormHtml = kaitenAlarmFormOpen===t.id ? `<div style="margin-top:6px;padding:8px;border:1px solid rgba(22,87,58,0.15);border-radius:8px">
-      <div style="display:flex;gap:6px">
-        <input class="fi" type="date" id="alarm-date-${t.id}" value="${esc(alarmDateVal)}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
-        <input class="fi" type="time" id="alarm-time-${t.id}" value="${esc(alarmTimeVal)}" style="margin-top:0;flex:1;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15);color-scheme:light">
-      </div>
-      <input class="fi" id="alarm-text-${t.id}" placeholder="Sabab (ixtiyoriy)" style="margin-top:6px;color:#16573a;background:rgba(22,87,58,0.04);border-color:rgba(22,87,58,0.15)">
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <button class="fsave" style="margin-top:0;flex:1" onclick="kaitenSaveAlarm('${t.id}')">Saqlash</button>
-        <button class="abtn" style="margin-top:0" onclick="kaitenToggleAlarmForm('${t.id}')">Bekor</button>
-      </div>
-    </div>` : '';
-  return `<div class="kaiten-card">
-    <div class="kaiten-card-text">${esc(t.text)}</div>
-    ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
-    ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
-    ${t.deadline?`<div class="kaiten-card-deadline">⏰ ${esc(kaitenFormatDeadline(t.deadline))}</div>`:''}
-    ${tl?`<div class="kaiten-card-timer" style="color:${tl.overdue?'#d32f2f':'#1e7a4a'}">${tl.overdue?'⚠ ':'⏳ '}${esc(tl.text)}</div>`:''}
-    ${linksHtml}${filesHtml}${contactsHtml}
-    ${alarmHtml}
-    ${alarmFormHtml}
-    <div class="kaiten-card-btns">
-      ${canLeft?`<button class="abtn" onclick="kaitenMove('${t.id}',-1)">←</button>`:''}
-      ${canRight?`<button class="abtn" onclick="kaitenMove('${t.id}',1)">→</button>`:''}
-      <button class="abtn" style="${(canLeft||canRight)?'':'margin-right:auto'};position:relative" onclick="kaitenToggleChat('${t.id}')">💬 ${comments.length}${kaitenHasUnread(t)?'<span style="position:absolute;top:-3px;right:-3px;width:8px;height:8px;background:#d32f2f;border-radius:50%"></span>':''}</button>
-      ${!chatOpen?'':''}
-      <button class="abtn" onclick="kaitenToggleAlarmForm('${t.id}')">⏰</button>
-      <div style="margin-left:auto;display:flex;gap:6px">
-      ${canEdit?`
-      <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
-      <button class="abtn abtn-red" onclick="kaitenDelTask('${t.id}')">✕</button>
-      `:''}
-      </div>
-    </div>
-    ${chatHtml}
-  </div>`;
-}
-var kaitenFilterDept = KAITEN_DEPTS[0];
-function kaitenSetFilter(idx){
-  kaitenFilterDept = (idx>=0 && idx<KAITEN_DEPTS.length) ? KAITEN_DEPTS[idx] : KAITEN_DEPTS[0];
-  renderKaiten();
-}
-function renderKaitenFilter(){
-  var el = document.getElementById('kaiten-filter');
-  if(!el) return;
-  var h = KAITEN_DEPTS.map((d,i)=>`<button class="kaiten-filter-chip${kaitenFilterDept===d?' active':''}" onclick="kaitenSetFilter(${i})">${esc(d)}</button>`).join('');
-  el.innerHTML = h;
-}
-function kaitenRenderBoardStructure(){
-  var boardEl = document.getElementById('kaiten-board');
-  if(!boardEl) return;
-  var existingAddForm = document.getElementById('kaiten-add-form');
-  var savedAddForm = existingAddForm ? existingAddForm.innerHTML : '';
-  var h = kaitenColumns.map((col,i)=>`<div class="kaiten-col">
-      <div class="kaiten-col-title">
-        <span class="kaiten-col-title-text" id="kaiten-title-${col.id}"></span>
-        ${isAdmin?`<button class="kaiten-col-edit-btn" onclick="kaitenRenameColumn('${col.id}')">✏</button>`:''}
-      </div>
-      <div class="kaiten-col-list" id="kaiten-list-${col.id}"></div>
-      ${i===0?'<div id="kaiten-add-form"></div>':''}
-    </div>`).join('');
-  if(isAdmin){
-    h += `<div class="kaiten-add-col"><button class="kaiten-add-col-btn" onclick="kaitenAddColumn()">+</button></div>`;
-  }
-  boardEl.innerHTML = h;
-  var newAddForm = document.getElementById('kaiten-add-form');
-  if(newAddForm && savedAddForm) newAddForm.innerHTML = savedAddForm;
-}
-function kaitenRenameColumn(id){
-  var col = kaitenColumns.find(c=>c.id===id);
-  if(!col) return;
-  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Ustun nomini o'zgartirish</div>
-    <div class="frow"><input class="fi" id="kcol-rename-inp" value="${esc(col.title)}"></div>
-    <div class="fbtns">
-      <button class="fsave" onclick="kaitenSaveColumnRename('${id}')">Saqlash</button>
-      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
-    </div>
-    ${kaitenColumns.length>1?`<button class="abtn abtn-red" style="width:100%;margin-top:8px;padding:10px" onclick="kaitenDeleteColumn('${id}')">✕ Ustunni o'chirish</button>`:''}`;
-  orgShowModal(html);
-}
-function kaitenSaveColumnRename(id){
-  var val = document.getElementById('kcol-rename-inp').value.trim();
-  if(!val){ notify('Nom kiriting!'); return; }
-  var col = kaitenColumns.find(c=>c.id===id);
-  if(col) col.title = val;
-  kaitenSave(); orgCloseModal(); renderKaiten();
-}
-function kaitenDeleteColumn(id){
-  if(kaitenColumns.length<=1) return;
-  var col = kaitenColumns.find(c=>c.id===id);
-  if(!col) return;
-  var taskCount = kaitenTasks.filter(t=>t.status===id).length;
-  var msg = taskCount
-    ? `"${col.title}" ustunini o'chirasizmi? Undagi ${taskCount} ta vazifa birinchi ustunga ko'chiriladi.`
-    : `"${col.title}" ustunini o'chirasizmi?`;
-  askConfirm(msg, ()=>{
-    kaitenColumns = kaitenColumns.filter(c=>c.id!==id);
-    var fallbackId = kaitenColumns[0].id;
-    kaitenTasks.forEach(t=>{ if(t.status===id) t.status = fallbackId; });
-    kaitenSave(); orgCloseModal(); renderKaiten(); notify("O'chirildi ✓");
-  }, "O'chirish", 'Bekor');
-}
-function kaitenAddColumn(){
-  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Yangi ustun</div>
-    <div class="frow"><input class="fi" id="kcol-new-inp" placeholder="Ustun nomi..."></div>
-    <div class="fbtns">
-      <button class="fsave" onclick="kaitenSaveNewColumn()">Qo'shish</button>
-      <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
-    </div>`;
-  orgShowModal(html);
-}
-function kaitenSaveNewColumn(){
-  var val = document.getElementById('kcol-new-inp').value.trim();
-  if(!val){ notify('Nom kiriting!'); return; }
-  kaitenColumns.push({id:'col'+Date.now(), title:val});
-  kaitenSave(); orgCloseModal();
-  renderKaiten();
-}
-function renderKaiten(){
-  renderKaitenFilter();
-  var boardEl = document.getElementById('kaiten-board');
-  if(boardEl){
-    var colEls = boardEl.querySelectorAll('.kaiten-col');
-    var hasAddBtn = !!boardEl.querySelector('.kaiten-add-col');
-    if(colEls.length !== kaitenColumns.length || hasAddBtn !== !!isAdmin){
-      kaitenRenderBoardStructure();
-    }
-  }
-  var visibleTasks = kaitenFilterDept ? kaitenTasks.filter(t=>t.dept===kaitenFilterDept) : kaitenTasks;
-  var cols={};
-  kaitenColumns.forEach(c=>cols[c.id]=[]);
-  visibleTasks.forEach(t=>{
-    if(cols[t.status]) cols[t.status].push(t);
-    else if(kaitenColumns.length) cols[kaitenColumns[0].id].push(t);
-  });
-  kaitenColumns.forEach(col=>{
-    var el=document.getElementById('kaiten-list-'+col.id);
-    var titleEl=document.getElementById('kaiten-title-'+col.id);
-    if(titleEl) titleEl.textContent = col.title+' — '+cols[col.id].length+' ta';
-    if(!el) return;
-    if(!cols[col.id].length){ el.innerHTML='<div style="text-align:center;padding:16px;color:var(--white-50);font-size:12px">Vazifalar yo&#39;q</div>'; }
-    else el.innerHTML = cols[col.id].map(kaitenCard).join('');
-  });
-  var addFormEl = document.getElementById('kaiten-add-form');
-  if(addFormEl && !addFormEl.innerHTML){
-    addFormEl.innerHTML = '<button class="add-item-btn" onclick="kaitenShowAddForm()">＋ Vazifa qo&#39;shish</button>';
-  }
-}
-setInterval(function(){
-  var p=document.getElementById('p-kaiten');
-  if(p && p.classList.contains('active')) renderKaiten();
-}, 60000);
-
-load().then(()=>{updateBc();});
-acadLoad().catch(()=>{});
-hujjatLoad().catch(()=>{});
-
-function sirlyStart(role){
-  if(role === 'editor'){
-    isAdmin = true;
-  }
-  updateLogoutBtn('p-entry1');
-  applyEntryCardPerms();
-  load().then(function(){ updateBc(); });
-  acadLoad().catch(function(){});
-  orgLoad().catch(function(){ renderOrg(); });
-  kaitenLoad().catch(function(){}).then(function(){ if(document.getElementById('p-kaiten').classList.contains('active')) renderKaiten(); });
-  sekretarLoad().catch(function(){});
-  bolimTitlesLoad().catch(function(){}).then(function(){ if(document.getElementById('p-entry2').classList.contains('active')) renderBolimCards(); });
-}
-</script>
-</body>
-</html>
+if __name__ == "__main__":
+    main()
