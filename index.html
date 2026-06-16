@@ -183,6 +183,17 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px}
 .kaiten-card{background:#ffffff;border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.sek-card{background:#f3f1ec;border:1px solid #e2dfd6;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.sek-date{font-size:13px;font-weight:700;color:#2e2c28;letter-spacing:.2px}
+.sek-row{font-size:13px;color:#5a574f;line-height:1.4}
+.sek-lbl{color:#9a9588;font-weight:600}
+.sek-purpose{color:#2e2c28}
+.sek-note{color:#8b877c;font-size:12px}
+.sek-link{display:block;font-size:12px;color:#5a574f;text-decoration:underline;word-break:break-all;margin-top:2px}
+.sek-btns{display:flex;gap:6px;margin-top:6px}
+.sek-abtn{border:1px solid #ddd9cc;background:#ffffff;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;color:#5a574f;font-family:inherit;transition:background .15s}
+.sek-abtn:active{background:#ebe8df}
+.sek-abtn-red{border-color:#e0c9c4;color:#a8493d}
 .org-white-dots{background-image:radial-gradient(circle, rgba(22,87,58,0.15) 1px, transparent 1px)!important;background-size:14px 14px;background-color:#ffffff;}
 .kaiten-card-text{font-size:13px;color:#16573a;line-height:1.4}
 .kaiten-card-meta{font-size:13px;color:#16573a;font-weight:600}
@@ -1631,21 +1642,21 @@ function sekretarFormatDateTime(date,time){
 }
 function sekretarCard(it){
   var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
-  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
-  return `<div class="kaiten-card">
+  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" class="sek-link">Fayl: ${esc(f.name)}</a>`;}).join('');
+  return `<div class="sek-card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-      <div style="font-size:14px;font-weight:700;color:var(--lime)">📅 ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
-      <button class="abtn" onclick="sekretarFinish('${it.id}')" title="Yakunlash">☐ Yakunlash</button>
+      <div class="sek-date">${esc(sekretarFormatDateTime(it.date,it.time))}</div>
+      <button class="sek-abtn" onclick="sekretarFinish('${it.id}')">Yakunlash</button>
     </div>
-    ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
-    ${person?`<div style="font-size:13px;color:var(--white-80);margin-top:2px">👤 ${esc(person)}</div>`:''}
-    ${it.purpose?`<div class="kaiten-card-text" style="margin-top:4px">🎯 ${esc(it.purpose)}</div>`:''}
-    ${it.link?`<a href="${esc(it.link)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:4px;word-break:break-all;text-decoration:none">🔗 ${esc(it.link)}</a>`:''}
+    ${it.place?`<div class="sek-row"><span class="sek-lbl">Joy:</span> ${esc(it.place)}</div>`:''}
+    ${person?`<div class="sek-row"><span class="sek-lbl">Kishi:</span> ${esc(person)}</div>`:''}
+    ${it.purpose?`<div class="sek-row sek-purpose"><span class="sek-lbl">Maqsad:</span> ${esc(it.purpose)}</div>`:''}
+    ${it.link?`<a href="${esc(it.link)}" target="_blank" class="sek-link">Link: ${esc(it.link)}</a>`:''}
     ${filesHtml}
-    ${it.note?`<div style="font-size:12px;color:var(--white-50);margin-top:4px">📝 ${esc(it.note)}</div>`:''}
-    <div class="kaiten-card-btns">
-      <button class="abtn" onclick="showSekretarForm('${it.id}')">✏</button>
-      <button class="abtn abtn-red" onclick="sekretarDelete('${it.id}')">✕</button>
+    ${it.note?`<div class="sek-row sek-note"><span class="sek-lbl">Eslatma:</span> ${esc(it.note)}</div>`:''}
+    <div class="sek-btns">
+      <button class="sek-abtn" onclick="showSekretarForm('${it.id}')">Tahrirlash</button>
+      <button class="sek-abtn sek-abtn-red" onclick="sekretarDelete('${it.id}')">O'chirish</button>
     </div>
   </div>`;
 }
@@ -1657,17 +1668,17 @@ function renderSekretarArchive(){
 }
 function sekretarArchiveCard(it){
   var person=[it.personName,it.personRole,it.personPhone].filter(Boolean).join(' — ');
-  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:2px;text-decoration:none;word-break:break-all">📎 ${esc(f.name)}</a>`;}).join('');
-  return `<div class="kaiten-card" style="opacity:.75">
-    <div style="font-size:14px;font-weight:700;color:var(--white-50)">✅ 📅 ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
-    ${it.place?`<div style="font-size:13px;color:var(--white-80);margin-top:4px">📍 ${esc(it.place)}</div>`:''}
-    ${person?`<div style="font-size:13px;color:var(--white-80);margin-top:2px">👤 ${esc(person)}</div>`:''}
-    ${it.purpose?`<div class="kaiten-card-text" style="margin-top:4px">🎯 ${esc(it.purpose)}</div>`:''}
-    ${it.link?`<a href="${esc(it.link)}" target="_blank" style="display:block;color:var(--lime);font-size:12px;margin-top:4px;word-break:break-all;text-decoration:none">🔗 ${esc(it.link)}</a>`:''}
+  var filesHtml=(it.files||[]).map(function(f){return `<a href="${esc(f.url)}" target="_blank" class="sek-link">Fayl: ${esc(f.name)}</a>`;}).join('');
+  return `<div class="sek-card" style="opacity:.7">
+    <div class="sek-date">Bajarildi — ${esc(sekretarFormatDateTime(it.date,it.time))}</div>
+    ${it.place?`<div class="sek-row"><span class="sek-lbl">Joy:</span> ${esc(it.place)}</div>`:''}
+    ${person?`<div class="sek-row"><span class="sek-lbl">Kishi:</span> ${esc(person)}</div>`:''}
+    ${it.purpose?`<div class="sek-row sek-purpose"><span class="sek-lbl">Maqsad:</span> ${esc(it.purpose)}</div>`:''}
+    ${it.link?`<a href="${esc(it.link)}" target="_blank" class="sek-link">Link: ${esc(it.link)}</a>`:''}
     ${filesHtml}
-    ${it.note?`<div style="font-size:12px;color:var(--white-50);margin-top:4px">📝 ${esc(it.note)}</div>`:''}
-    <div class="kaiten-card-btns">
-      <button class="abtn abtn-red" onclick="sekretarDeleteFromArchive('${it.id}')">✕</button>
+    ${it.note?`<div class="sek-row sek-note"><span class="sek-lbl">Eslatma:</span> ${esc(it.note)}</div>`:''}
+    <div class="sek-btns">
+      <button class="sek-abtn sek-abtn-red" onclick="sekretarDeleteFromArchive('${it.id}')">O'chirish</button>
     </div>
   </div>`;
 }
