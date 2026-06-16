@@ -191,25 +191,17 @@ async def kaiten_overdue_check_job(context: ContextTypes.DEFAULT_TYPE):
                     dept = t.get("dept") or "Boshqa"
                     assignee = t.get("empFio") or "—"
                     creator = t.get("createdByName")
-                    creator_tg = t.get("createdByTg")
-                    creator_line = None
-                    if creator:
-                        creator_line = creator
-                        if creator_tg:
-                            creator_line += f" @{creator_tg.lstrip('@')}"
                     deadline_local = dl_dt.astimezone(TIMEZONE).strftime("%d.%m.%Y %H:%M")
-                    text_parts = [
-                        "⚠️ Vazifa muddati o'tdi",
-                        "",
-                        f"{dept}da",
-                        f"{deadline_local}da",
-                    ]
-                    if creator_line:
-                        text_parts.append(f"{creator_line} tomonidan")
-                    text_parts.append(f"{assignee} uchun yaratilgan quyidagi vazifa")
-                    text_parts.append(f"\"{t.get('text','')}\"")
-                    text_parts.append("muddati o'tdi")
-                    text = "\n".join(text_parts)
+                    if creator:
+                        text = (
+                            f"{dept}da {creator} tomonidan {assignee} uchun yaratilgan\n"
+                            f"\"{t.get('text','')}\" vazifasining muddati {deadline_local}da o'tib ketdi."
+                        )
+                    else:
+                        text = (
+                            f"{dept}da {assignee} uchun yaratilgan\n"
+                            f"\"{t.get('text','')}\" vazifasining muddati {deadline_local}da o'tib ketdi."
+                        )
                     try:
                         await context.bot.send_message(chat_id=CHAT_ID, text=text)
                         t["overdue_notified"] = True
