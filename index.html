@@ -2086,11 +2086,11 @@ function kaitenSaveAlarm(id){
   var lines = ['⏰ Eslatma — '+kaitenFormatDeadline(iso), '', 'Vazifa: '+t.text];
   if(sabab) lines.push('Sabab: '+sabab);
   var msgText = lines.join(String.fromCharCode(10));
-  fetch(SB_URL+'/rest/v1/bot_group_messages',{
+  fetch(SB_URL+'/rest/v1/bot_group_messages?on_conflict=id',{
     method:'POST',
     headers:{...SB_H,'Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify({id:'kalarm_'+t.id, text:msgText, send_at:remindAtUTC, status:'pending'})
-  }).catch(function(){});
+  }).then(function(r){ if(!r.ok) r.text().then(function(t2){ console.error('alarm save failed', r.status, t2); }); }).catch(function(e){ console.error('alarm fetch error', e); });
 }
 function kaitenConfirmRemoveAlarm(id){
   askConfirm("Budilnikni o'chirishni xohlaysizmi?", function(){ kaitenRemoveAlarm(id); }, 'Ha', "Yo'q");
