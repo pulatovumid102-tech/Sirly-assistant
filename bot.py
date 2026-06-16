@@ -206,7 +206,7 @@ async def kaiten_overdue_check_job(context: ContextTypes.DEFAULT_TYPE):
                     ]
                     if creator_line:
                         text_parts.append(f"{creator_line} tomonidan")
-                    text_parts.append(f"{assignee} uchun yaratilgan")
+                    text_parts.append(f"{assignee} uchun yaratilgan quyidagi vazifa")
                     text_parts.append(f"\"{t.get('text','')}\"")
                     text_parts.append("muddati o'tdi")
                     text = "\n".join(text_parts)
