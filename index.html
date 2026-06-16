@@ -917,7 +917,7 @@ async function showAdminPanel(){
   load().catch(function(){});
 }
 document.getElementById('admin-new-profile-btn').addEventListener('click', adminShowNewProfileForm);
-function adminShowNewProfileForm(){
+async function adminShowNewProfileForm(){
   var formEl = document.getElementById('admin-new-profile-form');
   if(formEl.innerHTML){ formEl.innerHTML=''; return; }
   var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
@@ -926,6 +926,7 @@ function adminShowNewProfileForm(){
     return;
   }
   var options = emps.map(e=>'<option value="'+e.id+'">'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
+  var permsHtml = await adminPermsHtmlAsync(null);
   formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;">'+
     '<div style="font-size:13px;font-weight:700;color:#1e5927;margin-bottom:10px;">Yangi profil</div>'+
     '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
@@ -938,20 +939,24 @@ function adminShowNewProfileForm(){
     '<select id="anp-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-family:inherit;font-size:13px;">'+
       '<option value="guest">👁 Guest</option><option value="editor">✏ Editor</option>'+
     '</select>'+
-    adminPermsHtml(null)+
+    permsHtml+
     '<div id="anp-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
     '<button id="anp-save" style="width:100%;background:#558237;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
   '</div>';
   document.getElementById('anp-save').addEventListener('click', adminCreateProfile);
 }
 function escAdmin(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function adminPermsHtml(perms){
+function adminPermsHtml(perms, allBolimSections){
   perms = perms || {};
-  var sections = (db.sections||[]);
+  allBolimSections = allBolimSections || [{title: bolimTitles[0], sections: db.sections||[]}];
   var bolimlarChecked = perms.bolimlar!==false;
-  var secHtml = sections.map(function(s){
-    var checked = !perms.sections || perms.sections.includes(s.id);
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:4px 0 4px 18px;"><input type="checkbox" class="aperm-sec" value="'+escAdmin(s.id)+'" '+(checked?'checked':'')+'> '+escAdmin(s.title)+'</label>';
+  var secHtml = allBolimSections.map(function(bolim){
+    if(!bolim.sections||!bolim.sections.length) return '';
+    return '<div style="padding:4px 0 2px 8px;font-size:11px;font-weight:700;color:#16573a;margin-top:4px">'+escAdmin(bolim.title)+'</div>'
+      + bolim.sections.map(function(s){
+          var checked = !perms.sections || perms.sections.includes(s.id);
+          return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:3px 0 3px 18px;"><input type="checkbox" class="aperm-sec" value="'+escAdmin(s.id)+'" '+(checked?'checked':'')+'> '+escAdmin(s.title)+'</label>';
+        }).join('');
   }).join('');
   function chk(key,label,checked){
     return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;padding:4px 0;font-weight:600;"><input type="checkbox" id="aperm-'+key+'" '+(checked?'checked':'')+(key==='bolimlar'?' onchange="document.getElementById(\'aperm-sections-wrap\').style.opacity=this.checked?1:.4;document.getElementById(\'aperm-sections-wrap\').style.pointerEvents=this.checked?\'\':\'none\'"':'')+'> '+label+'</label>';
@@ -965,6 +970,19 @@ function adminPermsHtml(perms){
     chk('bolimlar','Bo&#39;limlar', bolimlarChecked)+
     '<div id="aperm-sections-wrap" style="'+(bolimlarChecked?'':'opacity:.4;pointer-events:none')+'">'+secHtml+'</div>'+
   '</div>';
+}
+async function adminPermsHtmlAsync(perms){
+  // Load all 3 bolim sections from Supabase in parallel
+  var allBolimSections = [];
+  await Promise.all(BOLIM_IDS.map(async function(key, i){
+    try{
+      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key, {headers:SB_H});
+      var rows = await r.json();
+      var sections = (rows&&rows.length&&rows[0].data&&rows[0].data.sections) ? rows[0].data.sections : [];
+      allBolimSections[i] = {title: bolimTitles[i]||('Bo\'lim '+(i+1)), sections: sections};
+    }catch(e){ allBolimSections[i] = {title: bolimTitles[i]||('Bo\'lim '+(i+1)), sections:[]}; }
+  }));
+  return adminPermsHtml(perms, allBolimSections);
 }
 function adminReadPerms(){
   var sections = [].slice.call(document.querySelectorAll('.aperm-sec:checked')).map(function(el){return el.value;});
@@ -1042,7 +1060,7 @@ async function adminCreateProfile(){
   }
 }
 
-function adminShowEditProfileForm(u){
+async function adminShowEditProfileForm(u){
   document.getElementById('admin-new-profile-form').innerHTML='';
   var formEl = document.getElementById('admin-edit-profile-form');
   if(!formEl){
@@ -1053,6 +1071,7 @@ function adminShowEditProfileForm(u){
   if(formEl.innerHTML){ formEl.innerHTML=''; return; }
   var emps = (typeof orgData!=='undefined'?orgData:[]).filter(n=>n.fio && n.fio.trim());
   var options = emps.map(e=>'<option value="'+e.id+'"'+(e.id===u.orgNodeId?' selected':'')+'>'+escAdmin(e.fio)+' ('+escAdmin(e.name)+')</option>').join('');
+  var permsHtml = await adminPermsHtmlAsync(u.permissions);
   formEl.innerHTML = '<div style="background:white;border-radius:10px;padding:14px;margin-bottom:16px;border:2px solid #2563a8;">'+
     '<div style="font-size:13px;font-weight:700;color:#2563a8;margin-bottom:10px;">Profilni tahrirlash</div>'+
     '<label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">Xodim (org struktura)</label>'+
@@ -1066,7 +1085,7 @@ function adminShowEditProfileForm(u){
       '<option value="guest"'+((u.role||'guest')==='guest'?' selected':'')+'>👁 Guest</option>'+
       '<option value="editor"'+(u.role==='editor'?' selected':'')+'>✏ Editor</option>'+
     '</select>'+
-    adminPermsHtml(u.permissions)+
+    permsHtml+
     '<div id="aep-error" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>'+
     '<div style="display:flex;gap:8px;">'+
     '<button id="aep-save" style="flex:1;background:#2563a8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Saqlash</button>'+
