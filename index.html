@@ -469,13 +469,30 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     renderOrg();
   }
 
+  var ORG_AVATAR_COLORS = ['#1e7a4a','#a8493d','#2563a8','#8b6914','#5a4a8b','#1e7a7a'];
+  function orgAvatarColor(name){
+    var s = name||'?';
+    var hash = 0;
+    for(var i=0;i<s.length;i++){ hash = (hash*31 + s.charCodeAt(i)) % ORG_AVATAR_COLORS.length; }
+    return ORG_AVATAR_COLORS[Math.abs(hash)];
+  }
+  function orgAvatarHtml(node, size){
+    size = size||36;
+    if(node.photo){
+      return `<img src="${esc(node.photo)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.15)">`;
+    }
+    var letter = (node.fio||node.name||'?').trim().charAt(0).toUpperCase();
+    var bg = orgAvatarColor(node.fio||node.name);
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px">${esc(letter)}</div>`;
+  }
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
     var detailOpen = orgDetailOpen === node.id;
     var draggable = orgIsAdmin() && node.parentId;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" id="org-node-${node.id}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')"
+      <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" id="org-node-${node.id}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer;display:flex;align-items:center;gap:10px${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')"
         ${draggable?`draggable="true" ondragstart="orgDragStart(event,'${node.id}')" ondragover="orgDragOver(event,'${node.id}')" ondragleave="orgDragLeave(event,'${node.id}')" ondrop="orgDrop(event,'${node.id}')" ondragend="orgDragEnd(event)"`:''}>
+        ${orgAvatarHtml(node,36)}
         <div style="flex:1;min-width:0">
           <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -548,7 +565,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(!node) return;
     var telDisplay = (node.tels&&node.tels.length)?node.tels.join(', '):(node.tel||'—');
     var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
-    var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)}</div>
+    var html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        ${orgAvatarHtml(node,56)}
+        <div style="font-size:15px;font-weight:700;color:var(--white)">${esc(node.name)}</div>
+      </div>
       <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
         <div><span class="flbl">F.I.O</span><br><span style="color:var(--white-80)">${esc(node.fio||'—')}</span></div>
         <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(telDisplay)}</span></div>
@@ -735,6 +755,15 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       return `<button onclick="orgToggleDay('${id}','${key}')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;background:${active?'var(--lime)':'var(--white-06)'};color:${active?'var(--green-dark)':'var(--white-50)'}">${label}</button>`;
     }).join('');
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Tahrirlash</div>
+      <div class="frow"><label class="flbl">Rasm</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
+          <div id="oem-photo-preview-${id}">${node.photo?`<img src="${esc(node.photo)}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`:orgAvatarHtml(node,48)}</div>
+          <input type="file" id="oem-photo-inp-${id}" accept="image/*" style="display:none" onchange="orgUploadPhoto('${id}')">
+          <button class="abtn" onclick="document.getElementById('oem-photo-inp-${id}').click()">Rasm tanlash</button>
+          ${node.photo?`<button class="abtn abtn-red" onclick="orgRemovePhoto('${id}')">O'chirish</button>`:''}
+        </div>
+        <input type="hidden" id="oem-photo-url-${id}" value="${esc(node.photo||'')}">
+      </div>
       <div class="frow"><label class="flbl">Lavozim</label><input class="fi" id="oem-name" value="${esc(node.name)}"></div>
       <div class="frow"><label class="flbl">FIO</label><input class="fi" id="oem-fio" value="${esc(node.fio||'')}"></div>
       <div class="frow"><label class="flbl">Tel raqam</label>
@@ -783,12 +812,46 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var timeStr = (start&&end) ? `${start}-${end}` : '';
     return timeStr ? `${dayStr}, ${timeStr}` : dayStr;
   }
+  async function orgUploadPhoto(id){
+    var inp = document.getElementById('oem-photo-inp-'+id);
+    if(!inp.files.length) return;
+    var f = inp.files[0];
+    var preview = document.getElementById('oem-photo-preview-'+id);
+    if(preview) preview.innerHTML = '<div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--white-50)">...</div>';
+    try{
+      var safeName = hujjatSafeFilename(f.name);
+      var path = 'org-avatars/'+id+'_'+Date.now()+'_'+safeName;
+      var r = await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},
+        body:f
+      });
+      if(r.ok){
+        var url = SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
+        var urlEl = document.getElementById('oem-photo-url-'+id);
+        if(urlEl) urlEl.value = url;
+        if(preview) preview.innerHTML = '<img src="'+esc(url)+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover">';
+      } else {
+        notify('Rasm yuklashda xato!');
+        if(preview) preview.innerHTML = '';
+      }
+    }catch(e){ notify('Rasm yuklashda xato!'); }
+  }
+  function orgRemovePhoto(id){
+    var urlEl = document.getElementById('oem-photo-url-'+id);
+    if(urlEl) urlEl.value = '';
+    var node = orgData.find(function(n){ return n.id===id; });
+    var preview = document.getElementById('oem-photo-preview-'+id);
+    if(preview && node) preview.innerHTML = orgAvatarHtml({fio:node.fio,name:node.name}, 48);
+  }
   function orgSaveEditModal(id){
     var node=orgData.find(n=>n.id===id);
     var name=document.getElementById('oem-name').value.trim();
     if(!name){notify('Nom kiriting!');return;}
     node.name=name;
     node.fio=document.getElementById('oem-fio').value.trim();
+    var photoUrlEl = document.getElementById('oem-photo-url-'+id);
+    if(photoUrlEl) node.photo = photoUrlEl.value || '';
     // Tel raqamlar
     var telWrap=document.getElementById('oem-tels-'+id);
     var tels=telWrap?Array.from(telWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
