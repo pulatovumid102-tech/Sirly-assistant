@@ -190,16 +190,20 @@ async def kaiten_overdue_check_job(context: ContextTypes.DEFAULT_TYPE):
                 if dl_dt_utc <= now_utc:
                     dept = t.get("dept") or "Boshqa"
                     assignee = t.get("empFio") or "—"
-                    emp_tg = t.get("empTg")
-                    if emp_tg:
-                        assignee += f" @{emp_tg.lstrip('@')}"
+                    creator = t.get("createdByName") or "—"
+                    creator_tg = t.get("createdByTg")
+                    creator_line = creator
+                    if creator_tg:
+                        creator_line += f" @{creator_tg.lstrip('@')}"
                     deadline_local = dl_dt.astimezone(TIMEZONE).strftime("%d.%m.%Y %H:%M")
                     text = (
-                        f"⚠️ Vazifa muddati o'tdi\n"
-                        f"{dept} da\n"
-                        f"{assignee} uchun\n"
+                        f"⚠️ Vazifa muddati o'tdi\n\n"
+                        f"{dept} bo'limida\n"
+                        f"{deadline_local}da\n"
+                        f"{creator_line} tomonidan\n"
+                        f"{assignee} uchun yaratilgan\n"
                         f"\"{t.get('text','')}\"\n"
-                        f"Muddat: {deadline_local}"
+                        f"muddati o'tdi"
                     )
                     try:
                         await context.bot.send_message(chat_id=CHAT_ID, text=text)
