@@ -2689,6 +2689,7 @@ async function chatGroupSend(){
   var inp = document.getElementById('chat-group-text');
   var text = inp.value.trim();
   if(!text && !chatPendingFilesGroup.length) return;
+  var taggedFio = chatTaggedGroup;
   var msg = {id:'cm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), from:chatMyName(), text:text, files:chatPendingFilesGroup.slice(), time:new Date().toISOString()};
   chatGroupMessages.push(msg);
   inp.value=''; inp.style.height='auto';
@@ -2703,7 +2704,18 @@ async function chatGroupSend(){
     try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})}); }catch(e2){}
   }
   var lines = ['💬 '+msg.from, text||'(fayl yuborildi)'];
-  fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:lines.join(String.fromCharCode(10)), status:'pending'})}).catch(function(){});
+  var msgText = lines.join(String.fromCharCode(10));
+  if(taggedFio){
+    var taggedNode = orgData.find(function(n){ return n.fio===taggedFio; });
+    var taggedUsername = taggedNode ? (taggedNode.tg||'').replace(/^@/,'') : '';
+    if(taggedUsername){
+      fetch(SB_URL+'/rest/v1/personal_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatgp'+Date.now()+'_'+Math.random().toString(36).slice(2,7), to_username:taggedUsername, from_name:msg.from, text:msgText, status:'pending'})}).catch(function(){});
+    } else {
+      fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:msgText, status:'pending'})}).catch(function(){});
+    }
+  } else {
+    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:msgText, status:'pending'})}).catch(function(){});
+  }
 }
 
 // ---- Shaxsiy xabarlar ----
