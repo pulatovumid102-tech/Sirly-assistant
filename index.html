@@ -3085,6 +3085,38 @@ setInterval(function(){
   var p=document.getElementById('p-kaiten');
   if(p && p.classList.contains('active')) renderKaiten();
 }, 60000);
+setInterval(function(){
+  var pg=document.getElementById('p-chat-group');
+  if(pg && pg.classList.contains('active')) chatRefreshGroup();
+  var pp=document.getElementById('p-chat-personal');
+  if(pp && pp.classList.contains('active')) chatRefreshPersonal();
+}, 1000);
+async function chatRefreshGroup(){
+  if(chatEditingId.group) return;
+  try{
+    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
+    var rows = await r.json();
+    var fresh = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
+    if(JSON.stringify(fresh)!==JSON.stringify(chatGroupMessages)){
+      chatGroupMessages = fresh;
+      chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
+    }
+  }catch(e){}
+}
+async function chatRefreshPersonal(){
+  if(chatEditingId.personal) return;
+  var key = chatPersonalThreads._currentKey;
+  if(!key) return;
+  try{
+    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
+    var rows = await r.json();
+    var fresh = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
+    if(JSON.stringify(fresh)!==JSON.stringify(chatPersonalThreads[key])){
+      chatPersonalThreads[key] = fresh;
+      chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[key], 'personal');
+    }
+  }catch(e){}
+}
 
 load().then(()=>{updateBc();});
 acadLoad().catch(()=>{});
