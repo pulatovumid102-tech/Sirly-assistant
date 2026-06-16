@@ -477,22 +477,29 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     return ORG_AVATAR_COLORS[Math.abs(hash)];
   }
   function orgAvatarHtml(node, size){
-    size = size||36;
-    if(node.photo){
-      return `<img src="${esc(node.photo)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.15)">`;
+    try{
+      size = size||36;
+      if(node && node.photo){
+        return `<img src="${esc(node.photo)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.15)">`;
+      }
+      var letter = ((node&&(node.fio||node.name))||'?').trim().charAt(0).toUpperCase();
+      var bg = orgAvatarColor((node&&(node.fio||node.name))||'?');
+      return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px">${esc(letter)}</div>`;
+    }catch(e){
+      console.error('orgAvatarHtml error', e);
+      return '';
     }
-    var letter = (node.fio||node.name||'?').trim().charAt(0).toUpperCase();
-    var bg = orgAvatarColor(node.fio||node.name);
-    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px">${esc(letter)}</div>`;
   }
   function orgCard(node){
     var menuOpen = orgMenuOpen === node.id;
     var detailOpen = orgDetailOpen === node.id;
     var draggable = orgIsAdmin() && node.parentId;
+    var cardAvatarHtml = '';
+    try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); }
     return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
       <div class="section-item${node.color==='#ffffff'?' org-white-dots':''}" id="org-node-${node.id}" style="width:240px;flex-shrink:0;position:relative;cursor:pointer;display:flex;align-items:center;gap:10px${node.color&&node.color!=='#ffffff'?`;background:${node.color}`:''}${node.color==='#ffffff'?';color:#16573a':''}" onclick="orgToggleDetail('${node.id}')"
         ${draggable?`draggable="true" ondragstart="orgDragStart(event,'${node.id}')" ondragover="orgDragOver(event,'${node.id}')" ondragleave="orgDragLeave(event,'${node.id}')" ondrop="orgDrop(event,'${node.id}')" ondragend="orgDragEnd(event)"`:''}>
-        ${orgAvatarHtml(node,36)}
+        ${cardAvatarHtml}
         <div style="flex:1;min-width:0">
           <div class="section-name" style="${node.color==='#ffffff'?'color:#16573a':''}">${esc(node.name)}</div>
           ${node.fio?`<div style="font-size:11px;${node.color==='#ffffff'?'color:#16573a99':'color:var(--white-50)'};margin-top:2px">${esc(node.fio)}</div>`:''}
@@ -565,8 +572,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(!node) return;
     var telDisplay = (node.tels&&node.tels.length)?node.tels.join(', '):(node.tel||'—');
     var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
+    var avatarHtml = '';
+    try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); }
     var html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        ${orgAvatarHtml(node,56)}
+        ${avatarHtml}
         <div style="font-size:15px;font-weight:700;color:var(--white)">${esc(node.name)}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
