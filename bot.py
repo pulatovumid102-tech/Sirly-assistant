@@ -257,7 +257,8 @@ async def org_checklist_check_job(context: ContextTypes.DEFAULT_TYPE):
                     fio = node.get("fio") or node.get("name") or "—"
                     tg = (node.get("tg") or "").lstrip("@")
                     person_line = fio + (f" @{tg}" if tg else "")
-                    text = f"{person_line} uchun eslatma:\n{item.get('text','')}"
+                    date_str = now_local.strftime("%d.%m.%Y")
+                    text = f"Cheklist — {person_line}\n{date_str}, {current_hm}\n\n{item.get('text','')}"
                     cl_id = item.get("id") or f"cl_{node.get('id')}_{item_time}"
                     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Bajarildi", callback_data=f"orgcl_done:{cl_id}:{today_str}")]])
                     try:
@@ -280,7 +281,29 @@ async def org_checklist_check_job(context: ContextTypes.DEFAULT_TYPE):
 async def org_checklist_done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
-        _, cl_id, date_str = query.data.split(":")
+        parts = query.data.split(":")
+        cl_id, date_str = parts[1], parts[2]
+        clicker_username = (query.from_user.username or "").lower()
+        owner_tg = ""
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.get(
+                    f"{SB_URL}/rest/v1/biznes_data",
+                    headers=SB_HEADERS,
+                    params={"id": "eq.org", "select": "data"}
+                )
+                rows = r.json()
+                if rows and isinstance(rows, list) and rows[0].get("data"):
+                    for node in rows[0]["data"]:
+                        for item in (node.get("checklist") or []):
+                            if item.get("id") == cl_id:
+                                owner_tg = (node.get("tg") or "").lstrip("@").lower()
+                                break
+        except Exception as lookup_err:
+            logger.error(f"org_checklist owner lookup error: {lookup_err}")
+        if owner_tg and clicker_username != owner_tg:
+            await query.answer()
+            return
         await query.answer("Bajarildi deb belgilandi ✓")
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Bajarildi", callback_data="noop")]])
         await query.edit_message_reply_markup(reply_markup=keyboard)
