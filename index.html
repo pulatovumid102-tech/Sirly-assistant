@@ -506,8 +506,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;margin-bottom:16px">
         ${isBolim?'':`<div><span class="flbl">F.I.O</span><br><span style="color:var(--white-80)">${esc(node.fio||'—')}</span></div>
         <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(telDisplay)}</span></div>
-        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(tgDisplay)}</span></div>
-        <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>`}
+        <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(tgDisplay)}</span></div>`}
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
@@ -697,7 +696,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node._tmpCardType = type;
     var btnX=document.getElementById('oem-type-xodim'), btnB=document.getElementById('oem-type-bolim');
     var isBolim = type==='bolim';
-    var rowIds = ['oem-fio-row-'+id,'oem-tel-row-'+id,'oem-tg-row-'+id,'oem-days-row-'+id,'oem-hours-row-'+id,'oem-status-row-'+id,'oem-photo-row-'+id];
+    var rowIds = ['oem-fio-row-'+id,'oem-tel-row-'+id,'oem-tg-row-'+id,'oem-status-row-'+id,'oem-photo-row-'+id];
     rowIds.forEach(function(rid){
       var el=document.getElementById(rid);
       if(el) el.style.display = isBolim ? 'none' : '';
@@ -718,14 +717,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   }
   function orgShowEditModal(id){
     var node=orgData.find(n=>n.id===id);
-    var days=node.workdays||[];
     var tels = node.tels||(node.tel?[node.tel]:['+998']);
     var tgs = node.tgs||(node.tg?[node.tg]:[]);
-    var dayLabels=[['mon','Dush'],['tue','Sesh'],['wed','Chor'],['thu','Pay'],['fri','Jum'],['sat','Shan'],['sun','Yak']];
-    var daysHtml=dayLabels.map(([key,label])=>{
-      var active=days.includes(key);
-      return `<button onclick="orgToggleDay('${id}','${key}')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;background:${active?'var(--lime)':'var(--white-06)'};color:${active?'var(--green-dark)':'var(--white-50)'}">${label}</button>`;
-    }).join('');
     var isBolimNow = node.cardType === 'bolim';
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">Tahrirlash</div>
       <div class="frow">
@@ -761,42 +754,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div id="oem-tgs-${id}">${orgTgHtml(tgs)}</div>
         <button class="abtn" style="margin-top:6px" onclick="orgAddTg('${id}')">+ Telegram qo'shish</button>
       </div>
-      <div class="frow" id="oem-days-row-${id}" style="${isBolimNow?'display:none':''}">
-        <label class="flbl">Ish kunlari</label>
-        <div id="oem-days-${id}" style="display:flex;gap:4px;margin-top:5px">${daysHtml}</div>
-      </div>
-      <div class="frow" id="oem-hours-row-${id}" style="${isBolimNow?'display:none':''}">
-        <label class="flbl">Ish vaqti</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-          <input class="fi" type="time" id="oem-start" value="${esc(node.workstart||'09:00')}" style="margin-top:0">
-          <span style="color:var(--white-50)">—</span>
-          <input class="fi" type="time" id="oem-end" value="${esc(node.workend||'18:00')}" style="margin-top:0">
-        </div>
-      </div>
       <div class="fbtns">
         <button class="fsave" onclick="orgSaveEditModal('${id}')">Saqlash</button>
         <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
       </div>`;
     orgShowModal(html);
-    if(!node._tmpDays) node._tmpDays = days.slice();
-  }
-  function orgToggleDay(id, key){
-    var node=orgData.find(n=>n.id===id);
-    if(!node._tmpDays) node._tmpDays = (node.workdays||[]).slice();
-    var idx=node._tmpDays.indexOf(key);
-    if(idx>-1) node._tmpDays.splice(idx,1); else node._tmpDays.push(key);
-    node.workdays = node._tmpDays;
-    orgShowEditModal(id);
-  }
-  var ORG_DAY_LABELS={mon:'Dush',tue:'Sesh',wed:'Chor',thu:'Pay',fri:'Jum',sat:'Shan',sun:'Yak'};
-  var ORG_DAY_ORDER=['mon','tue','wed','thu','fri','sat','sun'];
-  function orgBuildWorkhoursText(node){
-    var days=(node.workdays||[]).slice().sort((a,b)=>ORG_DAY_ORDER.indexOf(a)-ORG_DAY_ORDER.indexOf(b));
-    if(!days.length) return '';
-    var dayStr=days.map(d=>ORG_DAY_LABELS[d]).join(', ');
-    var start=node.workstart||'', end=node.workend||'';
-    var timeStr = (start&&end) ? `${start}-${end}` : '';
-    return timeStr ? `${dayStr}, ${timeStr}` : dayStr;
   }
   async function orgUploadPhoto(id){
     var inp = document.getElementById('oem-photo-inp-'+id);
@@ -853,11 +815,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       node.tel = '';
       node.tgs = [];
       node.tg = '';
-      node.workdays = [];
-      node.workstart = '';
-      node.workend = '';
-      node.workhours = '';
-      delete node._tmpDays;
       orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
       return;
     }
@@ -878,11 +835,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var tgs=tgWrap?Array.from(tgWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
     node.tgs=tgs;
     node.tg=tgs[0]||'';
-    node.workdays = node._tmpDays || node.workdays || [];
-    node.workstart = document.getElementById('oem-start').value;
-    node.workend = document.getElementById('oem-end').value;
-    node.workhours = orgBuildWorkhoursText(node);
-    delete node._tmpDays;
     orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
   }
   function orgAddChildModal(id){
