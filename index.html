@@ -343,10 +343,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   ];
   var orgMenuOpen = null;
   function orgIsAdmin(){
-    try{
-      if(typeof isAdmin !== 'undefined') return !!isAdmin;
-      return !!(window && window.isAdmin);
-    }catch(e){ return false; }
+    if(window.isAdmin === true) return true;
+    try{ if(isAdmin === true) return true; }catch(e){}
+    return false;
   }
   var orgDetailOpen = null;
   var orgInfoOpen = null;
@@ -496,7 +495,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div><span class="flbl">Tel raqam</span><br><span style="color:var(--white-80)">${esc(telDisplay)}</span></div>
         <div><span class="flbl">Telegram</span><br><span style="color:var(--white-80)">${esc(tgDisplay)}</span></div>
         <div><span class="flbl">Ish kunlari/vaqti</span><br><span style="color:var(--white-80)">${esc(node.workhours||'—')}</span></div>
-        <div><span class="flbl">Ishga kirgan sana</span><br><span style="color:var(--white-80)">${esc(node.startdate||'—')}</span></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="add-item-btn" style="margin-top:0" onclick="orgShowTasksModal('${id}')">Vazifalar ro'yxati</button>
@@ -532,10 +530,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node.tasks.splice(idx,1);
     orgSave(); orgShowTasksModal(id);
   }
-  var orgChecklistTmpDays=[], orgChecklistTmpText='', orgChecklistTmpStart='09:00', orgChecklistTmpEnd='10:00';
+  var orgChecklistTmpDays=[], orgChecklistTmpText='', orgChecklistTmpTime='09:00';
   var ORG_CL_DAY_LABELS=[['mon','Dush'],['tue','Sesh'],['wed','Chor'],['thu','Pay'],['fri','Jum'],['sat','Shan'],['sun','Yak']];
   function orgResetChecklistTmp(){
-    orgChecklistTmpDays=[]; orgChecklistTmpText=''; orgChecklistTmpStart='09:00'; orgChecklistTmpEnd='10:00';
+    orgChecklistTmpDays=[]; orgChecklistTmpText=''; orgChecklistTmpTime='09:00';
   }
   function orgShowChecklistModal(id){
     var node=orgData.find(n=>n.id===id);
@@ -545,7 +543,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
         <div style="flex:1">
           <div style="color:var(--white-80)">${i+1}. ${esc(c.text)}</div>
-          <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.start||'')}-${esc(c.end||'')} • ${esc(daysStr)}</div>
+          <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.time||'')} • ${esc(daysStr)}</div>
         </div>
         ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelChecklistModal('${id}',${i})">x</button>`:''}
       </div>`;
@@ -561,12 +559,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       ${orgIsAdmin()?`
       <div class="frow"><label class="flbl">Vazifa matni</label><input class="fi" id="org-cl-text" placeholder="Vazifa matni..." value="${esc(orgChecklistTmpText)}"></div>
       <div class="frow">
-        <label class="flbl">Vaqt oralig'i</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-          <input class="fi" type="time" id="org-cl-start" value="${esc(orgChecklistTmpStart)}" style="margin-top:0">
-          <span style="color:var(--white-50)">—</span>
-          <input class="fi" type="time" id="org-cl-end" value="${esc(orgChecklistTmpEnd)}" style="margin-top:0">
-        </div>
+        <label class="flbl">Vaqt</label>
+        <input class="fi" type="time" id="org-cl-time" value="${esc(orgChecklistTmpTime)}" style="margin-top:5px">
       </div>
       <div class="frow">
         <label class="flbl">Kunlar</label>
@@ -579,24 +573,22 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   }
   function orgToggleChecklistDay(id, key){
     var textEl=document.getElementById('org-cl-text');
-    var startEl=document.getElementById('org-cl-start');
-    var endEl=document.getElementById('org-cl-end');
+    var timeEl=document.getElementById('org-cl-time');
     if(textEl) orgChecklistTmpText=textEl.value;
-    if(startEl) orgChecklistTmpStart=startEl.value;
-    if(endEl) orgChecklistTmpEnd=endEl.value;
+    if(timeEl) orgChecklistTmpTime=timeEl.value;
     var idx=orgChecklistTmpDays.indexOf(key);
     if(idx>-1) orgChecklistTmpDays.splice(idx,1); else orgChecklistTmpDays.push(key);
     orgShowChecklistModal(id);
   }
   function orgAddChecklistModal(id){
     var text=document.getElementById('org-cl-text').value.trim();
-    var start=document.getElementById('org-cl-start').value;
-    var end=document.getElementById('org-cl-end').value;
+    var time=document.getElementById('org-cl-time').value;
     if(!text){notify('Matn kiriting!');return;}
+    if(!time){notify('Vaqtni kiriting!');return;}
     if(!orgChecklistTmpDays.length){notify('Kamida bitta kun tanlang!');return;}
     var node=orgData.find(n=>n.id===id);
     if(!node.checklist)node.checklist=[];
-    node.checklist.push({text,start,end,days:orgChecklistTmpDays.slice()});
+    node.checklist.push({id:'cl'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:text, time:time, days:orgChecklistTmpDays.slice()});
     orgSave(); notify('Saqlandi ✓');
     orgResetChecklistTmp();
     orgShowChecklistModal(id);
@@ -708,7 +700,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           <input class="fi" type="time" id="oem-end" value="${esc(node.workend||'18:00')}" style="margin-top:0">
         </div>
       </div>
-      <div class="frow"><label class="flbl">Ishga kirgan sana</label><input class="fi" id="oem-startdate" value="${esc(node.startdate||'')}"></div>
       <div class="fbtns">
         <button class="fsave" onclick="orgSaveEditModal('${id}')">Saqlash</button>
         <button class="fcancel" onclick="orgCloseModal()">Bekor</button>
@@ -789,7 +780,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node.workend = document.getElementById('oem-end').value;
     node.workhours = orgBuildWorkhoursText(node);
     delete node._tmpDays;
-    node.startdate=document.getElementById('oem-startdate').value.trim();
     orgSave(); notify('Saqlandi ✓'); orgCloseModal(); renderOrg();
   }
   function orgAddChildModal(id){
@@ -1536,13 +1526,9 @@ showLogin('sirly');
             USER_PERMS = user.permissions || null;
             CURRENT_USER_TG = user.tg || '';
             CURRENT_USER_ORG_ID = user.orgNodeId || '';
-            var freshRole = user.role || 'guest';
+            var freshRole = String(user.role || 'guest').trim().toLowerCase();
             if(freshRole === 'editor' && !isAdmin){
               isAdmin = true;
-              if(typeof renderOrg==='function') renderOrg();
-              if(typeof entryTitlesRender==='function') entryTitlesRender();
-            } else if(freshRole !== 'editor' && isAdmin){
-              isAdmin = false;
               if(typeof renderOrg==='function') renderOrg();
               if(typeof entryTitlesRender==='function') entryTitlesRender();
             }
