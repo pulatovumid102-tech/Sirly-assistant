@@ -419,7 +419,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var draggable = orgIsAdmin() && node.parentId;
     var isBolim = node.cardType === 'bolim';
     var cardAvatarHtml = '';
-    if(!isBolim && !node.autsors){ try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); } }
+    if(!isBolim && !node.autsors && !node.xodimKerak){ try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); } }
     var badges = '';
     if(node.sinov) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:4px">SINOV</span>`;
     if(node.autsors) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,0.12);color:var(--white-70);margin-right:4px">AUTSORS</span>`;
@@ -506,7 +506,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
     var isBolim = node.cardType === 'bolim';
     var avatarHtml = '';
-    if(!isBolim && !node.autsors){ try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); } }
+    if(!isBolim && !node.autsors && !node.xodimKerak){ try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); } }
     var statusBadges = '';
     if(node.sinov) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:6px">SINOV MUDDATIDA</span>`;
     if(node.autsors) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.12);color:var(--white-70);margin-right:6px">AUTSORS</span>`;
@@ -709,11 +709,14 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node._tmpCardType = type;
     var btnX=document.getElementById('oem-type-xodim'), btnB=document.getElementById('oem-type-bolim');
     var isBolim = type==='bolim';
-    var rowIds = ['oem-fio-row-'+id,'oem-tel-row-'+id,'oem-tg-row-'+id,'oem-status-row-'+id,'oem-photo-row-'+id];
+    var rowIds = ['oem-fio-row-'+id,'oem-tel-row-'+id,'oem-tg-row-'+id,'oem-status-row-'+id];
     rowIds.forEach(function(rid){
       var el=document.getElementById(rid);
       if(el) el.style.display = isBolim ? 'none' : '';
     });
+    orgTogglePhotoRowVisibility(id);
+    var photoRow=document.getElementById('oem-photo-row-'+id);
+    if(photoRow && isBolim) photoRow.style.display = 'none';
     var nameLabel=document.getElementById('oem-name-label');
     if(nameLabel) nameLabel.textContent = isBolim ? "Bo'lim nomi" : 'Lavozim';
     if(btnX&&btnB){
@@ -724,9 +727,11 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     }
   }
   function orgTogglePhotoRowVisibility(id){
-    var cb = document.getElementById('oem-autsors');
+    var cbAutsors = document.getElementById('oem-autsors');
+    var cbXodimKerak = document.getElementById('oem-xodimkerak');
     var row = document.getElementById('oem-photo-row-'+id);
-    if(row) row.style.display = (cb && cb.checked) ? 'none' : '';
+    var shouldHide = (cbAutsors && cbAutsors.checked) || (cbXodimKerak && cbXodimKerak.checked);
+    if(row) row.style.display = shouldHide ? 'none' : '';
   }
   function orgShowEditModal(id){
     var node=orgData.find(n=>n.id===id);
@@ -746,10 +751,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div style="display:flex;gap:14px;margin-top:8px">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-sinov" ${node.sinov?'checked':''}> Sinov muddatida</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-autsors" ${node.autsors?'checked':''} onchange="orgTogglePhotoRowVisibility('${id}')"> Autsors xodim</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-xodimkerak" ${node.xodimKerak?'checked':''}> Xodim kerak</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-xodimkerak" ${node.xodimKerak?'checked':''} onchange="orgTogglePhotoRowVisibility('${id}')"> Xodim kerak</label>
         </div>
       </div>
-      <div class="frow" id="oem-photo-row-${id}" style="${node.cardType==='bolim'||node.autsors?'display:none':''}"><label class="flbl">Rasm</label>
+      <div class="frow" id="oem-photo-row-${id}" style="${node.cardType==='bolim'||node.autsors||node.xodimKerak?'display:none':''}"><label class="flbl">Rasm</label>
         <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
           <div id="oem-photo-preview-${id}">${node.photo?`<img src="${esc(node.photo)}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`:orgAvatarHtml(node,48)}</div>
           <input type="file" id="oem-photo-inp-${id}" accept="image/*" style="display:none" onchange="orgUploadPhoto('${id}')">
@@ -839,9 +844,9 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     node.sinov = !!(sinovEl && sinovEl.checked);
     node.autsors = !!(autsorsEl && autsorsEl.checked);
     node.xodimKerak = !!(xodimKerakEl && xodimKerakEl.checked);
-    if(node.autsors) node.photo = '';
+    if(node.autsors || node.xodimKerak) node.photo = '';
     var photoUrlEl = document.getElementById('oem-photo-url-'+id);
-    if(photoUrlEl && !node.autsors) node.photo = photoUrlEl.value || '';
+    if(photoUrlEl && !node.autsors && !node.xodimKerak) node.photo = photoUrlEl.value || '';
     // Tel raqamlar
     var telWrap=document.getElementById('oem-tels-'+id);
     var tels=telWrap?Array.from(telWrap.querySelectorAll('input')).map(function(el){return el.value.trim();}).filter(Boolean):[];
