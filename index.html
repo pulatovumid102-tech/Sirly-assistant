@@ -518,13 +518,13 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   }
   function orgShowTasksModal(id){
     var node=orgData.find(n=>n.id===id);
-    var tasksHtml=(node.tasks&&node.tasks.length)?node.tasks.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
-      <span style="flex:1;color:var(--white-80)">${i+1}. ${esc(t)}</span>
+    var tasksHtml=(node.tasks&&node.tasks.length)?node.tasks.map((t,i)=>`<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
+      <span style="flex:1;color:var(--white-80);white-space:pre-wrap">${i+1}. ${esc(t)}</span>
       ${orgIsAdmin()?`<button class="abtn abtn-red" onclick="orgDelTaskModal('${id}',${i})">x</button>`:''}
     </div>`).join(''):'<div style="color:var(--white-50);padding:12px 0">Vazifalar yo\'q</div>';
     var html=`<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">${esc(node.name)} — Vazifalar</div>
       <div style="margin-bottom:12px">${tasksHtml}</div>
-      ${orgIsAdmin()?`<div class="frow"><input class="fi" id="org-task-inp" placeholder="Yangi vazifa..."></div>
+      ${orgIsAdmin()?`<div class="frow"><textarea class="fi" id="org-task-inp" placeholder="Yangi vazifa..." rows="3" style="resize:vertical;font-family:inherit"></textarea></div>
       <div class="fbtns"><button class="fsave" onclick="orgAddTaskModal('${id}')">Qo'shish</button></div>`:''}
       <button class="fcancel" style="margin-top:8px" onclick="orgCloseModal()">Yopish</button>`;
     orgShowModal(html);
@@ -554,7 +554,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       var daysStr=(c.days||[]).map(d=>{var f=ORG_CL_DAY_LABELS.find(x=>x[0]===d);return f?f[1]:d;}).join(', ');
       return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--white-10)">
         <div style="flex:1">
-          <div style="color:var(--white-80)">${i+1}. ${esc(c.text)}</div>
+          <div style="color:var(--white-80);white-space:pre-wrap">${i+1}. ${esc(c.text)}</div>
           <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(c.time||'')} • ${esc(daysStr)}</div>
         </div>
         ${orgIsAdmin()?`<button class="abtn" onclick="orgEditChecklistModal('${id}',${i})">✏</button><button class="abtn abtn-red" onclick="orgDelChecklistModal('${id}',${i})">x</button>`:''}
@@ -571,7 +571,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div style="margin-bottom:12px">${itemsHtml}</div>
       ${orgIsAdmin()?`
       ${isEditing?`<div style="font-size:12px;color:var(--lime);margin-bottom:8px">✏ Punkt tahrirlanmoqda...</div>`:''}
-      <div class="frow"><label class="flbl">Vazifa matni</label><input class="fi" id="org-cl-text" placeholder="Vazifa matni..." value="${esc(orgChecklistTmpText)}"></div>
+      <div class="frow"><label class="flbl">Vazifa matni</label><textarea class="fi" id="org-cl-text" placeholder="Vazifa matni..." rows="3" style="resize:vertical;font-family:inherit">${esc(orgChecklistTmpText)}</textarea></div>
       <div class="frow">
         <label class="flbl">Vaqt</label>
         <input class="fi" type="time" id="org-cl-time" value="${esc(orgChecklistTmpTime)}" style="margin-top:5px">
