@@ -259,7 +259,7 @@ async def org_checklist_check_job(context: ContextTypes.DEFAULT_TYPE):
                     person_line = fio + (f" @{tg}" if tg else "")
                     text = f"{person_line} uchun eslatma:\n{item.get('text','')}"
                     cl_id = item.get("id") or f"cl_{node.get('id')}_{item_time}"
-                    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Bajarildi", callback_data=f"orgcl_done:{cl_id}:{today_str}")]])
+                    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Bajarildi", callback_data=f"orgcl_done:{cl_id}:{today_str}")]])
                     try:
                         sent_msg = await context.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
                         sent_dates.append(today_str)
@@ -282,8 +282,8 @@ async def org_checklist_done_callback(update: Update, context: ContextTypes.DEFA
     try:
         _, cl_id, date_str = query.data.split(":")
         await query.answer("Bajarildi deb belgilandi ✓")
-        new_text = query.message.text + f"\n\n✅ Bajarildi ({date_str})"
-        await query.edit_message_text(text=new_text)
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Bajarildi", callback_data="noop")]])
+        await query.edit_message_reply_markup(reply_markup=keyboard)
     except Exception as e:
         logger.error(f"org_checklist_done_callback error: {e}")
         try:
