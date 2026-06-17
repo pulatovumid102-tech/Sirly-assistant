@@ -184,7 +184,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
 .kaiten-col-list{display:flex;flex-direction:column;gap:8px;border-radius:10px;transition:background 0.15s}
-.kaiten-col-list.kaiten-drop-active{background:rgba(212,255,77,0.08);outline:1.5px dashed var(--lime)}
+.kaiten-col.kaiten-drop-active{background:rgba(212,255,77,0.08);outline:1.5px dashed var(--lime)}
 .kaiten-card{cursor:grab}
 .kaiten-card:active{cursor:grabbing}
 .kaiten-card{background:#ffffff;border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
@@ -279,6 +279,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     <div class="page-header">
       <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
       <span class="page-title" id="page-title-kaiten">Kaiten</span>
+      <button class="abtn" style="margin-left:auto" onclick="kaitenShowArchive()">🗄 Arxiv</button>
     </div>
   </div>
   <div id="kaiten-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch;"></div>
@@ -2847,6 +2848,50 @@ function kaitenDelTask(id){
     kaitenSave(); renderKaiten(); notify("O'chirildi ✓");
   });
 }
+function kaitenArchiveTask(id){
+  var t = kaitenTasks.find(x=>x.id===id);
+  if(!t) return;
+  if(!kaitenCanEditTask(t)){ notify("Bu vazifani arxivlash huquqingiz yo'q"); return; }
+  askConfirm("Vazifani arxivga jo'natasizmi?",()=>{
+    t.archived = true;
+    t.archivedAt = new Date().toISOString();
+    kaitenSave(); renderKaiten(); notify("Arxivga jo'natildi ✓");
+  });
+}
+function kaitenUnarchiveTask(id){
+  var t = kaitenTasks.find(x=>x.id===id);
+  if(!t) return;
+  t.archived = false;
+  delete t.archivedAt;
+  kaitenSave(); renderKaiten(); kaitenShowArchive(); notify("Doskaga qaytarildi ✓");
+}
+function kaitenDeleteArchivedTask(id){
+  askConfirm("Vazifani butunlay o'chirasizmi? Bu amalni qaytarib bo'lmaydi.",()=>{
+    kaitenTasks = kaitenTasks.filter(t=>t.id!==id);
+    kaitenSave(); kaitenShowArchive(); notify("Butunlay o'chirildi ✓");
+  });
+}
+function kaitenShowArchive(){
+  var archived = kaitenTasks.filter(t=>t.archived);
+  archived.sort(function(a,b){ return new Date(b.archivedAt||0) - new Date(a.archivedAt||0); });
+  var listHtml = archived.length ? archived.map(function(t){
+    var meta = t.empFio?(t.empFio+(t.empRole?' ('+t.empRole+')':'')):'';
+    var archivedDate = t.archivedAt ? kaitenFormatDateOnly(t.archivedAt) : '';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--white-10)">
+      <div style="font-size:13px;color:var(--white-80);font-weight:600">${esc(t.text)}</div>
+      ${meta?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(meta)}</div>`:''}
+      ${archivedDate?`<div style="font-size:11px;color:var(--white-50);margin-top:2px">Arxivlangan: ${esc(archivedDate)}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="abtn" onclick="kaitenUnarchiveTask('${t.id}')">↩ Qaytarish</button>
+        <button class="abtn abtn-red" onclick="kaitenDeleteArchivedTask('${t.id}')">✕ Butunlay o'chirish</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:var(--white-50);padding:16px 0;text-align:center">Arxiv bo&#39;sh</div>';
+  var html = `<div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">🗄 Arxiv</div>
+    <div style="max-height:60vh;overflow-y:auto">${listHtml}</div>
+    <button class="fcancel" style="margin-top:12px" onclick="orgCloseModal()">Yopish</button>`;
+  orgShowModal(html);
+}
 var kaitenDragTaskId = null;
 function kaitenDragStart(e, id){
   kaitenDragTaskId = id;
@@ -2856,7 +2901,7 @@ function kaitenDragStart(e, id){
 function kaitenDragEnd(e){
   if(e.currentTarget) e.currentTarget.style.opacity = '';
   kaitenDragTaskId = null;
-  document.querySelectorAll('.kaiten-col-list').forEach(function(el){ el.classList.remove('kaiten-drop-active'); });
+  document.querySelectorAll('.kaiten-col').forEach(function(el){ el.classList.remove('kaiten-drop-active'); });
 }
 function kaitenDragOver(e, colId){
   e.preventDefault();
@@ -2999,6 +3044,7 @@ function kaitenCard(t){
       <div style="margin-left:auto;display:flex;gap:6px">
       ${canEdit?`
       <button class="abtn" onclick="kaitenShowEditForm('${t.id}')">✏</button>
+      <button class="abtn" onclick="kaitenArchiveTask('${t.id}')">🗄</button>
       <button class="abtn abtn-red" onclick="kaitenDelTask('${t.id}')">✕</button>
       `:''}
       </div>
@@ -3022,12 +3068,12 @@ function kaitenRenderBoardStructure(){
   if(!boardEl) return;
   var existingAddForm = document.getElementById('kaiten-add-form');
   var savedAddForm = existingAddForm ? existingAddForm.innerHTML : '';
-  var h = kaitenColumns.map((col,i)=>`<div class="kaiten-col">
+  var h = kaitenColumns.map((col,i)=>`<div class="kaiten-col" ondragover="kaitenDragOver(event,'${col.id}')" ondragleave="kaitenDragLeave(event,'${col.id}')" ondrop="kaitenDrop(event,'${col.id}')">
       <div class="kaiten-col-title">
         <span class="kaiten-col-title-text" id="kaiten-title-${col.id}"></span>
         ${isAdmin?`<button class="kaiten-col-edit-btn" onclick="kaitenRenameColumn('${col.id}')">✏</button>`:''}
       </div>
-      <div class="kaiten-col-list" id="kaiten-list-${col.id}" ondragover="kaitenDragOver(event,'${col.id}')" ondragleave="kaitenDragLeave(event,'${col.id}')" ondrop="kaitenDrop(event,'${col.id}')"></div>
+      <div class="kaiten-col-list" id="kaiten-list-${col.id}" style="min-height:60px"></div>
       ${i===0?'<div id="kaiten-add-form"></div>':''}
     </div>`).join('');
   if(isAdmin){
@@ -3099,7 +3145,8 @@ function renderKaiten(){
       kaitenRenderBoardStructure();
     }
   }
-  var visibleTasks = kaitenFilterDept ? kaitenTasks.filter(t=>t.dept===kaitenFilterDept) : kaitenTasks;
+  var activeTasks = kaitenTasks.filter(t=>!t.archived);
+  var visibleTasks = kaitenFilterDept ? activeTasks.filter(t=>t.dept===kaitenFilterDept) : activeTasks;
   var cols={};
   kaitenColumns.forEach(c=>cols[c.id]=[]);
   visibleTasks.forEach(t=>{
