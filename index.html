@@ -408,7 +408,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var draggable = orgIsAdmin() && node.parentId;
     var isBolim = node.cardType === 'bolim';
     var cardAvatarHtml = '';
-    if(!isBolim){ try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); } }
+    if(!isBolim && !node.autsors){ try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); } }
     var badges = '';
     if(node.sinov) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:4px">SINOV</span>`;
     if(node.autsors) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,0.12);color:var(--white-70)">AUTSORS</span>`;
@@ -494,7 +494,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     var tgDisplay = (node.tgs&&node.tgs.length)?node.tgs.join(', '):(node.tg||'—');
     var isBolim = node.cardType === 'bolim';
     var avatarHtml = '';
-    if(!isBolim){ try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); } }
+    if(!isBolim && !node.autsors){ try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); } }
     var statusBadges = '';
     if(node.sinov) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:6px">SINOV MUDDATIDA</span>`;
     if(node.autsors) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.12);color:var(--white-70)">AUTSORS</span>`;
