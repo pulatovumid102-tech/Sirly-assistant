@@ -183,7 +183,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .kaiten-add-col-btn{width:36px;height:36px;border-radius:50%;border:1.5px dashed var(--white-20);background:var(--white-06);color:var(--white-50);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
 .kaiten-filter-chip{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--white-10);background:var(--white-06);color:var(--white-80);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s}
 .kaiten-filter-chip.active{background:var(--lime);color:var(--green-dark);border-color:var(--lime)}
-.kaiten-col-list{display:flex;flex-direction:column;gap:8px}
+.kaiten-col-list{display:flex;flex-direction:column;gap:8px;border-radius:10px;transition:background 0.15s}
+.kaiten-col-list.kaiten-drop-active{background:rgba(212,255,77,0.08);outline:1.5px dashed var(--lime)}
+.kaiten-card{cursor:grab}
+.kaiten-card:active{cursor:grabbing}
 .kaiten-card{background:#ffffff;border:1px solid var(--white-10);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px}
 .sek-card{background:#f3f1ec;border:1px solid #e2dfd6;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px}
 .sek-date{font-size:13px;font-weight:700;color:#2e2c28;letter-spacing:.2px}
@@ -2437,14 +2440,46 @@ function kaitenMyRoleForTask(t){
   }
   return isAdmin ? 'yaratuvchi' : 'other';
 }
+var kaitenCommentPendingFile = {};
 function kaitenAddComment(id){
   var inp=document.getElementById('kc-text-'+id);
   var text=inp.value.trim();
-  if(!text){ notify('Matn kiriting!'); return; }
+  var file=kaitenCommentPendingFile[id];
+  if(!text && !file){ notify('Matn yoki fayl biriktiring!'); return; }
   var t=kaitenTasks.find(x=>x.id===id);
   if(!t.comments)t.comments=[];
-  t.comments.push({role:kaitenMyRoleForTask(t), text, time:new Date().toISOString()});
+  var entry = {role:kaitenMyRoleForTask(t), text:text, time:new Date().toISOString()};
+  if(file) entry.file = file;
+  t.comments.push(entry);
+  delete kaitenCommentPendingFile[id];
   kaitenSave(); renderKaiten();
+}
+async function kaitenUploadCommentFile(id){
+  var inp = document.getElementById('kc-file-inp-'+id);
+  if(!inp.files.length) return;
+  var f = inp.files[0];
+  notify('Fayl yuklanmoqda...');
+  try{
+    var safeName = hujjatSafeFilename(f.name);
+    var path = 'kaiten-comments/'+id+'_'+Date.now()+'_'+safeName;
+    var r = await fetch(SB_URL+'/storage/v1/object/'+HUJJAT_BUCKET+'/'+path,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':f.type||'application/octet-stream','x-upsert':'true'},
+      body:f
+    });
+    if(r.ok){
+      var url = SB_URL+'/storage/v1/object/public/'+HUJJAT_BUCKET+'/'+path;
+      kaitenCommentPendingFile[id] = {name:f.name, url:url};
+      notify('Fayl tayyor ✓');
+      renderKaiten();
+    } else {
+      notify('Fayl yuklashda xato!');
+    }
+  }catch(e){ notify('Fayl yuklashda xato!'); }
+}
+function kaitenRemoveCommentFile(id){
+  delete kaitenCommentPendingFile[id];
+  renderKaiten();
 }
 function kaitenDelComment(id, idx){
   askConfirm("Xabarni o'chirasizmi?",()=>{
@@ -2543,11 +2578,13 @@ function kaitenFieldsHtml(prefix, task){
     +'<input type="hidden" id="'+prefix+'-dept" value="'+esc(dept)+'">'
     +'<input type="hidden" id="'+prefix+'-link-count" value="'+links.length+'">'
     +'<input type="hidden" id="'+prefix+'-contact-count" value="'+contacts.length+'">'
-    +'<div class="frow"><label class="flbl">Vazifa matni <span style="color:#ff7070">*</span></label>'
-    +'<textarea class="fi" id="'+prefix+'-text" style="min-height:70px;resize:vertical" placeholder="Vazifa tavsifi...">'+esc(task.text||'')+'</textarea></div>'
+    +'<div class="frow"><label class="flbl">Vazifa nomi <span style="color:#ff7070">*</span></label>'
+    +'<input class="fi" id="'+prefix+'-text" placeholder="Vazifa nomi..." value="'+esc(task.text||'')+'"></div>'
+    +'<div class="frow"><label class="flbl">Vazifa haqida ma\'lumot</label>'
+    +'<textarea class="fi" id="'+prefix+'-desc" style="min-height:70px;resize:vertical" placeholder="Batafsil tavsif (ixtiyoriy)...">'+esc(task.description||'')+'</textarea></div>'
     +'<div class="frow"><label class="flbl">Xodim <span style="color:#ff7070">*</span></label>'
     +'<select class="fi" id="'+prefix+'-emp"><option value="">\u2014 tanlang \u2014</option></select></div>'
-    +'<div class="frow"><label class="flbl">Yakuniy muddat <span style="color:#ff7070">*</span></label>'
+    +'<div class="frow"><label class="flbl">Yakuniy muddat</label>'
     +'<div style="display:flex;gap:8px;margin-top:5px">'
     +'<input class="fi" type="date" id="'+prefix+'-deadline-date" value="'+esc(dateVal)+'" style="margin-top:0">'
     +'<input class="fi" type="time" id="'+prefix+'-deadline-time" value="'+esc(timeVal)+'" style="margin-top:0">'
@@ -2684,6 +2721,8 @@ function kaitenReadFields(prefix){
   var deadlineTime = document.getElementById(prefix+'-deadline-time').value;
   var deadline = deadlineDate ? (deadlineDate + 'T' + (deadlineTime||'00:00')) : '';
   var text = document.getElementById(prefix+'-text').value.trim();
+  var descEl = document.getElementById(prefix+'-desc');
+  var description = descEl ? descEl.value.trim() : '';
   var empFio='', empRole='', empTg='';
   if(empRaw){ var p=empRaw.split('|'); empFio=p[0]; empRole=p[1]||''; empTg=p[2]||''; }
   var nazFio='', nazRole='', nazDept='';
@@ -2698,7 +2737,7 @@ function kaitenReadFields(prefix){
   if(contactWrap){ var rows=contactWrap.querySelectorAll('.kaiten-contact-row,[id^="'+prefix+'-contact-"]'); rows.forEach(function(row,i){ var nameEl=row.querySelector('[id$="-cname-'+i+'"],input[id*="cname"]'); var roleEl=row.querySelector('[id$="-crole-'+i+'"],input[id*="crole"]'); var telEl=row.querySelector('[id$="-ctel-'+i+'"],input[id*="ctel"]'); var name=(nameEl&&nameEl.value.trim())||''; var role=(roleEl&&roleEl.value.trim())||''; var tel=(telEl&&telEl.value.trim())||''; if(name||role||tel) contacts.push({name,role,tel}); }); }
   // Files — existing + newly uploaded
   var files = kaitenUploadedFiles[prefix]||[];
-  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text,links,contacts,files};
+  return {dept,empFio,empRole,empTg,nazFio,nazRole,nazDept,deadline,text,description,links,contacts,files};
 }
 function kaitenMyId(){
   // Unique identity key for "who created/owns" a task — prefers org link, falls back to login
@@ -2735,9 +2774,8 @@ setTimeout(refreshAllBadges, 2000);
 
 function kaitenAddTask(){
   var f = kaitenReadFields('kt');
-  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
+  if(!f.text){ notify('Vazifa nomini kiriting!'); return; }
   if(!f.empFio){ notify('Xodimni tanlang!'); return; }
-  if(!f.deadline){ notify('Yakuniy muddatni kiriting!'); return; }
   askConfirm("Vazifani aniq tushunarli qilib berdingizmi? Esdan chiqmadimi hech narsa?",()=>{
     f.id='kt'+Date.now(); f.status='todo';
     f.createdBy = kaitenMyId();
@@ -2796,7 +2834,7 @@ function kaitenSaveEdit(id){
   if(!t) return;
   if(!kaitenCanEditTask(t)){ notify("Bu vazifani tahrirlash huquqingiz yo'q"); return; }
   var f = kaitenReadFields('ke');
-  if(!f.text){ notify('Vazifa matnini kiriting!'); return; }
+  if(!f.text){ notify('Vazifa nomini kiriting!'); return; }
   Object.assign(t, f);
   kaitenSave(); notify('Saqlandi ✓'); orgCloseModal(); renderKaiten();
 }
@@ -2808,6 +2846,40 @@ function kaitenDelTask(id){
     kaitenTasks = kaitenTasks.filter(t=>t.id!==id);
     kaitenSave(); renderKaiten(); notify("O'chirildi ✓");
   });
+}
+var kaitenDragTaskId = null;
+function kaitenDragStart(e, id){
+  kaitenDragTaskId = id;
+  try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); }catch(err){}
+  if(e.currentTarget) e.currentTarget.style.opacity = '0.5';
+}
+function kaitenDragEnd(e){
+  if(e.currentTarget) e.currentTarget.style.opacity = '';
+  kaitenDragTaskId = null;
+  document.querySelectorAll('.kaiten-col-list').forEach(function(el){ el.classList.remove('kaiten-drop-active'); });
+}
+function kaitenDragOver(e, colId){
+  e.preventDefault();
+  if(e.currentTarget) e.currentTarget.classList.add('kaiten-drop-active');
+}
+function kaitenDragLeave(e, colId){
+  if(e.currentTarget) e.currentTarget.classList.remove('kaiten-drop-active');
+}
+function kaitenDrop(e, colId){
+  e.preventDefault();
+  if(e.currentTarget) e.currentTarget.classList.remove('kaiten-drop-active');
+  var id = kaitenDragTaskId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
+  if(!id) return;
+  var t = kaitenTasks.find(x=>x.id===id);
+  if(!t || t.status===colId) return;
+  var order = kaitenColumns.map(c=>c.id);
+  var oldIdx = order.indexOf(t.status);
+  var oldTitle = kaitenColumns[oldIdx]?.title || t.status;
+  t.status = colId;
+  var newIdx = order.indexOf(colId);
+  var colTitle = kaitenColumns[newIdx]?.title || colId;
+  kaitenSave(); renderKaiten();
+  kaitenNotifyMove(t, oldTitle, colTitle);
 }
 function kaitenMove(id, dir){
   var order=kaitenColumns.map(c=>c.id);
@@ -2869,19 +2941,27 @@ function kaitenCard(t){
   var chatOpen = kaitenChatOpen===t.id;
   var chatHtml='';
   if(chatOpen){
+    var descHtml = t.description ? `<div style="font-size:12px;color:#16573a;background:rgba(22,87,58,0.06);border-radius:8px;padding:8px;margin-bottom:8px;white-space:pre-wrap">${esc(t.description)}</div>` : '';
     var msgsHtml = comments.length ? comments.map((c,i)=>`<div style="padding:6px 0;border-bottom:1px solid rgba(22,87,58,0.12)">
         <div style="font-size:11px;font-weight:700;color:#1e7a4a">${esc(KAITEN_ROLE_LABELS[c.role]||c.role)}
           <span style="color:#16573a99;font-weight:400">• ${esc(kaitenFormatDeadline(c.time))}</span>
           ${isAdmin?`<button class="abtn abtn-red" style="float:right;padding:2px 6px" onclick="kaitenDelComment('${t.id}',${i})">x</button>`:''}
         </div>
-        <div style="font-size:12px;color:#16573a;margin-top:2px">${esc(c.text)}</div>
+        ${c.text?`<div style="font-size:12px;color:#16573a;margin-top:2px">${esc(c.text)}</div>`:''}
+        ${c.file?`<a href="${esc(c.file.url)}" target="_blank" style="display:flex;align-items:center;gap:4px;font-size:11px;color:#1e7a4a;margin-top:4px">📎 ${esc(c.file.name)}</a>`:''}
       </div>`).join('') : '<div style="color:#16573a99;font-size:12px;padding:6px 0">Xabarlar yo&#39;q</div>';
+    var pendingFile = kaitenCommentPendingFile[t.id];
+    var pendingFileHtml = pendingFile ? `<div style="font-size:11px;color:#1e7a4a;background:rgba(22,87,58,0.06);border-radius:6px;padding:4px 8px;margin-top:6px;display:flex;align-items:center;gap:6px"><span>📎 ${esc(pendingFile.name)}</span><button class="abtn abtn-red" style="padding:1px 6px;margin-left:auto" onclick="kaitenRemoveCommentFile('${t.id}')">x</button></div>` : '';
     chatHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(22,87,58,0.12)">
+      ${descHtml}
       ${msgsHtml}
       <div style="display:flex;gap:6px;margin-top:6px">
         <input class="fi" id="kc-text-${t.id}" placeholder="Xabar..." style="margin-top:0;font-size:12px;background:rgba(22,87,58,0.06);color:#16573a;border-color:rgba(22,87,58,0.15)">
+        <input type="file" id="kc-file-inp-${t.id}" style="display:none" onchange="kaitenUploadCommentFile('${t.id}')">
+        <button class="abtn" style="margin-top:0;padding:8px 10px;color:#16573a;border-color:rgba(22,87,58,0.15)" onclick="document.getElementById('kc-file-inp-${t.id}').click()">📎</button>
         <button class="fsave" style="margin-top:0;padding:8px 10px" onclick="kaitenAddComment('${t.id}')">➤</button>
       </div>
+      ${pendingFileHtml}
     </div>`;
   }
   var linksHtml = (t.links&&t.links.length)?t.links.map(function(l){ return `<a href="${esc(l)}" target="_blank" style="display:block;font-size:11px;color:#1e7a4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">🔗 ${esc(l)}</a>`; }).join(''):'';
@@ -2901,7 +2981,7 @@ function kaitenCard(t){
         <button class="abtn" style="margin-top:0" onclick="kaitenToggleAlarmForm('${t.id}')">Bekor</button>
       </div>
     </div>` : '';
-  return `<div class="kaiten-card">
+  return `<div class="kaiten-card" draggable="true" data-task-id="${t.id}" ondragstart="kaitenDragStart(event,'${t.id}')" ondragend="kaitenDragEnd(event)">
     <div class="kaiten-card-text">${esc(t.text)}</div>
     ${meta?`<div class="kaiten-card-meta">${esc(meta)}</div>`:''}
     ${nazText?`<div class="kaiten-card-naz">${esc(nazText)}</div>`:''}
@@ -2947,7 +3027,7 @@ function kaitenRenderBoardStructure(){
         <span class="kaiten-col-title-text" id="kaiten-title-${col.id}"></span>
         ${isAdmin?`<button class="kaiten-col-edit-btn" onclick="kaitenRenameColumn('${col.id}')">✏</button>`:''}
       </div>
-      <div class="kaiten-col-list" id="kaiten-list-${col.id}"></div>
+      <div class="kaiten-col-list" id="kaiten-list-${col.id}" ondragover="kaitenDragOver(event,'${col.id}')" ondragleave="kaitenDragLeave(event,'${col.id}')" ondrop="kaitenDrop(event,'${col.id}')"></div>
       ${i===0?'<div id="kaiten-add-form"></div>':''}
     </div>`).join('');
   if(isAdmin){
