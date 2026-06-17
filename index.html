@@ -53,8 +53,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; m
 body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;background:var(--green-dark);color:var(--white);font-size:14px;min-height:100vh;}
 body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:24px 24px;pointer-events:none;z-index:0;}
 .page{display:none;padding:16px;position:relative;z-index:1}
-#p-chat-group.active,#p-chat-personal.active{display:flex;flex-direction:column;height:100vh;padding:0}
-#p-chat-group .page-topbar,#p-chat-personal .page-topbar{padding:16px;flex-shrink:0}
 .page.active{display:block}
 .home-header{padding:28px 0 20px}
 .home-title{font-size:26px;font-weight:800;letter-spacing:-0.6px;line-height:1.2;color:var(--white)}
@@ -197,27 +195,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .sek-abtn{border:1px solid #ddd9cc;background:#ffffff;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;color:#5a574f;font-family:inherit;transition:background .15s}
 .sek-abtn:active{background:#ebe8df}
 .sek-abtn-red{border-color:#e0c9c4;color:#a8493d}
-.chat-msg-list{display:flex;flex-direction:column;gap:8px;padding:12px;overflow-y:auto;flex:1;min-height:0}
-.chat-msg{max-width:78%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4;word-break:break-word}
-.chat-msg-mine{align-self:flex-end;background:var(--lime);color:var(--green-dark)}
-.chat-msg-other{align-self:flex-start;background:var(--white-06);color:var(--white);border:1px solid var(--white-10)}
-.chat-msg-meta{font-size:10px;opacity:.6;margin-bottom:2px;font-weight:600}
-.chat-msg-file{display:block;font-size:12px;text-decoration:underline;margin-top:4px;word-break:break-all}
-.chat-input-row{display:flex;gap:6px;align-items:center;padding:10px 12px;border-top:1px solid var(--white-10)}
-.chat-input{flex:1}
-.chat-pending-files{padding:0 12px;display:flex;flex-wrap:wrap;gap:6px}
-.chat-pending-file{font-size:11px;background:var(--white-06);border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:4px;color:var(--white-80)}
-.chat-body{display:flex;flex:1;min-height:0;overflow:hidden}
-.chat-sidebar{width:140px;flex-shrink:0;border-right:1px solid var(--white-10);overflow-y:auto;padding:8px}
-.chat-sidebar-item{padding:8px 6px;border-radius:8px;font-size:12px;cursor:pointer;color:var(--white-80);margin-bottom:4px}
-.chat-sidebar-item.active{background:var(--lime);color:var(--green-dark);font-weight:600}
-.chat-sidebar-title{font-size:10px;text-transform:uppercase;color:var(--white-50);padding:4px 6px;font-weight:700}
-.chat-main{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
-.chat-input{resize:none;max-height:100px;overflow-y:auto}
-.chat-msg-time{font-size:10px;opacity:.55;margin-top:3px}
-.chat-msg-edited{font-size:10px;opacity:.5;font-style:italic;margin-top:1px}
-.chat-msg-actions{display:flex;gap:4px;margin-top:4px}
-.chat-msg-actions button{font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--white-10);background:transparent;color:inherit;opacity:.6;cursor:pointer}
 .org-white-dots{background-image:radial-gradient(circle, rgba(22,87,58,0.15) 1px, transparent 1px)!important;background-size:14px 14px;background-color:#ffffff;}
 .kaiten-card-text{font-size:13px;color:#16573a;line-height:1.4}
 .kaiten-card-meta{font-size:13px;color:#16573a;font-weight:600}
@@ -285,11 +262,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <div class="nav-card-title" style="margin-top:4px">Sekretar</div>
       <div class="nav-card-arrow">→</div>
     </div>
-    <div class="nav-card" id="card-chat" onclick="goTo('p-chat')">
-      <span id="badge-chat" class="nav-card-badge" style="display:none"></span>
-      <div class="nav-card-title" style="margin-top:4px">Chat</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
   </div>
 </div>
 
@@ -346,76 +318,6 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     </div>
   </div>
   <div id="sekretar-archive-list" class="section-list"></div>
-</div>
-
-<div class="page" id="p-chat">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-entry1')">← Orqaga</button>
-      <span class="page-title">Chat</span>
-    </div>
-  </div>
-  <div class="cards-grid">
-    <div class="nav-card" onclick="goTo('p-chat-group')">
-      <span id="badge-chat-group" class="nav-card-badge" style="display:none"></span>
-      <div class="nav-card-title" style="margin-top:4px">Umumiy chat</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-    <div class="nav-card" onclick="goTo('p-chat-personal-list')">
-      <span id="badge-chat-personal" class="nav-card-badge" style="display:none"></span>
-      <div class="nav-card-title" style="margin-top:4px">Shaxsiy xabarlar</div>
-      <div class="nav-card-arrow">→</div>
-    </div>
-  </div>
-</div>
-
-<div class="page" id="p-chat-group">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat')">← Orqaga</button>
-      <span class="page-title">Umumiy chat</span>
-    </div>
-  </div>
-  <div class="chat-body">
-    <div id="chat-group-sidebar" class="chat-sidebar"></div>
-    <div class="chat-main">
-      <div id="chat-group-list" class="chat-msg-list"></div>
-      <div id="chat-group-pending" class="chat-pending-files"></div>
-      <div class="chat-input-row">
-        <input type="file" id="chat-group-file-inp" multiple style="display:none" onchange="chatGroupUploadFiles()">
-        <button class="abtn" onclick="document.getElementById('chat-group-file-inp').click()">📎</button>
-        <textarea class="fi chat-input" id="chat-group-text" placeholder="Xabar yozing... (Shift+Enter — yuborish)" style="margin-top:0" rows="1" onkeydown="chatHandleKeydown(event,'group')" oninput="chatAutoGrow(this)"></textarea>
-        <button class="fsave" style="margin-top:0;padding:10px 16px" onclick="chatGroupSend()">➤</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="page" id="p-chat-personal-list">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat')">← Orqaga</button>
-      <span class="page-title">Shaxsiy xabarlar</span>
-    </div>
-  </div>
-  <div id="chat-personal-contacts" class="section-list"></div>
-</div>
-
-<div class="page" id="p-chat-personal">
-  <div class="page-topbar">
-    <div class="page-header">
-      <button class="back-btn" onclick="goBack('p-chat-personal-list')">← Orqaga</button>
-      <span class="page-title" id="chat-personal-title">Xabar</span>
-    </div>
-  </div>
-  <div id="chat-personal-list" class="chat-msg-list"></div>
-  <div id="chat-personal-pending" class="chat-pending-files"></div>
-  <div class="chat-input-row">
-    <input type="file" id="chat-personal-file-inp" multiple style="display:none" onchange="chatPersonalUploadFiles()">
-    <button class="abtn" onclick="document.getElementById('chat-personal-file-inp').click()">📎</button>
-    <textarea class="fi chat-input" id="chat-personal-text" placeholder="Xabar yozing... (Shift+Enter — yuborish)" style="margin-top:0" rows="1" onkeydown="chatHandleKeydown(event,'personal')" oninput="chatAutoGrow(this)"></textarea>
-    <button class="fsave" style="margin-top:0;padding:10px 16px" onclick="chatPersonalSend()">➤</button>
-  </div>
 </div>
 
 <div class="page" id="p-org">
@@ -1071,7 +973,7 @@ function hasSectionPerm(secId){
   return USER_PERMS.sections.includes(secId);
 }
 function applyEntryCardPerms(){
-  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar','card-sekretar':'sekretar','card-chat':'chat'};
+  var map={'card-bolimlar':'bolimlar','card-org':'org','card-kaiten':'kaiten','card-hujjatlar':'hujjatlar','card-sekretar':'sekretar'};
   Object.keys(map).forEach(function(cid){
     var el=document.getElementById(cid);
     if(el) el.style.display = hasPerm(map[cid]) ? '' : 'none';
@@ -1197,7 +1099,6 @@ function adminPermsHtml(perms, allBolimSections){
     chk('kaiten','Kaiten', perms.kaiten!==false)+
     chk('hujjatlar','Hujjatlar', perms.hujjatlar!==false)+
     chk('sekretar','Sekretar', perms.sekretar!==false)+
-    chk('chat','Chat', perms.chat!==false)+
     chk('bolimlar','Bo&#39;limlar', bolimlarChecked)+
     '<div id="aperm-sections-wrap" style="'+(bolimlarChecked?'':'opacity:.4;pointer-events:none')+'">'+secHtml+'</div>'+
   '</div>';
@@ -1222,7 +1123,6 @@ function adminReadPerms(){
     kaiten: document.getElementById('aperm-kaiten').checked,
     hujjatlar: document.getElementById('aperm-hujjatlar').checked,
     sekretar: document.getElementById('aperm-sekretar').checked,
-    chat: document.getElementById('aperm-chat').checked,
     bolimlar: document.getElementById('aperm-bolimlar').checked,
     sections: sections
   };
@@ -2162,8 +2062,6 @@ function sirlyRender(p){
   else if(p==='p-hujjat-detail')renderHujjatDetail();
   else if(p==='p-sekretar')renderSekretar();
   else if(p==='p-sekretar-arxiv')renderSekretarArchive();
-  else if(p==='p-chat-group')renderChatGroup();
-  else if(p==='p-chat-personal-list')renderChatContacts();
   updateBc();
 }
 function updateBc(){
@@ -2640,356 +2538,6 @@ function kaitenCanEditTask(t){
   return t.createdBy && t.createdBy === kaitenMyId();
 }
 
-// =========================
-// CHAT MODULE
-// =========================
-var CHAT_BUCKET = 'hujjatlar';
-var chatGroupMessages = [];
-var chatPersonalThreads = {}; // key: otherUsername -> [messages]
-var chatPendingFilesGroup = [];
-var chatPendingFilesPersonal = [];
-var chatPersonalCurrentUsername = null;
-var chatTaggedGroup = null;
-var chatTaggedPersonal = null;
-var chatEditingId = {group:null, personal:null};
-
-function chatMyName(){
-  var fio = kaitenMyFio();
-  if(fio) return fio;
-  return CURRENT_USER_TG ? ('@'+CURRENT_USER_TG.replace(/^@/,'')) : (USER_ID||'Foydalanuvchi');
-}
-function chatMyUsername(){
-  return (CURRENT_USER_TG||'').replace(/^@/,'').toLowerCase();
-}
-async function chatSaveFile(file){
-  var safeName = hujjatSafeFilename(file.name);
-  var path = 'chat/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+safeName;
-  var r = await fetch(SB_URL+'/storage/v1/object/'+CHAT_BUCKET+'/'+path,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
-    body:file
-  });
-  if(!r.ok) throw new Error('upload failed');
-  return {name:file.name, url:SB_URL+'/storage/v1/object/public/'+CHAT_BUCKET+'/'+path};
-}
-function chatFormatTime(iso){
-  try{
-    var d = new Date(iso);
-    var pad = n=>String(n).padStart(2,'0');
-    return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
-  }catch(e){ return ''; }
-}
-function chatHandleKeydown(ev, kind){
-  if(ev.key==='Enter' && ev.shiftKey){
-    ev.preventDefault();
-    if(kind==='group') chatGroupSend(); else chatPersonalSend();
-  }
-  // plain Enter falls through to default (newline)
-}
-function chatAutoGrow(el){
-  el.style.height='auto';
-  el.style.height=Math.min(el.scrollHeight,100)+'px';
-}
-
-// ---- Umumiy chat ----
-async function renderChatGroup(){
-  var listEl = document.getElementById('chat-group-list');
-  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  chatRenderSidebar('chat-group-sidebar', 'group');
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
-    var rows = await r.json();
-    chatGroupMessages = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-  }catch(e){ chatGroupMessages = []; }
-  chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  try{ localStorage.setItem('chat_group_tag_seen', String(Date.now())); }catch(e){}
-  refreshAllBadges();
-}
-function chatRenderSidebar(elId, kind){
-  var el = document.getElementById(elId);
-  if(!el) return;
-  var myName = chatMyName();
-  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  var tagged = kind==='group' ? chatTaggedGroup : chatTaggedPersonal;
-  el.innerHTML = '<div class="chat-sidebar-title">Kimga</div>' + emps.map(function(e){
-    var active = tagged===e.fio;
-    return `<div class="chat-sidebar-item${active?' active':''}" onclick="chatToggleTag('${kind}','${esc(e.fio)}')">${esc(e.fio)}</div>`;
-  }).join('');
-}
-function chatToggleTag(kind, fio){
-  if(kind==='group'){
-    chatTaggedGroup = (chatTaggedGroup===fio) ? null : fio;
-    chatRenderSidebar('chat-group-sidebar','group');
-    var inp = document.getElementById('chat-group-text');
-    chatApplyTagToInput(inp, chatTaggedGroup);
-  } else {
-    chatTaggedPersonal = (chatTaggedPersonal===fio) ? null : fio;
-    var inp2 = document.getElementById('chat-personal-text');
-    chatApplyTagToInput(inp2, chatTaggedPersonal);
-  }
-}
-function chatApplyTagToInput(inp, fio){
-  if(!inp) return;
-  var val = inp.value;
-  var stripped = val.replace(/^@\S[^\n]*\n?/,'');
-  inp.value = fio ? ('@'+fio+'\n'+stripped) : stripped;
-  inp.focus();
-}
-function chatRenderMsgList(listEl, messages, kind){
-  var myName = chatMyName();
-  if(!messages.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xabarlar yo&#39;q</div>'; return; }
-  listEl.innerHTML = messages.map(function(m){
-    var mine = m.from===myName;
-    var filesHtml = (m.files||[]).map(function(f){ return `<a href="${esc(f.url)}" target="_blank" class="chat-msg-file" style="color:${mine?'var(--green-dark)':'var(--lime)'}">📎 ${esc(f.name)}</a>`; }).join('');
-    var editingThis = chatEditingId[kind]===m.id;
-    var bodyHtml;
-    if(editingThis){
-      bodyHtml = `<textarea class="fi" id="chat-edit-inp-${m.id}" style="margin-top:0;color:#16573a;background:#fff" rows="2">${esc(m.text||'')}</textarea>
-        <div class="chat-msg-actions">
-          <button onclick="chatSaveEdit('${kind}','${m.id}')">Saqlash</button>
-          <button onclick="chatCancelEdit('${kind}')">Bekor</button>
-        </div>`;
-    } else {
-      bodyHtml = (m.text?esc(m.text).replace(/\n/g,'<br>'):'') + filesHtml;
-    }
-    var actionsHtml = (mine && !editingThis) ? `<div class="chat-msg-actions"><button onclick="chatStartEdit('${kind}','${m.id}')">Tahrirlash</button></div>` : '';
-    return `<div class="chat-msg ${mine?'chat-msg-mine':'chat-msg-other'}">
-      ${!mine?`<div class="chat-msg-meta">${esc(m.from)}</div>`:''}
-      ${bodyHtml}
-      <div class="chat-msg-time">${esc(chatFormatTime(m.time))}</div>
-      ${m.edited?`<div class="chat-msg-edited">tahrirlangan</div>`:''}
-      ${actionsHtml}
-    </div>`;
-  }).join('');
-  listEl.scrollTop = listEl.scrollHeight;
-}
-function chatStartEdit(kind, id){
-  chatEditingId[kind] = id;
-  if(kind==='group') chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  else chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[chatPersonalThreads._currentKey]||[], 'personal');
-}
-function chatCancelEdit(kind){
-  chatEditingId[kind] = null;
-  if(kind==='group') chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  else chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[chatPersonalThreads._currentKey]||[], 'personal');
-}
-async function chatSaveEdit(kind, id){
-  var inp = document.getElementById('chat-edit-inp-'+id);
-  var newText = inp.value.trim();
-  if(!newText){ notify('Matn bo\'sh bo\'lmasin!'); return; }
-  if(kind==='group'){
-    var m = chatGroupMessages.find(function(x){return x.id===id;});
-    if(m){ m.text = newText; m.edited = true; }
-    chatEditingId.group = null;
-    chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:chatGroupMessages}})}); }catch(e){}
-  } else {
-    var key = chatPersonalThreads._currentKey;
-    var arr = chatPersonalThreads[key]||[];
-    var m2 = arr.find(function(x){return x.id===id;});
-    if(m2){ m2.text = newText; m2.edited = true; }
-    chatEditingId.personal = null;
-    chatRenderMsgList(document.getElementById('chat-personal-list'), arr, 'personal');
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({data:{messages:arr}})}); }catch(e){}
-  }
-}
-async function chatGroupUploadFiles(){
-  var inp = document.getElementById('chat-group-file-inp');
-  if(!inp.files.length) return;
-  for(var f of inp.files){
-    try{
-      var saved = await chatSaveFile(f);
-      chatPendingFilesGroup.push(saved);
-    }catch(e){}
-  }
-  inp.value='';
-  chatRenderPendingFiles('chat-group-pending', chatPendingFilesGroup);
-}
-function chatRenderPendingFiles(elId, arr){
-  var el = document.getElementById(elId);
-  if(!el) return;
-  el.innerHTML = arr.map(function(f,i){ return `<div class="chat-pending-file">📎 ${esc(f.name)}<button class="abtn abtn-red" style="padding:1px 5px" onclick="chatRemovePending('${elId}',${i})">✕</button></div>`; }).join('');
-}
-function chatRemovePending(elId, i){
-  var arr = elId==='chat-group-pending' ? chatPendingFilesGroup : chatPendingFilesPersonal;
-  arr.splice(i,1);
-  chatRenderPendingFiles(elId, arr);
-}
-async function chatGroupSend(){
-  var inp = document.getElementById('chat-group-text');
-  var text = inp.value.trim();
-  if(!text && !chatPendingFilesGroup.length) return;
-  var taggedFio = chatTaggedGroup;
-  var msg = {id:'cm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), from:chatMyName(), text:text, files:chatPendingFilesGroup.slice(), time:new Date().toISOString()};
-  chatGroupMessages.push(msg);
-  inp.value=''; inp.style.height='auto';
-  chatPendingFilesGroup = [];
-  chatTaggedGroup = null;
-  chatRenderPendingFiles('chat-group-pending', []);
-  chatRenderSidebar('chat-group-sidebar','group');
-  chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-  try{
-    var pr = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{method:'PATCH',headers:{...SB_H,'Prefer':'return=representation'},body:JSON.stringify({data:{messages:chatGroupMessages}})});
-    var prRows = await pr.json();
-    if(!prRows || !prRows.length){
-      await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})});
-    }
-  }catch(e){
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chat_group',data:{messages:chatGroupMessages}})}); }catch(e2){}
-  }
-  var lines = ['💬 '+msg.from, text||'(fayl yuborildi)'];
-  var msgText = lines.join(String.fromCharCode(10));
-  if(taggedFio){
-    var taggedNode = orgData.find(function(n){ return n.fio===taggedFio; });
-    var taggedUsername = taggedNode ? (taggedNode.tg||'').replace(/^@/,'') : '';
-    if(taggedUsername){
-      fetch(SB_URL+'/rest/v1/personal_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatgp'+Date.now()+'_'+Math.random().toString(36).slice(2,7), to_username:taggedUsername, from_name:msg.from, text:msgText, status:'pending'})}).catch(function(){});
-    } else {
-      fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:msgText, status:'pending'})}).catch(function(){});
-    }
-  } else {
-    fetch(SB_URL+'/rest/v1/bot_group_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'chatg'+Date.now()+'_'+Math.random().toString(36).slice(2,7), text:msgText, status:'pending'})}).catch(function(){});
-  }
-}
-
-// ---- Shaxsiy xabarlar ----
-async function renderChatContacts(){
-  var listEl = document.getElementById('chat-personal-contacts');
-  var myName = chatMyName();
-  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  if(!emps.length){ listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Xodimlar topilmadi</div>'; return; }
-  if(!listEl.innerHTML || listEl.innerHTML.indexOf('nav-card')<0){
-    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  }
-  var results = await Promise.all(emps.map(async function(e){
-    var key = chatThreadKey(myName, e.fio);
-    var lastSeen = 0;
-    try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
-    var unread = false;
-    try{
-      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-      var rows = await r.json();
-      var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-      unread = msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
-    }catch(e3){}
-    return {emp:e, unread:unread};
-  }));
-  results.sort(function(a,b){ return (b.unread?1:0)-(a.unread?1:0); });
-  listEl.innerHTML = results.map(function(item){
-    var e = item.emp;
-    return `<div class="nav-card" style="margin-bottom:8px;position:relative" onclick="chatOpenPersonal('${esc(e.fio)}','${esc((e.tg||'').replace(/^@/,''))}')">
-      ${item.unread?'<span class="nav-card-badge"></span>':''}
-      <div class="nav-card-title" style="margin-top:4px">${esc(e.fio)}</div>
-      <div style="font-size:11px;color:var(--white-50);margin-top:2px">${esc(e.name)}</div>
-      <div class="nav-card-arrow">→</div>
-    </div>`;
-  }).join('');
-}
-function chatThreadKey(myName, otherFio){
-  var a = [myName, otherFio].sort();
-  return 'chat_'+a.join('__').replace(/[^a-zA-Z0-9_]/g,'_');
-}
-async function chatOpenPersonal(otherFio, otherUsername){
-  chatPersonalCurrentUsername = otherUsername;
-  document.getElementById('chat-personal-title').textContent = otherFio;
-  goTo('p-chat-personal');
-  var listEl = document.getElementById('chat-personal-list');
-  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--white-50);font-size:12px">Yuklanmoqda...</div>';
-  var key = chatThreadKey(chatMyName(), otherFio);
-  chatPersonalThreads._currentKey = key;
-  chatPersonalThreads._otherFio = otherFio;
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-    var rows = await r.json();
-    chatPersonalThreads[key] = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-  }catch(e){ chatPersonalThreads[key] = []; }
-  chatRenderMsgList(listEl, chatPersonalThreads[key], 'personal');
-  try{ localStorage.setItem('chat_personal_seen_'+key, String(Date.now())); }catch(e){}
-  refreshAllBadges();
-}
-async function chatPersonalUploadFiles(){
-  var inp = document.getElementById('chat-personal-file-inp');
-  if(!inp.files.length) return;
-  for(var f of inp.files){
-    try{
-      var saved = await chatSaveFile(f);
-      chatPendingFilesPersonal.push(saved);
-    }catch(e){}
-  }
-  inp.value='';
-  chatRenderPendingFiles('chat-personal-pending', chatPendingFilesPersonal);
-}
-async function chatPersonalSend(){
-  var inp = document.getElementById('chat-personal-text');
-  var text = inp.value.trim();
-  if(!text && !chatPendingFilesPersonal.length) return;
-  var key = chatPersonalThreads._currentKey;
-  var otherFio = chatPersonalThreads._otherFio;
-  if(!key) return;
-  var msg = {id:'cm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), from:chatMyName(), text:text, files:chatPendingFilesPersonal.slice(), time:new Date().toISOString()};
-  if(!chatPersonalThreads[key]) chatPersonalThreads[key]=[];
-  chatPersonalThreads[key].push(msg);
-  inp.value=''; inp.style.height='auto';
-  chatPendingFilesPersonal = [];
-  chatTaggedPersonal = null;
-  chatRenderPendingFiles('chat-personal-pending', []);
-  chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[key], 'personal');
-  try{
-    var pr2 = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{method:'PATCH',headers:{...SB_H,'Prefer':'return=representation'},body:JSON.stringify({data:{messages:chatPersonalThreads[key]}})});
-    var pr2Rows = await pr2.json();
-    if(!pr2Rows || !pr2Rows.length){
-      await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:{messages:chatPersonalThreads[key]}})});
-    }
-  }catch(e){
-    try{ await fetch(SB_URL+'/rest/v1/biznes_data',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:key,data:{messages:chatPersonalThreads[key]}})}); }catch(e2){}
-  }
-  // Telegram shaxsiy xabar
-  if(chatPersonalCurrentUsername){
-    var lines = ['💬 '+msg.from+' sizga yozdi:', text||'(fayl yuborildi)'];
-    fetch(SB_URL+'/rest/v1/personal_messages',{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},body:JSON.stringify({id:'pm'+Date.now()+'_'+Math.random().toString(36).slice(2,7), to_username:chatPersonalCurrentUsername, from_name:msg.from, text:lines.join(String.fromCharCode(10)), status:'pending'})})
-      .then(function(r){ if(!r.ok){ notify("Xabar yuborildi, lekin Telegram bildirishnomasi muvaffaqiyatsiz"); } })
-      .catch(function(){});
-    setTimeout(function(){ chatCheckDeliveryStatus(); }, 4000);
-  } else {
-    notify("Xodimning Telegram username'i yo'q, faqat ilova ichida saqlandi");
-  }
-}
-function chatCheckDeliveryStatus(){
-  // Optional: could poll personal_messages status; kept simple for now
-}
-
-// =========================
-// BILDIRISHNOMA BADGE TIZIMI
-// =========================
-function chatTaggedForMe(text){
-  var myName = chatMyName();
-  if(!myName) return false;
-  return text && text.indexOf('@'+myName)===0;
-}
-function chatHasUnreadGroupTag(){
-  var myName = chatMyName();
-  var lastSeen = 0;
-  try{ lastSeen = parseInt(localStorage.getItem('chat_group_tag_seen')||'0'); }catch(e){}
-  return chatGroupMessages.some(function(m){
-    return m.from!==myName && chatTaggedForMe(m.text) && new Date(m.time).getTime() > lastSeen;
-  });
-}
-async function chatHasUnreadPersonal(){
-  var myName = chatMyName();
-  var emps = orgData.filter(function(n){ return n.fio && n.fio.trim() && n.fio!==myName; });
-  var results = await Promise.all(emps.map(async function(e){
-    var key = chatThreadKey(myName, e.fio);
-    var lastSeen = 0;
-    try{ lastSeen = parseInt(localStorage.getItem('chat_personal_seen_'+key)||'0'); }catch(e2){}
-    try{
-      var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-      var rows = await r.json();
-      var msgs = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-      return msgs.some(function(m){ return m.from!==myName && new Date(m.time).getTime() > lastSeen; });
-    }catch(e3){ return false; }
-  }));
-  return results.some(function(x){ return x; });
-}
 function kaitenHasUnreadForMe(){
   var myFio = kaitenMyFio();
   if(!myFio) return false;
@@ -3001,30 +2549,12 @@ function kaitenHasUnreadForMe(){
   });
 }
 async function refreshAllBadges(){
-  var groupUnread = false, personalUnread = false, kaitenUnread = false;
-  try{
-    var rg = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
-    var rowsg = await rg.json();
-    chatGroupMessages = (rowsg&&rowsg.length&&rowsg[0].data&&rowsg[0].data.messages) ? rowsg[0].data.messages : chatGroupMessages;
-    groupUnread = chatHasUnreadGroupTag();
-  }catch(e){ console.error('badge group check error', e); }
-  try{
-    personalUnread = await chatHasUnreadPersonal();
-  }catch(e){ console.error('badge personal check error', e); }
+  var kaitenUnread = false;
   try{
     kaitenUnread = kaitenHasUnreadForMe();
   }catch(e){ console.error('badge kaiten check error', e); }
-  var chatUnread = groupUnread || personalUnread;
-  var bChat = document.getElementById('badge-chat');
-  if(bChat) bChat.style.display = chatUnread ? '' : 'none';
   var bKaiten = document.getElementById('badge-kaiten');
   if(bKaiten) bKaiten.style.display = kaitenUnread ? '' : 'none';
-  var bGroup = document.getElementById('badge-chat-group');
-  if(bGroup) bGroup.style.display = groupUnread ? '' : 'none';
-  var bPersonal = document.getElementById('badge-chat-personal');
-  if(bPersonal) bPersonal.style.display = personalUnread ? '' : 'none';
-  var pcl = document.getElementById('p-chat-personal-list');
-  if(pcl && pcl.classList.contains('active')) renderChatContacts();
 }
 setInterval(refreshAllBadges, 5000);
 setTimeout(refreshAllBadges, 2000);
@@ -3049,20 +2579,23 @@ function kaitenAddTask(){
     renderKaiten();
   }, 'Ha', "Yo'q");
 }
+function kaitenFallbackName(){
+  return CURRENT_USER_TG ? ('@'+CURRENT_USER_TG.replace(/^@/,'')) : (USER_ID||'Foydalanuvchi');
+}
 function kaitenCreatorNameNow(){
   var fio = kaitenMyFio();
   if(fio) return fio;
-  return chatMyName();
+  return kaitenFallbackName();
 }
 function kaitenCreatorName(t){
   if(t.createdByName) return t.createdByName;
-  if(!t.createdBy) return chatMyName();
+  if(!t.createdBy) return kaitenFallbackName();
   if(t.createdBy.indexOf('fio:')===0){
     var norm = t.createdBy.slice(4);
     var node = orgData.find(function(n){ return n.fio && kaitenNorm(n.fio)===norm; });
     if(node) return node.fio;
   }
-  return chatMyName();
+  return kaitenFallbackName();
 }
 function kaitenNotifyGroup(t){
   try{
@@ -3337,38 +2870,6 @@ setInterval(function(){
   var p=document.getElementById('p-kaiten');
   if(p && p.classList.contains('active')) renderKaiten();
 }, 60000);
-setInterval(function(){
-  var pg=document.getElementById('p-chat-group');
-  if(pg && pg.classList.contains('active')) chatRefreshGroup();
-  var pp=document.getElementById('p-chat-personal');
-  if(pp && pp.classList.contains('active')) chatRefreshPersonal();
-}, 1000);
-async function chatRefreshGroup(){
-  if(chatEditingId.group) return;
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.chat_group',{headers:SB_H});
-    var rows = await r.json();
-    var fresh = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-    if(JSON.stringify(fresh)!==JSON.stringify(chatGroupMessages)){
-      chatGroupMessages = fresh;
-      chatRenderMsgList(document.getElementById('chat-group-list'), chatGroupMessages, 'group');
-    }
-  }catch(e){}
-}
-async function chatRefreshPersonal(){
-  if(chatEditingId.personal) return;
-  var key = chatPersonalThreads._currentKey;
-  if(!key) return;
-  try{
-    var r = await fetch(SB_URL+'/rest/v1/biznes_data?id=eq.'+key,{headers:SB_H});
-    var rows = await r.json();
-    var fresh = (rows&&rows.length&&rows[0].data&&rows[0].data.messages) ? rows[0].data.messages : [];
-    if(JSON.stringify(fresh)!==JSON.stringify(chatPersonalThreads[key])){
-      chatPersonalThreads[key] = fresh;
-      chatRenderMsgList(document.getElementById('chat-personal-list'), chatPersonalThreads[key], 'personal');
-    }
-  }catch(e){}
-}
 
 load().then(()=>{updateBc();});
 acadLoad().catch(()=>{});
