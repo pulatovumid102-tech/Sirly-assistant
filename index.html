@@ -422,7 +422,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(!isBolim && !node.autsors){ try{ cardAvatarHtml = orgAvatarHtml(node,36); }catch(e){ console.error('card avatar error', e); } }
     var badges = '';
     if(node.sinov) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:4px">SINOV</span>`;
-    if(node.autsors) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,0.12);color:var(--white-70)">AUTSORS</span>`;
+    if(node.autsors) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,0.12);color:var(--white-70);margin-right:4px">AUTSORS</span>`;
+    if(node.xodimKerak) badges += `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(232,93,93,0.18);color:#e85d5d">XODIM KERAK</span>`;
     var bgStyle = isBolim ? ';background:rgba(212,255,77,0.10)' : (node.color && node.color!=='#ffffff' ? `;background:${node.color}` : '');
     var borderStyle = isBolim ? ';border:1.5px solid var(--lime)' : '';
     var textColorStyle = (node.color==='#ffffff' && !isBolim) ? ';color:#16573a' : '';
@@ -508,7 +509,8 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(!isBolim && !node.autsors){ try{ avatarHtml = orgAvatarHtml(node,56); }catch(e){ console.error('avatar render error', e); } }
     var statusBadges = '';
     if(node.sinov) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,193,7,0.18);color:#ffc107;margin-right:6px">SINOV MUDDATIDA</span>`;
-    if(node.autsors) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.12);color:var(--white-70)">AUTSORS</span>`;
+    if(node.autsors) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.12);color:var(--white-70);margin-right:6px">AUTSORS</span>`;
+    if(node.xodimKerak) statusBadges += `<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(232,93,93,0.18);color:#e85d5d">XODIM KERAK</span>`;
     var html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:${statusBadges?'8px':'16px'}">
         ${avatarHtml}
         <div style="font-size:15px;font-weight:700;color:var(--white)">${esc(node.name)}</div>
@@ -744,6 +746,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div style="display:flex;gap:14px;margin-top:8px">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-sinov" ${node.sinov?'checked':''}> Sinov muddatida</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-autsors" ${node.autsors?'checked':''} onchange="orgTogglePhotoRowVisibility('${id}')"> Autsors xodim</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--white-80);cursor:pointer"><input type="checkbox" id="oem-xodimkerak" ${node.xodimKerak?'checked':''}> Xodim kerak</label>
         </div>
       </div>
       <div class="frow" id="oem-photo-row-${id}" style="${node.cardType==='bolim'||node.autsors?'display:none':''}"><label class="flbl">Rasm</label>
@@ -821,6 +824,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     if(newType==='bolim'){
       node.sinov = false;
       node.autsors = false;
+      node.xodimKerak = false;
       node.photo = '';
       node.tels = [];
       node.tel = '';
@@ -831,8 +835,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     }
     var sinovEl = document.getElementById('oem-sinov');
     var autsorsEl = document.getElementById('oem-autsors');
+    var xodimKerakEl = document.getElementById('oem-xodimkerak');
     node.sinov = !!(sinovEl && sinovEl.checked);
     node.autsors = !!(autsorsEl && autsorsEl.checked);
+    node.xodimKerak = !!(xodimKerakEl && xodimKerakEl.checked);
     if(node.autsors) node.photo = '';
     var photoUrlEl = document.getElementById('oem-photo-url-'+id);
     if(photoUrlEl && !node.autsors) node.photo = photoUrlEl.value || '';
