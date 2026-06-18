@@ -131,8 +131,10 @@ body{
 .profile-stat-num{ font-size:24px; font-weight:800; color:var(--accent-1); }
 .profile-stat-label{ font-size:11px; color:var(--text-muted); margin-top:4px; }
 .section-label{ font-size:13px; font-weight:700; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.4px; }
-.medal-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px; }
-.medal-chip{ display:flex; align-items:center; gap:6px; background:var(--surface); border-radius:99px; padding:8px 14px; font-size:12px; font-weight:600; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.medal-slots-row{ display:flex; gap:10px; margin-bottom:8px; }
+.medal-slot-icon{ font-size:26px; filter:grayscale(1) opacity(0.35); }
+.medal-slot-icon.lit{ filter:none; }
+.medal-count-label{ font-size:12px; color:var(--text-muted); font-weight:600; }
 
 .btn-small{ background:var(--surface-alt); color:var(--text); border:none; border-radius:var(--radius-sm); padding:9px 14px; font-size:12px; font-weight:600; font-family:inherit; box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light); }
 .btn-small.danger{ color:var(--danger); }
@@ -430,7 +432,7 @@ async function loadAndRenderBookList() {
       });
     } else {
       var bookResults = await Promise.all([
-        sbGet('books?select=*&order=created_at.desc'),
+        sbGet('books?select=*&order=title.asc'),
         sbGet('progress?select=book_id'),
       ]);
       var books = bookResults[0];
@@ -496,11 +498,13 @@ function bookCard(b, pct, pagesRead, readerCount) {
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
 function profileBodyHtml(isOwn, finishedCount, medals, books) {
   var limit = computeDailyLimit(finishedCount);
-  var medalsHtml = medals.length
-    ? '<div class="medal-row">' + medals.map(function (m) {
-        return '<div class="medal-chip">' + (m.medal === 1 ? '🥇' : '🥈') + ' <span>' + escapeHtml(m.book_title) + '</span></div>';
-      }).join('') + '</div>'
-    : '<div class="empty" style="padding:10px 0">Hali medal yo\'q.</div>';
+  var medalCount = medals.length;
+  var litSlots = Math.min(medalCount, 5);
+  var medalSlotsHtml = '<div class="medal-slots-row">';
+  for (var i = 1; i <= 5; i++) {
+    medalSlotsHtml += '<div class="medal-slot-icon' + (i <= litSlots ? ' lit' : '') + '">🏅</div>';
+  }
+  medalSlotsHtml += '</div><div class="medal-count-label">' + medalCount + ' medal</div>';
   var booksHtml = books.length
     ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
     : '<div class="empty">Hali kitob yo\'q.</div>';
@@ -509,7 +513,7 @@ function profileBodyHtml(isOwn, finishedCount, medals, books) {
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
     '</div>' +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
-    '<div class="section-label">Medallar</div>' + medalsHtml +
+    '<div class="section-label">Medallar</div>' + medalSlotsHtml +
     '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml;
 }
 
@@ -648,7 +652,7 @@ function renderAdminUsersList() {
 async function loadAdminBooks() {
   var el = document.getElementById('adminBody');
   try {
-    _adminBooksCache = await sbGet('books?select=*&order=created_at.desc');
+    _adminBooksCache = await sbGet('books?select=*&order=title.asc');
     el.innerHTML = '<input id="adminBookSearch" class="input" placeholder="Kitob nomi yoki muallif bo\'yicha qidirish..." style="margin-bottom:14px" />' +
       '<div id="adminBooksList"></div>';
     document.getElementById('adminBookSearch').addEventListener('input', renderAdminBooksList);
@@ -792,10 +796,17 @@ function renderAddBook() {
     var prevEl = document.getElementById('coverPreview');
     if (!f) { prevEl.innerHTML = ''; return; }
     if (f.size > 8 * 1024 * 1024) { showAlert('Rasm hajmi katta (8MB dan oshmasin).'); this.value = ''; prevEl.innerHTML = ''; return; }
-    prevEl.innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="cover-preview-img" />';
+    prevEl.innerHTML = '<div style="position:relative;display:inline-block">' +
+      '<img src="' + URL.createObjectURL(f) + '" class="cover-preview-img" />' +
+      '<button type="button" id="removeCoverBtn" style="position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:14px;font-weight:700;line-height:1;cursor:pointer">✕</button>' +
+      '</div>';
+    document.getElementById('removeCoverBtn').addEventListener('click', function () {
+      document.getElementById('coverInput').value = '';
+      prevEl.innerHTML = '';
+    });
   });
 
-  document.getElementById('createBookBtn').addEventListener('click', async function () {
+  document.getElementById('createBookBtn').addEventListener('click', function () {
     if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
     var title = newFormEl.dataset.title || searchEl.value.trim();
     if (!title) return;
@@ -807,23 +818,25 @@ function renderAddBook() {
     var totalPages = tpVal ? parseInt(tpVal, 10) : null;
     if (!totalPages || totalPages <= 0) { showAlert('Jami bet sonini kiriting.'); return; }
     var btn = this;
-    btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
-    try {
-      var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
-      var coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
-      var created = await sbPost('books', {
-        title: title, author: author, total_pages: totalPages,
-        cover_url: coverUrl, created_by_id: ME.id, created_by_name: ME.name,
-      });
-      var book = created[0];
-      await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0 });
-      vibrate('medium');
-      replyTarget = null;
-      state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'readers'; render();
-    } catch (e) {
-      console.error(e); showAlert('Rasm yuklashda yoki saqlashda xatolik. Qaytadan urinib ko\'ring.');
-      btn.disabled = false; btn.textContent = "Kitobni qo'shish";
-    }
+    confirmAction("Hammasini to'g'ri kiritdingizmi? Kitob hammaga ko'rinadi.", async function () {
+      btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+      try {
+        var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+        var coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
+        var created = await sbPost('books', {
+          title: title, author: author, total_pages: totalPages,
+          cover_url: coverUrl, created_by_id: ME.id, created_by_name: ME.name,
+        });
+        var book = created[0];
+        await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0 });
+        vibrate('medium');
+        replyTarget = null;
+        state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'readers'; render();
+      } catch (e) {
+        console.error(e); showAlert('Rasm yuklashda yoki saqlashda xatolik. Qaytadan urinib ko\'ring.');
+        btn.disabled = false; btn.textContent = "Kitobni qo'shish";
+      }
+    });
   });
 }
 
@@ -835,6 +848,7 @@ async function renderBookDetail() {
   var body = document.getElementById('bookDetailBody');
   try {
     var today = new Date().toISOString().slice(0, 10);
+    var _t0 = Date.now();
     var results = await Promise.all([
       sbGet('books?select=*&id=eq.' + state.bookId),
       sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
@@ -842,6 +856,7 @@ async function renderBookDetail() {
       sbGet('finishers?select=id&user_id=eq.' + ME.id),
       sbGet('streaks?select=*&user_id=eq.' + ME.id),
     ]);
+    var _t1 = Date.now();
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
@@ -853,6 +868,9 @@ async function renderBookDetail() {
       var likeRows = await sbGet('comment_likes?select=comment_id,user_id&comment_id=in.(' + comments.map(function (c) { return c.id; }).join(',') + ')');
       likeRows.forEach(function (l) { likeCounts[l.comment_id] = (likeCounts[l.comment_id] || 0) + 1; if (l.user_id === ME.id) myLiked[l.comment_id] = true; });
     }
+    var _t2 = Date.now();
+    var _debugTiming = '⏱ parallel: ' + (_t1 - _t0) + 'ms · likes: ' + (_t2 - _t1) + 'ms · jami: ' + (_t2 - _t0) + 'ms';
+    console.log(_debugTiming);
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
@@ -874,8 +892,7 @@ async function renderBookDetail() {
         return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
           '<div class="reader-rank">' + rankMark + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-          '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div>' +
-          (p.note ? '<div class="reader-note">' + escapeHtml(p.note) + '</div>' : '') + '</div>' +
+          '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
           '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
           '</div>';
       }).join('') + '</div>';
@@ -885,7 +902,6 @@ async function renderBookDetail() {
       '<div class="hint" style="margin-bottom:14px">Bugun ' + maxReadableNow + ' betgacha o\'qishingiz mumkin.</div>' +
       '<div class="form">' +
       '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '" />' +
-      '<input id="myNote" class="input" placeholder="Bob/qism eslatma (ixtiyoriy)" value="' + (mine && mine.note ? escapeHtml(mine.note) : '') + '" />' +
       '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
       '</div>' +
       (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '');
@@ -926,6 +942,7 @@ async function renderBookDetail() {
     var activeTabHtml = state.detailTab === 'progress' ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
     body.innerHTML =
+      '<div style="font-size:11px;color:var(--accent-1);opacity:0.8;margin-bottom:8px">' + _debugTiming + '</div>' +
       '<div class="hero-row">' + coverHtml +
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
@@ -1017,7 +1034,6 @@ async function renderBookDetail() {
         if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
         var oldPages = mine ? mine.pages_read : 0;
         var delta = requestedPages - oldPages;
-        var note = document.getElementById('myNote').value.trim();
         try {
           var limitInfo = await recordDailyProgress(delta);
           if (limitInfo.blocked) {
@@ -1026,7 +1042,7 @@ async function renderBookDetail() {
           }
           var finalPages = oldPages + limitInfo.allowedDelta;
           await sbPost('progress?on_conflict=book_id,user_id', {
-            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, note: note || null, updated_at: new Date().toISOString(),
+            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
           }, 'resolution=merge-duplicates,return=representation');
           vibrate('light');
           var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
