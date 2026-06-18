@@ -254,18 +254,6 @@ function computeDailyLimit(finishedCount) {
   return Math.min(MAX_DAILY_LIMIT, BASE_DAILY_LIMIT + FINISH_BONUS * finishedCount);
 }
 
-async function getRemainingDailyAllowance() {
-  var today = new Date().toISOString().slice(0, 10);
-  try {
-    var finishers = await sbGet('finishers?select=id&user_id=eq.' + ME.id);
-    var limit = computeDailyLimit(finishers.length);
-    var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
-    var row = rows[0];
-    var pagesToday = (row && row.last_active_date === today) ? (row.pages_today || 0) : 0;
-    return Math.max(0, limit - pagesToday);
-  } catch (e) { console.error(e); return 0; }
-}
-
 // ===== Kunlik odat va o'qish limiti =====
 async function recordDailyProgress(delta) {
   var today = new Date().toISOString().slice(0, 10);
@@ -441,8 +429,12 @@ async function loadAndRenderBookList() {
         return { book: b, pct: pct, pagesRead: r.pages_read, readerCount: null };
       });
     } else {
-      var books = await sbGet('books?select=*&order=created_at.desc');
-      var progress = await sbGet('progress?select=book_id');
+      var bookResults = await Promise.all([
+        sbGet('books?select=*&order=created_at.desc'),
+        sbGet('progress?select=book_id'),
+      ]);
+      var books = bookResults[0];
+      var progress = bookResults[1];
       var counts = {};
       progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
       state.listData = books.map(function (b) {
@@ -524,9 +516,13 @@ function profileBodyHtml(isOwn, finishedCount, medals, books) {
 async function loadProfileInto(elId, userId, userName, isOwn) {
   var el = document.getElementById(elId);
   try {
-    var finishers = await sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc');
+    var profileResults = await Promise.all([
+      sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
+      sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
+    ]);
+    var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
-    var progRows = await sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc');
+    var progRows = profileResults[1];
     var books = progRows.map(function (r) {
       var b = r.books;
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
@@ -593,20 +589,23 @@ async function loadAllUsersMerged() {
       if (date && new Date(date) < new Date(map[id].firstSeen)) map[id].firstSeen = date;
     }
   }
-  var prog = await sbGet('progress?select=user_id,user_name,started_at');
-  prog.forEach(function (p) { consider(p.user_id, p.user_name, p.started_at); });
-  var cm = await sbGet('comments?select=user_id,user_name,created_at');
-  cm.forEach(function (c) { consider(c.user_id, c.user_name, c.created_at); });
-  var bk = await sbGet('books?select=created_by_id,created_by_name,created_at');
-  bk.forEach(function (b) { consider(b.created_by_id, b.created_by_name, b.created_at); });
+  var results = await Promise.all([
+    sbGet('progress?select=user_id,user_name,started_at'),
+    sbGet('comments?select=user_id,user_name,created_at'),
+    sbGet('books?select=created_by_id,created_by_name,created_at'),
+  ]);
+  results[0].forEach(function (p) { consider(p.user_id, p.user_name, p.started_at); });
+  results[1].forEach(function (c) { consider(c.user_id, c.user_name, c.created_at); });
+  results[2].forEach(function (b) { consider(b.created_by_id, b.created_by_name, b.created_at); });
   return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return new Date(b.firstSeen) - new Date(a.firstSeen); });
 }
 
 async function loadAdminUsers() {
   var el = document.getElementById('adminBody');
   try {
-    _adminUsersCache = await loadAllUsersMerged();
-    var blockedRows = await sbGet('blocked_users?select=user_id');
+    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id')]);
+    _adminUsersCache = usersAndBlocked[0];
+    var blockedRows = usersAndBlocked[1];
     _adminBlockedSet = {};
     blockedRows.forEach(function (b) { _adminBlockedSet[b.user_id] = true; });
     el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:14px" />' +
@@ -835,10 +834,20 @@ async function renderBookDetail() {
     '<div id="bookDetailBody"><div class="loading">Yuklanmoqda...</div></div>');
   var body = document.getElementById('bookDetailBody');
   try {
-    var books = await sbGet('books?select=*&id=eq.' + state.bookId);
-    var book = books[0];
-    var progress = await sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc');
-    var comments = await sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100');
+    var today = new Date().toISOString().slice(0, 10);
+    var results = await Promise.all([
+      sbGet('books?select=*&id=eq.' + state.bookId),
+      sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
+      sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
+      sbGet('finishers?select=id&user_id=eq.' + ME.id),
+      sbGet('streaks?select=*&user_id=eq.' + ME.id),
+    ]);
+    var book = results[0][0];
+    var progress = results[1];
+    var comments = results[2];
+    var myFinishers = results[3];
+    var myStreakRows = results[4];
+
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
       var likeRows = await sbGet('comment_likes?select=comment_id,user_id&comment_id=in.(' + comments.map(function (c) { return c.id; }).join(',') + ')');
@@ -847,7 +856,10 @@ async function renderBookDetail() {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
-    var remainingAllowance = await getRemainingDailyAllowance();
+    var dailyLimit = computeDailyLimit(myFinishers.length);
+    var streakRow = myStreakRows[0];
+    var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
+    var remainingAllowance = Math.max(0, dailyLimit - pagesToday);
     var maxReadableNow = totalPages ? Math.min(totalPages, myPages + remainingAllowance) : (myPages + remainingAllowance);
 
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
