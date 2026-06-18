@@ -3,62 +3,460 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>App</title>
+<title>O'qish Klubi</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --green-dark:#16573a;
-    --lime:#d4ff4d;
-    --white:#ffffff;
-    --white-80:rgba(255,255,255,0.8);
-    --white-50:rgba(255,255,255,0.5);
-    --white-10:rgba(255,255,255,0.1);
-    --white-06:rgba(255,255,255,0.06);
-  }
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    background:var(--green-dark);
-    color:var(--white);
-    min-height:100vh;
-    -webkit-font-smoothing:antialiased;
-  }
-  #app{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-    min-height:100vh;
-    text-align:center;
-    padding:24px;
-  }
-  .logo{font-size:48px;margin-bottom:16px}
-  .title{font-size:22px;font-weight:700;margin-bottom:8px}
-  .sub{font-size:14px;color:var(--white-50)}
+:root{
+  --bg:#1A5140;
+  --surface:#1F5C49;
+  --surface-alt:#173F32;
+  --text:#EAF4EE;
+  --text-muted:#8FB8A4;
+  --accent-1:#B7E5BA;
+  --accent-2:#5CA87C;
+  --accent-3:#288760;
+  --shadow-dark: rgba(6,26,19,0.55);
+  --shadow-light: rgba(120,210,165,0.14);
+  --ring-track: rgba(255,255,255,0.08);
+  --radius-lg:26px;
+  --radius-md:18px;
+  --radius-sm:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+#app{ min-height:100vh; padding-bottom:120px; }
+.screen{ padding:20px 16px 12px; }
+
+.header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; min-height:38px; }
+.h-title{ font-size:20px; font-weight:700; }
+.back{ background:var(--surface); box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+.segment{ display:flex; background:var(--surface-alt); border-radius:var(--radius-md); padding:5px; gap:4px; margin-bottom:18px; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.seg-btn{ flex:1; border:none; background:transparent; color:var(--text-muted); padding:10px 0; border-radius:var(--radius-sm); font-size:13px; font-weight:600; font-family:inherit; }
+.seg-btn.active{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); box-shadow:4px 4px 10px var(--shadow-dark); }
+
+.book-list{ display:flex; flex-direction:column; gap:12px; }
+.card{ background:var(--surface); border-radius:var(--radius-lg); padding:18px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
+.book-card{ cursor:pointer; }
+.card-title{ font-size:16px; font-weight:700; margin-bottom:10px; }
+.card-meta{ font-size:12px; color:var(--text-muted); margin-top:8px; }
+.progress-track{ height:8px; background:var(--surface-alt); border-radius:99px; overflow:hidden; box-shadow:inset 2px 2px 4px var(--shadow-dark); }
+.progress-fill{ height:100%; background:linear-gradient(90deg,var(--accent-1),var(--accent-2)); border-radius:99px; }
+
+.loading,.empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:40px 16px; line-height:1.6; }
+
+.fab{ position:fixed; right:18px; bottom:118px; width:58px; height:58px; border-radius:50%; border:none; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); font-size:28px; font-weight:700; box-shadow:8px 8px 16px var(--shadow-dark), -6px -6px 14px var(--shadow-light); z-index:5; }
+
+.tabbar{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:14px; padding:14px 16px calc(14px + env(safe-area-inset-bottom)); }
+.tab{ flex:0 0 auto; width:74px; height:64px; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border-radius:var(--radius-md); background:var(--surface); box-shadow:6px 6px 14px var(--shadow-dark), -5px -5px 12px var(--shadow-light); color:var(--text-muted); font-family:inherit; }
+.tab.active{ color:var(--bg); background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); }
+.tab-icon{ font-size:20px; }
+.tab-label{ font-size:10px; font-weight:600; }
+
+.form{ display:flex; flex-direction:column; gap:12px; }
+.input{ width:100%; background:var(--surface-alt); border:none; color:var(--text); border-radius:var(--radius-sm); padding:13px 14px; font-size:14px; font-family:inherit; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.input::placeholder{ color:var(--text-muted); }
+.hint{ font-size:12px; color:var(--accent-1); background:rgba(183,229,186,0.1); border-radius:var(--radius-sm); padding:10px 12px; line-height:1.5; }
+.btn-primary{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); border:none; border-radius:var(--radius-sm); padding:13px 18px; font-weight:700; font-size:14px; font-family:inherit; box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.btn-primary.full{ width:100%; margin-top:6px; }
+.result-card{ cursor:pointer; margin-bottom:8px; }
+
+.book-hero{ margin-bottom:6px; }
+.book-hero-title{ font-size:22px; font-weight:800; margin-bottom:6px; }
+.book-hero-sub{ font-size:12px; color:var(--text-muted); }
+.section-title{ font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin:22px 0 10px; }
+
+.ring-row{ display:flex; align-items:center; gap:18px; margin-bottom:14px; }
+.ring-wrap{ position:relative; flex-shrink:0; }
+.ring-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.ring-pct{ font-size:24px; font-weight:800; }
+.ring-side{ flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.ring-pages-label{ font-size:14px; font-weight:700; color:var(--accent-1); }
+.range-slider{ -webkit-appearance:none; appearance:none; width:100%; height:10px; border-radius:99px; background:var(--surface-alt); box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); outline:none; }
+.range-slider::-webkit-slider-thumb{ -webkit-appearance:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); box-shadow:3px 3px 8px var(--shadow-dark); cursor:pointer; }
+.range-slider::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); border:none; box-shadow:3px 3px 8px var(--shadow-dark); cursor:pointer; }
+
+.readers{ display:flex; flex-direction:column; gap:8px; }
+.reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.reader-row.me{ box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light), 0 0 0 2px var(--accent-1) inset; }
+.reader-rank{ width:26px; text-align:center; font-size:13px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
+.reader-info{ flex:1; min-width:0; }
+.reader-name{ font-size:14px; font-weight:600; }
+.reader-note{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+.reader-pages{ font-size:12px; color:var(--accent-1); font-weight:700; white-space:nowrap; }
+
+.comment-form{ display:flex; gap:8px; margin-bottom:16px; }
+.comments{ display:flex; flex-direction:column; gap:0; }
+.comment{ font-size:13px; line-height:1.6; color:var(--text-muted); padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.comment-name{ font-weight:700; color:var(--text); }
+
+.coming-soon{ display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:65vh; text-align:center; }
+.cs-icon{ font-size:52px; margin-bottom:14px; }
+.cs-title{ font-size:20px; font-weight:700; margin-bottom:6px; }
+.cs-sub{ font-size:14px; color:var(--text-muted); }
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="logo">🌿</div>
-  <div class="title">Yangi app</div>
-  <div class="sub">Tez kunda...</div>
-</div>
-
+<div id="app"></div>
 <script>
 // ===== Supabase sozlamalari =====
 var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
-var SB_H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};
-var HUJJAT_BUCKET = 'hujjatlar';
+var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+// Eslatma: 'hujjatlar' Storage bucket hozircha ishlatilmaydi (kelajakda kitob muqovasi rasm uchun mo'ljallanishi mumkin).
 
 // ===== Telegram WebApp init =====
 var tg = window.Telegram ? window.Telegram.WebApp : null;
-if(tg){
-  try{ tg.ready(); tg.expand(); }catch(e){}
+if (tg) {
+  try {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('#1A5140');
+    tg.setBackgroundColor('#1A5140');
+  } catch (e) {}
 }
 
-// ===== Yangi app kodi shu yerdan boshlanadi =====
+function vibrate(style) {
+  try { if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || 'light'); } catch (e) {}
+}
+function showAlert(msg) {
+  try { if (tg && tg.showAlert) { tg.showAlert(msg); return; } } catch (e) {}
+  alert(msg);
+}
 
+// ===== Foydalanuvchi =====
+var ME = (function () {
+  try {
+    var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (u) return { id: u.id, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || ('Foydalanuvchi ' + u.id) };
+  } catch (e) {}
+  return { id: 0, name: 'Mehmon' };
+})();
+
+// ===== Supabase yordamchi funksiyalar =====
+async function sbGet(path) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, { headers: SB_H });
+  if (!res.ok) throw new Error('SB GET xato: ' + res.status);
+  return res.json();
+}
+async function sbPost(path, body, prefer) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'POST',
+    headers: Object.assign({}, SB_H, { Prefer: prefer || 'return=representation' }),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('SB POST xato: ' + res.status + ' ' + (await res.text()));
+  var txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+// ===== Holat =====
+var state = { view: 'home', tab: 'mine', bookId: null };
+var app = document.getElementById('app');
+var _backHandler = null;
+
+function setBackButton(show, handler) {
+  if (!tg || !tg.BackButton) return;
+  try {
+    if (show) {
+      if (_backHandler) { try { tg.BackButton.offClick(_backHandler); } catch (e2) {} }
+      _backHandler = handler;
+      tg.BackButton.show();
+      tg.BackButton.onClick(_backHandler);
+    } else {
+      if (_backHandler) { try { tg.BackButton.offClick(_backHandler); } catch (e2) {} _backHandler = null; }
+      tg.BackButton.hide();
+    }
+  } catch (e) {}
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function circularProgressSVG(pct, size, id) {
+  var stroke = 14;
+  var r = (size - stroke) / 2;
+  var c = size / 2;
+  var circumference = 2 * Math.PI * r;
+  var offset = circumference * (1 - pct / 100);
+  return '<div class="ring-wrap" id="' + id + '" style="width:' + size + 'px;height:' + size + 'px">' +
+    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
+    '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="var(--ring-track)" stroke-width="' + stroke + '"/>' +
+    '<circle class="ring-fill" cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="url(#ringGrad)" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '" transform="rotate(-90 ' + c + ' ' + c + ')"/>' +
+    '<defs><linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B7E5BA"/><stop offset="100%" stop-color="#5CA87C"/></linearGradient></defs>' +
+    '</svg>' +
+    '<div class="ring-center"><div class="ring-pct">' + pct + '%</div></div>' +
+    '</div>';
+}
+
+// ===== Router =====
+function render() {
+  if (state.view === 'home') renderHome();
+  else if (state.view === 'addBook') renderAddBook();
+  else if (state.view === 'bookDetail') renderBookDetail();
+  else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
+  else if (state.view === 'ovqat') renderComingSoon('🥗', "To'g'ri ovqatlanish");
+}
+
+function currentSection() {
+  if (state.view === 'sport') return 'sport';
+  if (state.view === 'ovqat') return 'ovqat';
+  return 'home';
+}
+
+function tabBtn(view, icon, label) {
+  var active = currentSection() === view ? ' active' : '';
+  return '<button class="tab' + active + '" data-go="' + view + '"><span class="tab-icon">' + icon + '</span><span class="tab-label">' + label + '</span></button>';
+}
+
+function renderShell(innerHtml, opts) {
+  opts = opts || {};
+  app.innerHTML =
+    '<div class="screen">' + innerHtml + '</div>' +
+    (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
+    '<nav class="tabbar">' +
+    tabBtn('home', '📚', 'Kitoblar') +
+    tabBtn('sport', '🏃', 'Sport') +
+    tabBtn('ovqat', '🥗', 'Ovqat') +
+    '</nav>';
+}
+
+// ===== Bosh sahifa =====
+async function renderHome() {
+  setBackButton(false);
+  renderShell(
+    '<div class="header"><div class="h-title">Kitoblar</div></div>' +
+    '<div class="segment">' +
+    '<button class="seg-btn' + (state.tab === 'mine' ? ' active' : '') + '" data-tab="mine">Mening kitoblarim</button>' +
+    '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Hammasi</button>' +
+    '</div>' +
+    '<div id="bookList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>',
+    { fab: true }
+  );
+  await loadAndRenderBookList();
+}
+
+async function loadAndRenderBookList() {
+  var listEl = document.getElementById('bookList');
+  try {
+    if (state.tab === 'mine') {
+      var rows = await sbGet('progress?select=*,books(*)&user_id=eq.' + ME.id + '&order=updated_at.desc');
+      if (!rows.length) {
+        listEl.innerHTML = '<div class="empty">Hali kitob boshlamadingiz.<br>Pastdagi + tugmasi bilan qo\'shing.</div>';
+        return;
+      }
+      listEl.innerHTML = rows.map(function (r) {
+        var b = r.books;
+        var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
+        return bookCard(b, pct, r.pages_read);
+      }).join('');
+    } else {
+      var books = await sbGet('books?select=*&order=created_at.desc');
+      var progress = await sbGet('progress?select=book_id');
+      var counts = {};
+      progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
+      if (!books.length) { listEl.innerHTML = '<div class="empty">Hozircha kitob yo\'q.<br>Birinchi bo\'lib siz qo\'shing!</div>'; return; }
+      listEl.innerHTML = books.map(function (b) {
+        return bookCard(b, null, null, counts[b.id] || 0);
+      }).join('');
+    }
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi. Internetni tekshiring.</div>';
+    console.error(e);
+  }
+}
+
+function bookCard(b, pct, pagesRead, readerCount) {
+  var inner;
+  if (pct !== null) {
+    inner = '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="card-meta">' + pagesRead + (b.total_pages ? ' / ' + b.total_pages + ' bet' : ' bet') + ' · ' + pct + '%</div>';
+  } else {
+    inner = '<div class="card-meta">👥 ' + (readerCount || 0) + ' kishi o\'qiyapti' + (b.total_pages ? ' · ' + b.total_pages + ' bet' : '') + '</div>';
+  }
+  return '<div class="card book-card" data-go="bookDetail" data-id="' + b.id + '">' +
+    '<div class="card-title">' + escapeHtml(b.title) + '</div>' + inner +
+    '</div>';
+}
+
+// ===== Kitob qo'shish =====
+function renderAddBook() {
+  setBackButton(true, function () { state.view = 'home'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="home">←</button><div class="h-title">Kitob qo\'shish</div></div>' +
+    '<div class="form">' +
+    '<input id="bookSearch" class="input" placeholder="Kitob nomini yozing..." />' +
+    '<div id="searchResults"></div>' +
+    '<div id="newBookForm" style="display:none">' +
+    '<div class="hint">Bu kitob topilmadi — yangi sifatida qo\'shamiz. Siz birinchi o\'quvchi bo\'lasiz 🎉</div>' +
+    '<input id="totalPages" class="input" type="number" min="1" placeholder="Jami bet soni (ixtiyoriy)" />' +
+    '<button id="createBookBtn" class="btn-primary full">Kitobni qo\'shish</button>' +
+    '</div>' +
+    '</div>'
+  );
+
+  var searchEl = document.getElementById('bookSearch');
+  var resultsEl = document.getElementById('searchResults');
+  var newFormEl = document.getElementById('newBookForm');
+  var timer = null;
+
+  searchEl.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = searchEl.value.trim();
+    newFormEl.style.display = 'none';
+    if (!q) { resultsEl.innerHTML = ''; return; }
+    timer = setTimeout(async function () {
+      try {
+        var matches = await sbGet('books?select=*&title=ilike.*' + encodeURIComponent(q) + '*&limit=5');
+        if (matches.length) {
+          resultsEl.innerHTML = matches.map(function (b) {
+            return '<div class="card result-card" data-go="bookDetail" data-id="' + b.id + '">' + escapeHtml(b.title) + '</div>';
+          }).join('');
+        } else {
+          resultsEl.innerHTML = '';
+          newFormEl.style.display = 'block';
+          newFormEl.dataset.title = q;
+        }
+      } catch (e) { console.error(e); }
+    }, 400);
+  });
+
+  document.getElementById('createBookBtn').addEventListener('click', async function () {
+    var title = newFormEl.dataset.title || searchEl.value.trim();
+    if (!title) return;
+    var tpVal = document.getElementById('totalPages').value.trim();
+    var totalPages = tpVal ? parseInt(tpVal, 10) : null;
+    try {
+      var created = await sbPost('books', { title: title, total_pages: totalPages, created_by_id: ME.id, created_by_name: ME.name });
+      var book = created[0];
+      await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0 });
+      vibrate('medium');
+      state.view = 'bookDetail'; state.bookId = book.id; render();
+    } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+  });
+}
+
+// ===== Kitob sahifasi =====
+async function renderBookDetail() {
+  setBackButton(true, function () { state.view = 'home'; render(); });
+  renderShell('<div class="header"><button class="back" data-go="home">←</button><div class="h-title">Kitob</div></div>' +
+    '<div id="bookDetailBody"><div class="loading">Yuklanmoqda...</div></div>');
+  var body = document.getElementById('bookDetailBody');
+  try {
+    var books = await sbGet('books?select=*&id=eq.' + state.bookId);
+    var book = books[0];
+    var progress = await sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc');
+    var comments = await sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.desc&limit=30');
+    var mine = progress.find(function (p) { return p.user_id === ME.id; });
+    var myPages = mine ? mine.pages_read : 0;
+    var totalPages = book.total_pages;
+    var myPct = totalPages ? Math.min(100, Math.round((myPages / totalPages) * 100)) : Math.min(100, myPages);
+    var sliderMax = totalPages || 100;
+    var ringSize = 140, ringStroke = 14, ringR = (ringSize - ringStroke) / 2, ringCirc = 2 * Math.PI * ringR;
+
+    body.innerHTML =
+      '<div class="book-hero"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
+      '<div class="book-hero-sub">🏁 Birinchi: ' + escapeHtml(book.created_by_name) + (totalPages ? ' · ' + totalPages + ' bet' : '') + '</div></div>' +
+      '<div class="section-title">Mening progressim</div>' +
+      '<div class="ring-row">' +
+      circularProgressSVG(myPct, ringSize, 'progressRing') +
+      '<div class="ring-side">' +
+      '<div id="pagesLabel" class="ring-pages-label">' + myPages + (totalPages ? ' / ' + totalPages + ' bet' : ' %') + '</div>' +
+      '<input id="progressRange" class="range-slider" type="range" min="0" max="' + sliderMax + '" value="' + myPages + '" />' +
+      '</div></div>' +
+      '<input id="myNote" class="input" placeholder="Bob/qism eslatma (ixtiyoriy)" value="' + (mine && mine.note ? escapeHtml(mine.note) : '') + '" />' +
+      '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
+      '<div class="section-title">O\'qiyotganlar (' + progress.length + ')</div>' +
+      '<div class="readers">' + progress.map(function (p, i) {
+        var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
+        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '">' +
+          '<div class="reader-rank">' + (i === 0 ? '🥇' : (i + 1)) + '</div>' +
+          '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+          (p.note ? '<div class="reader-note">' + escapeHtml(p.note) + '</div>' : '') + '</div>' +
+          '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+          '</div>';
+      }).join('') + '</div>' +
+      '<div class="section-title">Komentariyalar</div>' +
+      '<div class="comment-form"><input id="commentInput" class="input" placeholder="Fikringizni yozing..." />' +
+      '<button id="sendCommentBtn" class="btn-primary">Yubor</button></div>' +
+      '<div class="comments">' + (comments.length ? comments.map(function (c) {
+        return '<div class="comment"><span class="comment-name">' + escapeHtml(c.user_name) + ':</span> ' + escapeHtml(c.text) + '</div>';
+      }).join('') : '<div class="empty">Hali komentariya yo\'q.</div>') + '</div>';
+
+    var rangeEl = document.getElementById('progressRange');
+    var pagesLabelEl = document.getElementById('pagesLabel');
+    var ringFillEl = document.querySelector('#progressRing .ring-fill');
+    var ringPctEl = document.querySelector('#progressRing .ring-pct');
+    rangeEl.addEventListener('input', function () {
+      var val = parseInt(rangeEl.value, 10);
+      var pct = totalPages ? Math.min(100, Math.round((val / totalPages) * 100)) : Math.min(100, val);
+      pagesLabelEl.textContent = val + (totalPages ? ' / ' + totalPages + ' bet' : ' %');
+      if (ringFillEl) ringFillEl.setAttribute('stroke-dashoffset', String(ringCirc * (1 - pct / 100)));
+      if (ringPctEl) ringPctEl.textContent = pct + '%';
+    });
+
+    document.getElementById('updateProgressBtn').addEventListener('click', async function () {
+      var pages = parseInt(rangeEl.value, 10) || 0;
+      var note = document.getElementById('myNote').value.trim();
+      try {
+        await sbPost('progress?on_conflict=book_id,user_id', {
+          book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: pages, note: note || null, updated_at: new Date().toISOString(),
+        }, 'resolution=merge-duplicates,return=representation');
+        vibrate('light');
+        renderBookDetail();
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+    });
+
+    document.getElementById('sendCommentBtn').addEventListener('click', async function () {
+      var input = document.getElementById('commentInput');
+      var text = input.value.trim();
+      if (!text) return;
+      try {
+        await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: ME.name, text: text });
+        input.value = '';
+        vibrate('light');
+        renderBookDetail();
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+    });
+  } catch (e) {
+    body.innerHTML = '<div class="empty">Xatolik: kitob topilmadi.</div>';
+    console.error(e);
+  }
+}
+
+// ===== Tez kunda ekrani =====
+function renderComingSoon(icon, title) {
+  setBackButton(false);
+  renderShell('<div class="coming-soon"><div class="cs-icon">' + icon + '</div><div class="cs-title">' + title + '</div><div class="cs-sub">Tez kunda...</div></div>');
+}
+
+// ===== Voqealar (event delegation) =====
+document.addEventListener('click', function (e) {
+  var goEl = e.target.closest('[data-go]');
+  if (goEl) {
+    var view = goEl.dataset.go;
+    if (view === 'bookDetail') state.bookId = parseInt(goEl.dataset.id, 10);
+    state.view = view;
+    render();
+    return;
+  }
+  var tabEl = e.target.closest('[data-tab]');
+  if (tabEl) { state.tab = tabEl.dataset.tab; render(); return; }
+});
+
+render();
 </script>
 </body>
 </html>
