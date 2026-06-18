@@ -1,6 +1,6 @@
 import logging
 import httpx
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -35,7 +35,14 @@ WEBAPP_URL = "https://example.com"
 
 # ===== Buyruqlar =====
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Salom! Bot ishlayapti.")
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📚 Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]]
+    )
+    await update.message.reply_text(
+        "Salom! Kitob o'qish klubiga xush kelibsiz 📖\n\n"
+        "Ilovani ochish uchun pastdagi tugmani bosing.",
+        reply_markup=keyboard,
+    )
 
 
 # ===== Asosiy =====
