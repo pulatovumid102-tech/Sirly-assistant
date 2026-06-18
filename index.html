@@ -41,7 +41,7 @@ body{
 .back{ background:var(--surface); box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 
 .segment{ display:flex; background:var(--surface-alt); border-radius:var(--radius-md); padding:5px; gap:4px; margin-bottom:16px; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
-.seg-btn{ flex:1; border:none; background:transparent; color:var(--text-muted); padding:10px 0; border-radius:var(--radius-sm); font-size:13px; font-weight:600; font-family:inherit; }
+.seg-btn{ flex:1; border:none; background:transparent; color:var(--text-muted); padding:10px 4px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; font-family:inherit; line-height:1.3; }
 .seg-btn.active{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); box-shadow:4px 4px 10px var(--shadow-dark); }
 
 .book-list{ display:flex; flex-direction:column; gap:12px; }
@@ -93,8 +93,6 @@ body{
 .book-hero-title{ font-size:20px; font-weight:800; margin-bottom:4px; }
 .book-hero-author{ font-size:13px; color:var(--text-muted); margin-bottom:8px; }
 .book-hero-sub{ font-size:12px; color:var(--text-muted); }
-.section-title{ font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin:22px 0 10px; }
-.section-title:first-child{ margin-top:0; }
 
 .pdf-row{ display:flex; align-items:center; justify-content:space-between; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:16px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); font-size:13px; }
 .pdf-link{ color:var(--accent-1); font-weight:700; font-size:13px; text-decoration:none; }
@@ -112,7 +110,7 @@ body{
 .readers{ display:flex; flex-direction:column; gap:8px; }
 .reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
 .reader-row.me{ box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light), 0 0 0 2px var(--accent-1) inset; }
-.reader-rank{ width:26px; text-align:center; font-size:13px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
+.reader-rank{ width:26px; text-align:center; font-size:14px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
 .reader-info{ flex:1; min-width:0; }
 .reader-name{ font-size:14px; font-weight:600; }
 .reader-note{ font-size:11px; color:var(--text-muted); margin-top:2px; }
@@ -226,7 +224,7 @@ async function bumpStreak() {
 }
 
 // ===== Holat =====
-var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'progress' };
+var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers' };
 var app = document.getElementById('app');
 var _backHandler = null;
 
@@ -472,7 +470,7 @@ function renderAddBook() {
       await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0 });
       vibrate('medium');
       if (warnings.length) showAlert(warnings.join(' va ') + " yuklanmadi, lekin kitob qo'shildi.");
-      state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'progress'; render();
+      state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'readers'; render();
     } catch (e) {
       console.error(e); showAlert('Xatolik yuz berdi.');
       btn.disabled = false; btn.textContent = "Kitobni qo'shish";
@@ -503,6 +501,18 @@ async function renderBookDetail() {
       ? '<div class="pdf-row"><span>📄 Kitob PDF fayli</span><a class="pdf-link" href="' + book.pdf_url + '" target="_blank" rel="noopener">Ochish</a></div>'
       : '<div class="pdf-row"><span>📄 PDF hali yo\'q</span><label class="pdf-link" for="addPdfInput" style="cursor:pointer">+ Qo\'shish</label><input type="file" id="addPdfInput" accept="application/pdf" style="display:none" /></div>';
 
+    var readersTabHtml =
+      '<div class="readers">' + progress.map(function (p, i) {
+        var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
+        var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '">' +
+          '<div class="reader-rank">' + medal + '</div>' +
+          '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+          (p.note ? '<div class="reader-note">' + escapeHtml(p.note) + '</div>' : '') + '</div>' +
+          '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+          '</div>';
+      }).join('') + '</div>';
+
     var progressTabHtml =
       '<div class="ring-row">' + circularProgressSVG(myPct, ringSize, 'progressRing') +
       '<div class="ring-side">' +
@@ -513,23 +523,14 @@ async function renderBookDetail() {
       '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
       (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '');
 
-    var readersTabHtml =
-      '<div class="section-title">O\'qiyotganlar (' + progress.length + ')</div>' +
-      '<div class="readers">' + progress.map(function (p, i) {
-        var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
-        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '">' +
-          '<div class="reader-rank">' + (i === 0 ? '🥇' : (i + 1)) + '</div>' +
-          '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-          (p.note ? '<div class="reader-note">' + escapeHtml(p.note) + '</div>' : '') + '</div>' +
-          '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
-          '</div>';
-      }).join('') + '</div>' +
-      '<div class="section-title">Komentariyalar</div>' +
+    var commentsTabHtml =
       '<div class="comment-form"><input id="commentInput" class="input" placeholder="Fikringizni yozing..." />' +
       '<button id="sendCommentBtn" class="btn-primary">Yubor</button></div>' +
       '<div class="comments">' + (comments.length ? comments.map(function (c) {
         return '<div class="comment"><span class="comment-name">' + escapeHtml(c.user_name) + ':</span> ' + escapeHtml(c.text) + '</div>';
       }).join('') : '<div class="empty">Hali komentariya yo\'q.</div>') + '</div>';
+
+    var activeTabHtml = state.detailTab === 'progress' ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
     body.innerHTML =
       '<div class="hero-row">' + coverHtml +
@@ -538,10 +539,11 @@ async function renderBookDetail() {
       '<div class="book-hero-sub">🏁 Birinchi: ' + escapeHtml(book.created_by_name) + (totalPages ? ' · ' + totalPages + ' bet' : '') + '</div></div></div>' +
       pdfHtml +
       '<div class="segment">' +
-      '<button class="seg-btn' + (state.detailTab !== 'readers' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
       '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">O\'qiyotganlar</button>' +
+      '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
+      '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Komentariyalar</button>' +
       '</div>' +
-      (state.detailTab === 'readers' ? readersTabHtml : progressTabHtml);
+      activeTabHtml;
 
     document.querySelectorAll('[data-detailtab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -550,7 +552,7 @@ async function renderBookDetail() {
       });
     });
 
-    if (state.detailTab === 'readers') {
+    if (state.detailTab === 'comments') {
       document.getElementById('sendCommentBtn').addEventListener('click', async function () {
         var input = document.getElementById('commentInput');
         var text = input.value.trim();
@@ -562,7 +564,7 @@ async function renderBookDetail() {
           renderBookDetail();
         } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
       });
-    } else {
+    } else if (state.detailTab === 'progress') {
       var rangeEl = document.getElementById('progressRange');
       var pagesLabelEl = document.getElementById('pagesLabel');
       var ringFillEl = document.querySelector('#progressRing .ring-fill');
@@ -594,7 +596,7 @@ async function renderBookDetail() {
           try {
             await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
             vibrate('medium');
-            state.view = 'home'; state.detailTab = 'progress'; render();
+            state.view = 'home'; state.detailTab = 'readers'; render();
           } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
         });
       }
@@ -631,7 +633,7 @@ document.addEventListener('click', function (e) {
   var goEl = e.target.closest('[data-go]');
   if (goEl) {
     var view = goEl.dataset.go;
-    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'progress'; }
+    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; }
     state.view = view;
     render();
     return;
