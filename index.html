@@ -104,7 +104,7 @@ body{
 .range-slider::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); border:none; box-shadow:3px 3px 8px var(--shadow-dark); cursor:pointer; }
 
 .readers{ display:flex; flex-direction:column; gap:8px; }
-.reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); cursor:pointer; }
 .reader-row.me{ box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light), 0 0 0 2px var(--accent-1) inset; }
 .reader-rank{ width:26px; text-align:center; font-size:14px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
 .reader-info{ flex:1; min-width:0; }
@@ -133,6 +133,7 @@ var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
 var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 var HUJJATLAR_BUCKET = 'hujjatlar';
+var DAILY_LIMIT_PER_BOOK = 20;
 
 // ===== Telegram WebApp init =====
 var tg = window.Telegram ? window.Telegram.WebApp : null;
@@ -201,27 +202,51 @@ async function sbUploadFile(bucket, path, file) {
   return SB_URL + '/storage/v1/object/public/' + bucket + '/' + path;
 }
 
-// ===== Kunlik odat (streak) =====
-async function bumpStreak() {
+// ===== Kunlik odat va o'qish limiti =====
+async function recordDailyProgress(delta) {
   var today = new Date().toISOString().slice(0, 10);
+  var result = { allowedDelta: delta, limit: null, capped: false, blocked: false };
   try {
+    var myBooks = await sbGet('progress?select=book_id&user_id=eq.' + ME.id);
+    var limit = DAILY_LIMIT_PER_BOOK * Math.max(1, myBooks.length);
+    result.limit = limit;
+
     var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
     var row = rows[0];
+    var pagesToday = (row && row.last_active_date === today) ? (row.pages_today || 0) : 0;
+
+    if (delta > 0) {
+      var remaining = Math.max(0, limit - pagesToday);
+      if (remaining <= 0) {
+        result.blocked = true;
+        result.allowedDelta = 0;
+        return result;
+      }
+      result.allowedDelta = Math.min(delta, remaining);
+      result.capped = result.allowedDelta < delta;
+    }
+
+    var newPagesToday = pagesToday + Math.max(0, result.allowedDelta);
     var current = 1, longest = 1;
     if (row) {
-      if (row.last_active_date === today) return;
-      var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      current = (row.last_active_date === yesterday) ? row.current_streak + 1 : 1;
-      longest = Math.max(row.longest_streak, current);
+      if (row.last_active_date === today) {
+        current = row.current_streak;
+        longest = row.longest_streak;
+      } else {
+        var yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        current = (row.last_active_date === yesterday) ? row.current_streak + 1 : 1;
+        longest = Math.max(row.longest_streak, current);
+      }
     }
     await sbPost('streaks?on_conflict=user_id', {
-      user_id: ME.id, current_streak: current, longest_streak: longest, last_active_date: today,
+      user_id: ME.id, current_streak: current, longest_streak: longest, last_active_date: today, pages_today: newPagesToday,
     }, 'resolution=merge-duplicates,return=representation');
   } catch (e) { console.error(e); }
+  return result;
 }
 
 // ===== Holat =====
-var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers', listData: [] };
+var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null };
 var app = document.getElementById('app');
 var _backHandler = null;
 
@@ -267,6 +292,7 @@ function render() {
   if (state.view === 'home') renderHome();
   else if (state.view === 'addBook') renderAddBook();
   else if (state.view === 'bookDetail') renderBookDetail();
+  else if (state.view === 'userBooks') renderUserBooks();
   else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
   else if (state.view === 'ovqat') renderComingSoon('🥗', "To'g'ri ovqatlanish");
 }
@@ -397,6 +423,28 @@ function bookCard(b, pct, pagesRead, readerCount) {
     '</div>';
 }
 
+// ===== Boshqa foydalanuvchi kitoblari =====
+async function renderUserBooks() {
+  setBackButton(true, function () { state.view = 'bookDetail'; state.detailTab = 'readers'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="bookDetail" data-id="' + state.bookId + '">←</button><div class="h-title">' + escapeHtml(state.viewUserName) + '</div></div>' +
+    '<div id="userBooksList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>'
+  );
+  var listEl = document.getElementById('userBooksList');
+  try {
+    var rows = await sbGet('progress?select=*,books(*)&user_id=eq.' + state.viewUserId + '&order=updated_at.desc');
+    if (!rows.length) { listEl.innerHTML = '<div class="empty">Hali kitob yo\'q.</div>'; return; }
+    listEl.innerHTML = rows.map(function (r) {
+      var b = r.books;
+      var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
+      return bookCard(b, pct, r.pages_read);
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi.</div>';
+    console.error(e);
+  }
+}
+
 // ===== Kitob qo'shish =====
 function renderAddBook() {
   setBackButton(true, function () { state.view = 'home'; render(); });
@@ -510,7 +558,7 @@ async function renderBookDetail() {
       '<div class="readers">' + progress.map(function (p, i) {
         var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
         var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '">' +
+        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
           '<div class="reader-rank">' + medal + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
           '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div>' +
@@ -585,14 +633,22 @@ async function renderBookDetail() {
       });
 
       document.getElementById('updateProgressBtn').addEventListener('click', async function () {
-        var pages = parseInt(rangeEl.value, 10) || 0;
+        var requestedPages = parseInt(rangeEl.value, 10) || 0;
+        var oldPages = mine ? mine.pages_read : 0;
+        var delta = requestedPages - oldPages;
         var note = document.getElementById('myNote').value.trim();
         try {
+          var limitInfo = await recordDailyProgress(delta);
+          if (limitInfo.blocked) {
+            showAlert("Bugungi o'qish limitingiz (" + limitInfo.limit + " bet) tugadi. Ertaga davom etasiz!");
+            return;
+          }
+          var finalPages = oldPages + limitInfo.allowedDelta;
           await sbPost('progress?on_conflict=book_id,user_id', {
-            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: pages, note: note || null, updated_at: new Date().toISOString(),
+            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, note: note || null, updated_at: new Date().toISOString(),
           }, 'resolution=merge-duplicates,return=representation');
-          await bumpStreak();
           vibrate('light');
+          if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
           renderBookDetail();
         } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
       });
@@ -626,6 +682,7 @@ document.addEventListener('click', function (e) {
   if (goEl) {
     var view = goEl.dataset.go;
     if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; }
+    if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
     state.view = view;
     render();
     return;
