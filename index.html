@@ -670,9 +670,13 @@ async function loadAdminUsers() {
     var blockedRows = usersAndBlocked[1];
     _adminBlockedSet = {};
     blockedRows.forEach(function (b) { _adminBlockedSet[b.user_id] = true; });
-    el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:14px" />' +
+    el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:10px" />' +
+      '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminUserDateFrom" class="input" type="date" style="flex:1" /><input id="adminUserDateTo" class="input" type="date" style="flex:1" /></div>' +
       '<div id="adminUsersList"></div>';
     document.getElementById('adminUserSearch').addEventListener('input', renderAdminUsersList);
+    document.getElementById('adminUserDateFrom').addEventListener('change', renderAdminUsersList);
+    document.getElementById('adminUserDateTo').addEventListener('change', renderAdminUsersList);
     renderAdminUsersList();
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
 }
@@ -680,13 +684,19 @@ async function loadAdminUsers() {
 function renderAdminUsersList() {
   var listEl = document.getElementById('adminUsersList');
   var searchEl = document.getElementById('adminUserSearch');
+  var fromEl = document.getElementById('adminUserDateFrom');
+  var toEl = document.getElementById('adminUserDateTo');
   var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var fromVal = fromEl ? fromEl.value : '';
+  var toVal = toEl ? toEl.value : '';
   var users = _adminUsersCache;
   if (q) {
     users = users.filter(function (u) {
       return (u.name || '').toLowerCase().indexOf(q) !== -1 || String(u.id).indexOf(q) !== -1;
     });
   }
+  if (fromVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) >= fromVal; });
+  if (toVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) <= toVal; });
   listEl.innerHTML = users.length ? users.map(function (u) {
     var isBlocked = !!_adminBlockedSet[u.id];
     return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
@@ -711,9 +721,13 @@ async function loadAdminBooks() {
   var el = document.getElementById('adminBody');
   try {
     _adminBooksCache = await sbGet('books?select=*&order=title.asc');
-    el.innerHTML = '<input id="adminBookSearch" class="input" placeholder="Kitob nomi yoki muallif bo\'yicha qidirish..." style="margin-bottom:14px" />' +
+    el.innerHTML = '<input id="adminBookSearch" class="input" placeholder="Kitob nomi yoki muallif bo\'yicha qidirish..." style="margin-bottom:10px" />' +
+      '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminBookDateFrom" class="input" type="date" style="flex:1" /><input id="adminBookDateTo" class="input" type="date" style="flex:1" /></div>' +
       '<div id="adminBooksList"></div>';
     document.getElementById('adminBookSearch').addEventListener('input', renderAdminBooksList);
+    document.getElementById('adminBookDateFrom').addEventListener('change', renderAdminBooksList);
+    document.getElementById('adminBookDateTo').addEventListener('change', renderAdminBooksList);
     renderAdminBooksList();
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
 }
@@ -721,13 +735,19 @@ async function loadAdminBooks() {
 function renderAdminBooksList() {
   var listEl = document.getElementById('adminBooksList');
   var searchEl = document.getElementById('adminBookSearch');
+  var fromEl = document.getElementById('adminBookDateFrom');
+  var toEl = document.getElementById('adminBookDateTo');
   var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var fromVal = fromEl ? fromEl.value : '';
+  var toVal = toEl ? toEl.value : '';
   var books = _adminBooksCache;
   if (q) {
     books = books.filter(function (b) {
       return (b.title || '').toLowerCase().indexOf(q) !== -1 || (b.author || '').toLowerCase().indexOf(q) !== -1;
     });
   }
+  if (fromVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) >= fromVal; });
+  if (toVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) <= toVal; });
   listEl.innerHTML = books.length ? books.map(function (b) {
     return '<div class="card" style="margin-bottom:10px" data-go="bookDetail" data-id="' + b.id + '"><div class="book-card-row">' +
       (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
@@ -912,32 +932,24 @@ async function renderBookDetail() {
   var body = document.getElementById('bookDetailBody');
   try {
     var today = new Date().toISOString().slice(0, 10);
-    var _t0 = Date.now();
     var results = await Promise.all([
       sbGet('books?select=*&id=eq.' + state.bookId),
       sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
       sbGet('finishers?select=id&user_id=eq.' + ME.id),
       sbGet('streaks?select=*&user_id=eq.' + ME.id),
-      isAdminMode ? sbGet('blocked_users?select=user_id') : Promise.resolve([]),
     ]);
-    var _t1 = Date.now();
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
     var myFinishers = results[3];
     var myStreakRows = results[4];
-    var blockedReaderIds = {};
-    results[5].forEach(function (row) { blockedReaderIds[row.user_id] = true; });
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
       var likeRows = await sbGet('comment_likes?select=comment_id,user_id&comment_id=in.(' + comments.map(function (c) { return c.id; }).join(',') + ')');
       likeRows.forEach(function (l) { likeCounts[l.comment_id] = (likeCounts[l.comment_id] || 0) + 1; if (l.user_id === ME.id) myLiked[l.comment_id] = true; });
     }
-    var _t2 = Date.now();
-    var _debugTiming = '⏱ parallel: ' + (_t1 - _t0) + 'ms · likes: ' + (_t2 - _t1) + 'ms · jami: ' + (_t2 - _t0) + 'ms';
-    console.log(_debugTiming);
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
@@ -956,14 +968,11 @@ async function renderBookDetail() {
       '<div class="readers">' + readersList.map(function (p, i) {
         var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
         var rankMark = !started ? '•' : (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1));
-        var isBlockedReader = !!blockedReaderIds[p.user_id];
-        var blockBtnHtml = isAdminMode ? '<button class="btn-small' + (isBlockedReader ? ' danger' : '') + '" data-block-reader="' + p.user_id + '" data-reader-blocked="' + (isBlockedReader ? '1' : '0') + '" style="margin-left:8px;flex-shrink:0">' + (isBlockedReader ? "Blokdan chiqar" : "Blokla") + '</button>' : '';
         return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
           '<div class="reader-rank">' + rankMark + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
           '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
           '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
-          blockBtnHtml +
           '</div>';
       }).join('') + '</div>';
 
@@ -1015,7 +1024,6 @@ async function renderBookDetail() {
     var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
     body.innerHTML =
-      '<div style="font-size:11px;color:var(--accent-1);opacity:0.8;margin-bottom:8px">' + _debugTiming + '</div>' +
       '<div class="hero-row">' + coverHtml +
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
@@ -1045,33 +1053,27 @@ async function renderBookDetail() {
       });
     });
 
-    if (state.detailTab === 'readers' && isAdminMode) {
-      document.querySelectorAll('[data-block-reader]').forEach(function (btn) {
-        btn.addEventListener('click', async function (e) {
-          e.stopPropagation();
-          var id = parseInt(btn.dataset.blockReader, 10);
-          var wasBlocked = btn.dataset.readerBlocked === '1';
-          try {
-            if (wasBlocked) await sbDelete('blocked_users?user_id=eq.' + id);
-            else await sbPost('blocked_users?on_conflict=user_id', { user_id: id }, 'resolution=merge-duplicates,return=representation');
-            vibrate('light');
-            renderBookDetail();
-          } catch (err) { console.error(err); showAlert('Xatolik yuz berdi.'); }
-        });
-      });
-    }
-
     if (state.detailTab === 'comments') {
       document.querySelectorAll('[data-like-comment]').forEach(function (btn) {
         btn.addEventListener('click', async function () {
           var cid = btn.dataset.likeComment;
           var alreadyLiked = btn.classList.contains('liked');
+          var oldCountMatch = btn.textContent.match(/\d+/);
+          var oldCount = oldCountMatch ? parseInt(oldCountMatch[0], 10) : 0;
+          var newLiked = !alreadyLiked;
+          var newCount = newLiked ? oldCount + 1 : Math.max(0, oldCount - 1);
+          btn.classList.toggle('liked', newLiked);
+          btn.textContent = (newLiked ? '❤️' : '🤍') + (newCount ? ' ' + newCount : '');
+          vibrate('light');
           try {
             if (alreadyLiked) await sbDelete('comment_likes?comment_id=eq.' + cid + '&user_id=eq.' + ME.id);
             else await sbPost('comment_likes', { comment_id: cid, user_id: ME.id });
-            vibrate('light');
-            renderBookDetail();
-          } catch (e) { console.error(e); }
+          } catch (e) {
+            console.error(e);
+            btn.classList.toggle('liked', alreadyLiked);
+            btn.textContent = (alreadyLiked ? '❤️' : '🤍') + (oldCount ? ' ' + oldCount : '');
+            showAlert('Xatolik yuz berdi.');
+          }
         });
       });
       document.querySelectorAll('[data-reply-comment]').forEach(function (btn) {
@@ -1128,7 +1130,7 @@ async function renderBookDetail() {
         }
         showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
           try {
-            await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
+            await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
             input.value = '';
             if (replyTarget) expandedReplies[replyTarget.id] = true;
             replyTarget = null;
