@@ -919,6 +919,7 @@ async function renderBookDetail() {
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
       sbGet('finishers?select=id&user_id=eq.' + ME.id),
       sbGet('streaks?select=*&user_id=eq.' + ME.id),
+      isAdminMode ? sbGet('blocked_users?select=user_id') : Promise.resolve([]),
     ]);
     var _t1 = Date.now();
     var book = results[0][0];
@@ -926,6 +927,8 @@ async function renderBookDetail() {
     var comments = results[2];
     var myFinishers = results[3];
     var myStreakRows = results[4];
+    var blockedReaderIds = {};
+    results[5].forEach(function (row) { blockedReaderIds[row.user_id] = true; });
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
@@ -953,11 +956,14 @@ async function renderBookDetail() {
       '<div class="readers">' + readersList.map(function (p, i) {
         var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
         var rankMark = !started ? '•' : (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1));
+        var isBlockedReader = !!blockedReaderIds[p.user_id];
+        var blockBtnHtml = isAdminMode ? '<button class="btn-small' + (isBlockedReader ? ' danger' : '') + '" data-block-reader="' + p.user_id + '" data-reader-blocked="' + (isBlockedReader ? '1' : '0') + '" style="margin-left:8px;flex-shrink:0">' + (isBlockedReader ? "Blokdan chiqar" : "Blokla") + '</button>' : '';
         return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
           '<div class="reader-rank">' + rankMark + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
           '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
           '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+          blockBtnHtml +
           '</div>';
       }).join('') + '</div>';
 
@@ -1006,7 +1012,7 @@ async function renderBookDetail() {
       '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>' +
       '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali komentariya yo\'q.</div>') + '</div>';
 
-    var activeTabHtml = state.detailTab === 'progress' ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
+    var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
     body.innerHTML =
       '<div style="font-size:11px;color:var(--accent-1);opacity:0.8;margin-bottom:8px">' + _debugTiming + '</div>' +
@@ -1020,7 +1026,7 @@ async function renderBookDetail() {
       '<div class="segment">' +
       '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">O\'qiyotganlar</button>' +
       '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Komentariyalar</button>' +
-      '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
+      (isAdminMode ? '' : '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>') +
       '</div>' +
       activeTabHtml;
 
@@ -1038,6 +1044,22 @@ async function renderBookDetail() {
         window.open(url, '_blank');
       });
     });
+
+    if (state.detailTab === 'readers' && isAdminMode) {
+      document.querySelectorAll('[data-block-reader]').forEach(function (btn) {
+        btn.addEventListener('click', async function (e) {
+          e.stopPropagation();
+          var id = parseInt(btn.dataset.blockReader, 10);
+          var wasBlocked = btn.dataset.readerBlocked === '1';
+          try {
+            if (wasBlocked) await sbDelete('blocked_users?user_id=eq.' + id);
+            else await sbPost('blocked_users?on_conflict=user_id', { user_id: id }, 'resolution=merge-duplicates,return=representation');
+            vibrate('light');
+            renderBookDetail();
+          } catch (err) { console.error(err); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    }
 
     if (state.detailTab === 'comments') {
       document.querySelectorAll('[data-like-comment]').forEach(function (btn) {
