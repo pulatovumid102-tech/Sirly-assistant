@@ -100,15 +100,7 @@ body{
 .book-hero-author{ font-size:13px; color:var(--text-muted); margin-bottom:8px; }
 .book-hero-sub{ font-size:12px; color:var(--text-muted); margin-top:4px; }
 
-.ring-row{ display:flex; align-items:center; gap:18px; margin-bottom:14px; }
-.ring-wrap{ position:relative; flex-shrink:0; }
-.ring-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
-.ring-pct{ font-size:24px; font-weight:800; }
-.ring-side{ flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; }
-.ring-pages-label{ font-size:14px; font-weight:700; color:var(--accent-1); }
-.range-slider{ -webkit-appearance:none; appearance:none; width:100%; height:10px; border-radius:99px; background:var(--surface-alt); box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); outline:none; }
-.range-slider::-webkit-slider-thumb{ -webkit-appearance:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); box-shadow:3px 3px 8px var(--shadow-dark); cursor:pointer; }
-.range-slider::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); border:none; box-shadow:3px 3px 8px var(--shadow-dark); cursor:pointer; }
+
 
 .readers{ display:flex; flex-direction:column; gap:8px; }
 .reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); cursor:pointer; }
@@ -119,11 +111,12 @@ body{
 .reader-note{ font-size:11px; color:var(--text-muted); margin-top:2px; }
 .reader-pages{ font-size:12px; color:var(--accent-1); font-weight:700; white-space:nowrap; }
 
-.comment-form{ display:flex; gap:8px; margin-bottom:16px; }
+.comment-form{ display:flex; align-items:flex-end; gap:8px; margin-bottom:16px; }
+.comment-form textarea{ resize:none; font-family:inherit; }
 .comments{ display:flex; flex-direction:column; gap:0; }
 .comment-block{ padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
 .comment-block.reply{ margin-left:22px; border-bottom:none; padding:8px 0 2px; }
-.comment-text{ font-size:13px; line-height:1.6; color:var(--text-muted); }
+.comment-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
 .comment-name{ font-weight:700; color:var(--text); }
 .comment-actions{ display:flex; gap:16px; margin-top:5px; }
 .comment-action-btn{ background:none; border:none; color:var(--text-muted); font-size:11px; font-family:inherit; display:flex; align-items:center; gap:4px; padding:2px 0; }
@@ -179,9 +172,10 @@ if (tg) {
 function vibrate(style) {
   try { if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || 'light'); } catch (e) {}
 }
-function showAlert(msg) {
-  try { if (tg && tg.showAlert) { tg.showAlert(msg); return; } } catch (e) {}
+function showAlert(msg, callback) {
+  try { if (tg && tg.showAlert) { tg.showAlert(msg, callback); return; } } catch (e) {}
   alert(msg);
+  if (callback) callback();
 }
 function confirmAction(msg, onYes) {
   try {
@@ -258,6 +252,18 @@ async function sbUploadFile(bucket, path, file) {
 // ===== Kunlik limit hisoblash =====
 function computeDailyLimit(finishedCount) {
   return Math.min(MAX_DAILY_LIMIT, BASE_DAILY_LIMIT + FINISH_BONUS * finishedCount);
+}
+
+async function getRemainingDailyAllowance() {
+  var today = new Date().toISOString().slice(0, 10);
+  try {
+    var finishers = await sbGet('finishers?select=id&user_id=eq.' + ME.id);
+    var limit = computeDailyLimit(finishers.length);
+    var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
+    var row = rows[0];
+    var pagesToday = (row && row.last_active_date === today) ? (row.pages_today || 0) : 0;
+    return Math.max(0, limit - pagesToday);
+  } catch (e) { console.error(e); return 0; }
 }
 
 // ===== Kunlik odat va o'qish limiti =====
@@ -346,21 +352,6 @@ function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
-}
-
-function circularProgressSVG(pct, size, id) {
-  var stroke = 14;
-  var r = (size - stroke) / 2;
-  var c = size / 2;
-  var circumference = 2 * Math.PI * r;
-  var offset = circumference * (1 - pct / 100);
-  return '<div class="ring-wrap" id="' + id + '" style="width:' + size + 'px;height:' + size + 'px">' +
-    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
-    '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="var(--ring-track)" stroke-width="' + stroke + '"/>' +
-    '<circle class="ring-fill" cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="url(#ringGrad)" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '" transform="rotate(-90 ' + c + ' ' + c + ')"/>' +
-    '<defs><linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#B7E5BA"/><stop offset="100%" stop-color="#5CA87C"/></linearGradient></defs>' +
-    '</svg>' +
-    '</div>';
 }
 
 // ===== Router =====
@@ -856,9 +847,8 @@ async function renderBookDetail() {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
-    var myPct = totalPages ? Math.min(100, Math.round((myPages / totalPages) * 100)) : Math.min(100, myPages);
-    var sliderMax = totalPages || 100;
-    var ringSize = 140, ringStroke = 14, ringR = (ringSize - ringStroke) / 2, ringCirc = 2 * Math.PI * ringR;
+    var remainingAllowance = await getRemainingDailyAllowance();
+    var maxReadableNow = totalPages ? Math.min(totalPages, myPages + remainingAllowance) : (myPages + remainingAllowance);
 
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
     var started = !book.start_date || new Date(book.start_date + 'T00:00:00') <= new Date();
@@ -879,14 +869,13 @@ async function renderBookDetail() {
       }).join('') + '</div>';
 
     var progressTabHtml =
-      (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
-      '<div class="ring-row">' + circularProgressSVG(myPct, ringSize, 'progressRing') +
-      '<div class="ring-side">' +
-      '<div id="pagesLabel" class="ring-pages-label">' + myPages + (totalPages ? ' / ' + totalPages + ' bet' : ' %') + '</div>' +
-      '<input id="progressRange" class="range-slider" type="range" min="0" max="' + sliderMax + '" value="' + myPages + '" />' +
-      '</div></div>' +
+      (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
+      '<div class="hint" style="margin-bottom:14px">Bugun ' + maxReadableNow + ' betgacha o\'qishingiz mumkin.</div>' +
+      '<div class="form">' +
+      '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '" />' +
       '<input id="myNote" class="input" placeholder="Bob/qism eslatma (ixtiyoriy)" value="' + (mine && mine.note ? escapeHtml(mine.note) : '') + '" />' +
       '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
+      '</div>' +
       (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '');
 
     var topLevelComments = comments.filter(function (c) { return !c.reply_to_id; }).sort(function (a, b) {
@@ -917,9 +906,8 @@ async function renderBookDetail() {
     }).join('');
 
     var commentsTabHtml =
-      '<div class="hint" style="margin-bottom:12px">⚠️ Bu xabaringiz boshqa o\'qiyotganlarga ko\'rinadi.</div>' +
       (replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
-      '<div class="comment-form"><input id="commentInput" class="input" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '" />' +
+      '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '"></textarea>' +
       '<button id="sendCommentBtn" class="btn-primary">Yubor</button></div>' +
       '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali komentariya yo\'q.</div>') + '</div>';
 
@@ -935,8 +923,8 @@ async function renderBookDetail() {
       '</div></div>' +
       '<div class="segment">' +
       '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">O\'qiyotganlar</button>' +
-      '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
       '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Komentariyalar</button>' +
+      '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
       '</div>' +
       activeTabHtml;
 
@@ -992,34 +980,29 @@ async function renderBookDetail() {
           });
         });
       });
-      document.getElementById('sendCommentBtn').addEventListener('click', async function () {
+      document.getElementById('sendCommentBtn').addEventListener('click', function () {
         if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
         var input = document.getElementById('commentInput');
         var text = input.value.trim();
         if (!text) return;
-        try {
-          await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
-          input.value = '';
-          if (replyTarget) expandedReplies[replyTarget.id] = true;
-          replyTarget = null;
-          vibrate('light');
-          renderBookDetail();
-        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
+          try {
+            await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
+            input.value = '';
+            if (replyTarget) expandedReplies[replyTarget.id] = true;
+            replyTarget = null;
+            vibrate('light');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
       });
     } else if (state.detailTab === 'progress') {
-      var rangeEl = document.getElementById('progressRange');
-      var pagesLabelEl = document.getElementById('pagesLabel');
-      var ringFillEl = document.querySelector('#progressRing .ring-fill');
-      rangeEl.addEventListener('input', function () {
-        var val = parseInt(rangeEl.value, 10);
-        var pct = totalPages ? Math.min(100, Math.round((val / totalPages) * 100)) : Math.min(100, val);
-        pagesLabelEl.textContent = val + (totalPages ? ' / ' + totalPages + ' bet' : ' %');
-        if (ringFillEl) ringFillEl.setAttribute('stroke-dashoffset', String(ringCirc * (1 - pct / 100)));
-      });
-
       document.getElementById('updateProgressBtn').addEventListener('click', async function () {
         if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
-        var requestedPages = parseInt(rangeEl.value, 10) || 0;
+        var pagesInputEl = document.getElementById('pagesInput');
+        var requestedPages = parseInt(pagesInputEl.value, 10);
+        if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
+        if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
         var oldPages = mine ? mine.pages_read : 0;
         var delta = requestedPages - oldPages;
         var note = document.getElementById('myNote').value.trim();
