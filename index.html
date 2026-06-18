@@ -323,6 +323,7 @@ var state = { view: 'modeSelect', tab: 'mine', bookId: null, detailTab: 'readers
 var replyTarget = null;
 var editTarget = null;
 var expandedReplies = {};
+var isAdminMode = false;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
@@ -419,6 +420,7 @@ function renderAdminLogin() {
     var login = document.getElementById('adminLoginInput').value.trim();
     var pass = document.getElementById('adminPassInput').value.trim();
     if (login === 'testadmin' && pass === 'testadmin') {
+      isAdminMode = true;
       state.adminTab = 'users';
       state.view = 'admin';
       render();
@@ -621,7 +623,7 @@ async function renderUserBooks() {
 
 // ===== Admin panel =====
 async function renderAdmin() {
-  setBackButton(true, function () { state.view = 'modeSelect'; render(); });
+  setBackButton(true, function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
   app.innerHTML =
     '<div class="screen">' +
     '<div class="header"><div class="h-title">Admin</div><button class="back" id="adminExitBtn" style="margin-left:auto">✕</button></div>' +
@@ -631,7 +633,7 @@ async function renderAdmin() {
     '</div>' +
     '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
     '</div>';
-  document.getElementById('adminExitBtn').addEventListener('click', function () { state.view = 'modeSelect'; render(); });
+  document.getElementById('adminExitBtn').addEventListener('click', function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
   document.querySelectorAll('[data-admintab]').forEach(function (b) {
     b.addEventListener('click', function () { state.adminTab = b.dataset.admintab; renderAdmin(); });
   });
@@ -727,7 +729,7 @@ function renderAdminBooksList() {
     });
   }
   listEl.innerHTML = books.length ? books.map(function (b) {
-    return '<div class="card" style="margin-bottom:10px"><div class="book-card-row">' +
+    return '<div class="card" style="margin-bottom:10px" data-go="bookDetail" data-id="' + b.id + '"><div class="book-card-row">' +
       (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
       '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
       (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
@@ -738,7 +740,8 @@ function renderAdminBooksList() {
   }).join('') : '<div class="empty">Kitob topilmadi.</div>';
 
   document.querySelectorAll('[data-delete-book]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
       var id = btn.dataset.deleteBook;
       confirmAction("Kitobni butunlay o'chirish? Bu amalni qaytarib bo'lmaydi.", async function () {
         try {
@@ -751,7 +754,8 @@ function renderAdminBooksList() {
     });
   });
   document.querySelectorAll('[data-edit-book]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
       var book = _adminBooksCache.find(function (b) { return String(b.id) === btn.dataset.editBook; });
       openEditBookForm(book);
     });
@@ -899,9 +903,12 @@ function renderAddBook() {
 
 // ===== Kitob sahifasi =====
 async function renderBookDetail() {
-  setBackButton(true, function () { state.view = 'home'; render(); });
-  renderShell('<div class="header"><button class="back" data-go="home">←</button><div class="h-title">Kitob</div></div>' +
-    '<div id="bookDetailBody"><div class="loading">Yuklanmoqda...</div></div>');
+  var backView = isAdminMode ? 'admin' : 'home';
+  setBackButton(true, function () { state.view = backView; render(); });
+  var headerHtml = '<div class="header"><button class="back" data-go="' + backView + '">←</button><div class="h-title">Kitob</div></div>' +
+    '<div id="bookDetailBody"><div class="loading">Yuklanmoqda...</div></div>';
+  if (isAdminMode) app.innerHTML = '<div class="screen">' + headerHtml + '</div>';
+  else renderShell(headerHtml);
   var body = document.getElementById('bookDetailBody');
   try {
     var today = new Date().toISOString().slice(0, 10);
@@ -983,7 +990,7 @@ async function renderBookDetail() {
         (!isReply ? '<button class="comment-action-btn" data-reply-comment="' + c.id + '" data-reply-name="' + escapeHtml(c.user_name) + '">↩ Javob</button>' : '') +
         (replyCount > 0 ? '<button class="comment-action-btn" data-toggle-replies="' + c.id + '">' + (expandedReplies[c.id] ? '▴ Javoblarni yashirish' : '▾ Javoblar (' + replyCount + ')') + '</button>' : '') +
         (isMine ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
-        ((isMine || ME.id === ADMIN_ID) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
+        ((isMine || ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
         '</div></div>';
     }
 
