@@ -40,7 +40,7 @@ body{
 .h-title{ font-size:20px; font-weight:700; }
 .back{ background:var(--surface); box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 
-.segment{ display:flex; background:var(--surface-alt); border-radius:var(--radius-md); padding:5px; gap:4px; margin-bottom:16px; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.segment{ display:flex; background:var(--surface-alt); border-radius:var(--radius-md); padding:5px; gap:4px; margin-bottom:14px; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
 .seg-btn{ flex:1; border:none; background:transparent; color:var(--text-muted); padding:10px 4px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; font-family:inherit; line-height:1.3; }
 .seg-btn.active{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); box-shadow:4px 4px 10px var(--shadow-dark); }
 
@@ -58,7 +58,7 @@ body{
 .cover-thumb{ width:48px; height:68px; object-fit:cover; border-radius:10px; flex-shrink:0; box-shadow:4px 4px 10px var(--shadow-dark); }
 .cover-thumb-placeholder{ width:48px; height:68px; border-radius:10px; flex-shrink:0; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:20px; }
 
-.streak-badge{ display:flex; align-items:center; gap:12px; background:var(--surface); border-radius:var(--radius-md); padding:14px 16px; margin-bottom:16px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
+.streak-badge{ display:flex; align-items:center; gap:12px; background:var(--surface); border-radius:var(--radius-md); padding:14px 16px; margin-bottom:14px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
 .streak-fire{ font-size:26px; }
 .streak-num{ font-size:18px; font-weight:800; }
 .streak-label{ font-size:11px; color:var(--text-muted); }
@@ -84,18 +84,14 @@ body{
 
 .file-btn{ display:block; text-align:center; background:var(--surface-alt); color:var(--text-muted); border-radius:var(--radius-sm); padding:13px 14px; font-size:13px; font-weight:600; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); cursor:pointer; }
 .cover-preview-img{ width:84px; height:118px; object-fit:cover; border-radius:var(--radius-sm); margin-top:4px; box-shadow:5px 5px 12px var(--shadow-dark); }
-.pdf-filename{ font-size:12px; color:var(--accent-1); margin-top:-4px; }
 
-.hero-row{ display:flex; gap:16px; margin-bottom:14px; }
+.hero-row{ display:flex; gap:16px; margin-bottom:18px; }
 .cover-hero{ width:84px; height:118px; object-fit:cover; border-radius:var(--radius-sm); flex-shrink:0; box-shadow:6px 6px 14px var(--shadow-dark); }
 .cover-hero-placeholder{ width:84px; height:118px; border-radius:var(--radius-sm); flex-shrink:0; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:32px; }
 .hero-info{ flex:1; min-width:0; padding-top:2px; }
 .book-hero-title{ font-size:20px; font-weight:800; margin-bottom:4px; }
 .book-hero-author{ font-size:13px; color:var(--text-muted); margin-bottom:8px; }
 .book-hero-sub{ font-size:12px; color:var(--text-muted); }
-
-.pdf-row{ display:flex; align-items:center; justify-content:space-between; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:16px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); font-size:13px; }
-.pdf-link{ color:var(--accent-1); font-weight:700; font-size:13px; text-decoration:none; }
 
 .ring-row{ display:flex; align-items:center; gap:18px; margin-bottom:14px; }
 .ring-wrap{ position:relative; flex-shrink:0; }
@@ -166,6 +162,15 @@ var ME = (function () {
   return { id: 0, name: 'Mehmon' };
 })();
 
+// ===== Yordamchi: sana formatlash =====
+function formatDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '.' + mm + '.' + d.getFullYear();
+}
+
 // ===== Supabase yordamchi funksiyalar =====
 async function sbGet(path) {
   var res = await fetch(SB_URL + '/rest/v1/' + path, { headers: SB_H });
@@ -181,14 +186,6 @@ async function sbPost(path, body, prefer) {
   if (!res.ok) throw new Error('SB POST xato: ' + res.status + ' ' + (await res.text()));
   var txt = await res.text();
   return txt ? JSON.parse(txt) : null;
-}
-async function sbPatch(path, body) {
-  var res = await fetch(SB_URL + '/rest/v1/' + path, {
-    method: 'PATCH',
-    headers: Object.assign({}, SB_H, { Prefer: 'return=minimal' }),
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error('SB PATCH xato: ' + res.status + ' ' + (await res.text()));
 }
 async function sbDelete(path) {
   var res = await fetch(SB_URL + '/rest/v1/' + path, { method: 'DELETE', headers: SB_H });
@@ -224,7 +221,7 @@ async function bumpStreak() {
 }
 
 // ===== Holat =====
-var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers' };
+var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers', listData: [] };
 var app = document.getElementById('app');
 var _backHandler = null;
 
@@ -307,9 +304,11 @@ async function renderHome() {
     '<button class="seg-btn' + (state.tab === 'mine' ? ' active' : '') + '" data-tab="mine">Mening kitoblarim</button>' +
     '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Hammasi</button>' +
     '</div>' +
+    '<input id="bookListSearch" class="input" placeholder="Kitob yoki muallif bo\'yicha qidirish..." style="margin-bottom:14px" />' +
     '<div id="bookList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>',
     { fab: true }
   );
+  document.getElementById('bookListSearch').addEventListener('input', renderFilteredList);
   if (state.tab === 'mine') loadStreakBadge();
   else document.getElementById('streakBadge').innerHTML = '';
   await loadAndRenderBookList();
@@ -321,7 +320,9 @@ async function loadStreakBadge() {
     var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
     var s = rows[0];
     var n = s ? s.current_streak : 0;
-    el.innerHTML = '<div class="streak-badge"><div class="streak-fire">🔥</div><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">' + (n > 0 ? "ketma-ket o'qiyapsiz" : "bugun o'qishni boshlang") + '</div></div></div>';
+    el.innerHTML = n > 0
+      ? '<div class="streak-badge"><div class="streak-fire">🔥</div><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div></div>'
+      : '';
   } catch (e) { el.innerHTML = ''; console.error(e); }
 }
 
@@ -330,36 +331,60 @@ async function loadAndRenderBookList() {
   try {
     if (state.tab === 'mine') {
       var rows = await sbGet('progress?select=*,books(*)&user_id=eq.' + ME.id + '&order=updated_at.desc');
-      if (!rows.length) {
-        listEl.innerHTML = '<div class="empty">Hali kitob boshlamadingiz.<br>Pastdagi + tugmasi bilan qo\'shing.</div>';
-        return;
-      }
-      listEl.innerHTML = rows.map(function (r) {
+      state.listData = rows.map(function (r) {
         var b = r.books;
         var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
-        return bookCard(b, pct, r.pages_read);
-      }).join('');
+        return { book: b, pct: pct, pagesRead: r.pages_read, readerCount: null };
+      });
     } else {
       var books = await sbGet('books?select=*&order=created_at.desc');
       var progress = await sbGet('progress?select=book_id');
       var counts = {};
       progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
-      if (!books.length) { listEl.innerHTML = '<div class="empty">Hozircha kitob yo\'q.<br>Birinchi bo\'lib siz qo\'shing!</div>'; return; }
-      listEl.innerHTML = books.map(function (b) {
-        return bookCard(b, null, null, counts[b.id] || 0);
-      }).join('');
+      state.listData = books.map(function (b) {
+        return { book: b, pct: null, pagesRead: null, readerCount: counts[b.id] || 0 };
+      });
     }
+    renderFilteredList();
   } catch (e) {
     listEl.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi. Internetni tekshiring.</div>';
     console.error(e);
   }
 }
 
+function renderFilteredList() {
+  var listEl = document.getElementById('bookList');
+  var searchEl = document.getElementById('bookListSearch');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var items = state.listData || [];
+  if (q) {
+    items = items.filter(function (it) {
+      var t = (it.book.title || '').toLowerCase();
+      var a = (it.book.author || '').toLowerCase();
+      return t.indexOf(q) !== -1 || a.indexOf(q) !== -1;
+    });
+  }
+  if (!items.length) {
+    if (!(state.listData || []).length) {
+      listEl.innerHTML = state.tab === 'mine'
+        ? '<div class="empty">Hali kitob boshlamadingiz.<br>Pastdagi + tugmasi bilan qo\'shing.</div>'
+        : '<div class="empty">Hozircha kitob yo\'q.<br>Birinchi bo\'lib siz qo\'shing!</div>';
+    } else {
+      listEl.innerHTML = '<div class="empty">Hech narsa topilmadi.</div>';
+    }
+    return;
+  }
+  listEl.innerHTML = items.map(function (it) {
+    return bookCard(it.book, it.pct, it.pagesRead, it.readerCount);
+  }).join('');
+}
+
 function bookCard(b, pct, pagesRead, readerCount) {
   var inner;
   if (pct !== null) {
+    var metaText = b.total_pages ? (pagesRead + ' · ' + pct + '%') : (pagesRead + ' bet');
     inner = '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
-      '<div class="card-meta">' + pagesRead + (b.total_pages ? ' / ' + b.total_pages + ' bet' : ' bet') + ' · ' + pct + '%</div>';
+      '<div class="card-meta">' + metaText + '</div>';
   } else {
     inner = '<div class="card-meta">👥 ' + (readerCount || 0) + ' kishi o\'qiyapti' + (b.total_pages ? ' · ' + b.total_pages + ' bet' : '') + '</div>';
   }
@@ -387,9 +412,6 @@ function renderAddBook() {
     '<label class="file-btn" for="coverInput">🖼️ Kitob rasmini tanlash (ixtiyoriy)</label>' +
     '<input type="file" id="coverInput" accept="image/*" style="display:none" />' +
     '<div id="coverPreview"></div>' +
-    '<label class="file-btn" for="pdfInput">📄 PDF fayl (ixtiyoriy, keyin ham qo\'shsa bo\'ladi)</label>' +
-    '<input type="file" id="pdfInput" accept="application/pdf" style="display:none" />' +
-    '<div id="pdfFileName" class="pdf-filename"></div>' +
     '<button id="createBookBtn" class="btn-primary full">Kitobni qo\'shish</button>' +
     '</div>' +
     '</div>'
@@ -430,14 +452,6 @@ function renderAddBook() {
     prevEl.innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="cover-preview-img" />';
   });
 
-  document.getElementById('pdfInput').addEventListener('change', function () {
-    var f = this.files[0];
-    var lbl = document.getElementById('pdfFileName');
-    if (!f) { lbl.textContent = ''; return; }
-    if (f.size > 45 * 1024 * 1024) { showAlert('PDF hajmi juda katta (45MB dan oshmasin).'); this.value = ''; lbl.textContent = ''; return; }
-    lbl.textContent = '📎 ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)';
-  });
-
   document.getElementById('createBookBtn').addEventListener('click', async function () {
     var title = newFormEl.dataset.title || searchEl.value.trim();
     if (!title) return;
@@ -445,31 +459,25 @@ function renderAddBook() {
     var tpVal = document.getElementById('totalPages').value.trim();
     var totalPages = tpVal ? parseInt(tpVal, 10) : null;
     var coverFile = document.getElementById('coverInput').files[0];
-    var pdfFile = document.getElementById('pdfInput').files[0];
     var btn = this;
     btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
-    var warnings = [];
-    var coverUrl = null, pdfUrl = null;
+    var coverFailed = false;
+    var coverUrl = null;
     try {
       if (coverFile) {
         try {
           var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
           coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
-        } catch (e1) { console.error(e1); warnings.push('rasm'); }
-      }
-      if (pdfFile) {
-        try {
-          pdfUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'pdfs/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.pdf', pdfFile);
-        } catch (e2) { console.error(e2); warnings.push('PDF'); }
+        } catch (e1) { console.error(e1); coverFailed = true; }
       }
       var created = await sbPost('books', {
         title: title, author: author || null, total_pages: totalPages,
-        cover_url: coverUrl, pdf_url: pdfUrl, created_by_id: ME.id, created_by_name: ME.name,
+        cover_url: coverUrl, created_by_id: ME.id, created_by_name: ME.name,
       });
       var book = created[0];
       await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0 });
       vibrate('medium');
-      if (warnings.length) showAlert(warnings.join(' va ') + " yuklanmadi, lekin kitob qo'shildi.");
+      if (coverFailed) showAlert("Rasm yuklanmadi, lekin kitob qo'shildi.");
       state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'readers'; render();
     } catch (e) {
       console.error(e); showAlert('Xatolik yuz berdi.');
@@ -497,9 +505,6 @@ async function renderBookDetail() {
     var ringSize = 140, ringStroke = 14, ringR = (ringSize - ringStroke) / 2, ringCirc = 2 * Math.PI * ringR;
 
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
-    var pdfHtml = book.pdf_url
-      ? '<div class="pdf-row"><span>📄 Kitob PDF fayli</span><a class="pdf-link" href="' + book.pdf_url + '" target="_blank" rel="noopener">Ochish</a></div>'
-      : '<div class="pdf-row"><span>📄 PDF hali yo\'q</span><label class="pdf-link" for="addPdfInput" style="cursor:pointer">+ Qo\'shish</label><input type="file" id="addPdfInput" accept="application/pdf" style="display:none" /></div>';
 
     var readersTabHtml =
       '<div class="readers">' + progress.map(function (p, i) {
@@ -508,12 +513,14 @@ async function renderBookDetail() {
         return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '">' +
           '<div class="reader-rank">' + medal + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+          '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div>' +
           (p.note ? '<div class="reader-note">' + escapeHtml(p.note) + '</div>' : '') + '</div>' +
           '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
           '</div>';
       }).join('') + '</div>';
 
     var progressTabHtml =
+      (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
       '<div class="ring-row">' + circularProgressSVG(myPct, ringSize, 'progressRing') +
       '<div class="ring-side">' +
       '<div id="pagesLabel" class="ring-pages-label">' + myPages + (totalPages ? ' / ' + totalPages + ' bet' : ' %') + '</div>' +
@@ -536,8 +543,8 @@ async function renderBookDetail() {
       '<div class="hero-row">' + coverHtml +
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
-      '<div class="book-hero-sub">🏁 Birinchi: ' + escapeHtml(book.created_by_name) + (totalPages ? ' · ' + totalPages + ' bet' : '') + '</div></div></div>' +
-      pdfHtml +
+      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet</div>' : '') +
+      '</div></div>' +
       '<div class="segment">' +
       '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">O\'qiyotganlar</button>' +
       '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>' +
@@ -600,21 +607,6 @@ async function renderBookDetail() {
           } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
         });
       }
-    }
-
-    var addPdfInput = document.getElementById('addPdfInput');
-    if (addPdfInput) {
-      addPdfInput.addEventListener('change', async function () {
-        var f = this.files[0];
-        if (!f) return;
-        if (f.size > 45 * 1024 * 1024) { showAlert('PDF hajmi juda katta (45MB dan oshmasin).'); return; }
-        try {
-          var url = await sbUploadFile(HUJJATLAR_BUCKET, 'pdfs/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.pdf', f);
-          await sbPatch('books?id=eq.' + book.id, { pdf_url: url });
-          vibrate('medium');
-          renderBookDetail();
-        } catch (e) { console.error(e); showAlert('PDF yuklanmadi.'); }
-      });
     }
   } catch (e) {
     body.innerHTML = '<div class="empty">Xatolik: kitob topilmadi.</div>';
