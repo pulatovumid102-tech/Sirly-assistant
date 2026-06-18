@@ -319,7 +319,7 @@ async function tryRecordFinish(book) {
 }
 
 // ===== Holat =====
-var state = { view: 'home', tab: 'mine', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'users' };
+var state = { view: 'modeSelect', tab: 'mine', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'users' };
 var replyTarget = null;
 var editTarget = null;
 var expandedReplies = {};
@@ -360,7 +360,9 @@ function avatarHtml(photoUrl, size) {
 
 // ===== Router =====
 function render() {
-  if (state.view === 'home') renderHome();
+  if (state.view === 'modeSelect') renderModeSelect();
+  else if (state.view === 'adminLogin') renderAdminLogin();
+  else if (state.view === 'home') renderHome();
   else if (state.view === 'addBook') renderAddBook();
   else if (state.view === 'bookDetail') renderBookDetail();
   else if (state.view === 'userBooks') renderUserBooks();
@@ -374,7 +376,6 @@ function currentSection() {
   if (state.view === 'sport') return 'sport';
   if (state.view === 'ovqat') return 'ovqat';
   if (state.view === 'profile') return 'profile';
-  if (state.view === 'admin') return 'admin';
   return 'home';
 }
 
@@ -386,11 +387,45 @@ function tabBtn(view, icon, label) {
 function renderShell(innerHtml, opts) {
   opts = opts || {};
   var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('ovqat', '🥗', 'Ovqat') + tabBtn('profile', '👤', 'Profil');
-  if (ME.id === ADMIN_ID) tabs += tabBtn('admin', '⚙️', 'Admin');
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
     (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
     '<nav class="tabbar">' + tabs + '</nav>';
+}
+
+// ===== Rejim tanlash va admin kirish =====
+function renderModeSelect() {
+  setBackButton(false);
+  app.innerHTML =
+    '<div class="screen" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh;gap:14px">' +
+    '<div style="text-align:center;margin-bottom:24px"><div style="font-size:46px;margin-bottom:8px">📚</div><div style="font-size:21px;font-weight:700">O\'qish Klubi</div></div>' +
+    '<button class="btn-primary full" data-go="home" style="padding:18px 16px;font-size:15px">🌱 Shaxsiy rivojlanish</button>' +
+    '<button class="btn-primary full" data-go="adminLogin" style="padding:18px 16px;font-size:15px;background:var(--surface);color:var(--text);box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light)">🔐 Admin rejimi</button>' +
+    '</div>';
+}
+
+function renderAdminLogin() {
+  setBackButton(true, function () { state.view = 'modeSelect'; render(); });
+  app.innerHTML =
+    '<div class="screen">' +
+    '<div class="header"><button class="back" data-go="modeSelect">←</button><div class="h-title">Admin kirish</div></div>' +
+    '<div class="form">' +
+    '<input id="adminLoginInput" class="input" placeholder="Login" autocomplete="off" />' +
+    '<input id="adminPassInput" class="input" type="password" placeholder="Parol" autocomplete="off" />' +
+    '<button id="adminLoginBtn" class="btn-primary full">Kirish</button>' +
+    '</div>' +
+    '</div>';
+  document.getElementById('adminLoginBtn').addEventListener('click', function () {
+    var login = document.getElementById('adminLoginInput').value.trim();
+    var pass = document.getElementById('adminPassInput').value.trim();
+    if (login === 'testadmin' && pass === 'testadmin') {
+      state.adminTab = 'users';
+      state.view = 'admin';
+      render();
+    } else {
+      showAlert('Login yoki parol xato.');
+    }
+  });
 }
 
 // ===== Bosh sahifa =====
@@ -586,13 +621,17 @@ async function renderUserBooks() {
 
 // ===== Admin panel =====
 async function renderAdmin() {
-  setBackButton(false);
-  renderShell('<div class="header"><div class="h-title">Admin</div></div>' +
+  setBackButton(true, function () { state.view = 'modeSelect'; render(); });
+  app.innerHTML =
+    '<div class="screen">' +
+    '<div class="header"><div class="h-title">Admin</div><button class="back" id="adminExitBtn" style="margin-left:auto">✕</button></div>' +
     '<div class="segment">' +
     '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar</button>' +
     '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar</button>' +
     '</div>' +
-    '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>');
+    '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
+    '</div>';
+  document.getElementById('adminExitBtn').addEventListener('click', function () { state.view = 'modeSelect'; render(); });
   document.querySelectorAll('[data-admintab]').forEach(function (b) {
     b.addEventListener('click', function () { state.adminTab = b.dataset.admintab; renderAdmin(); });
   });
