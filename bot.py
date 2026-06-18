@@ -171,6 +171,62 @@ async def check_scheduled_books(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_scheduled_books xato: {e}")
 
 
+async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            books_r = await client.get(
+                f"{SB_URL}/rest/v1/books",
+                headers=SB_HEADERS,
+                params={"select": "id,title,start_date"},
+            )
+            books = books_r.json()
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            for b in books:
+                start_date = b.get("start_date")
+                if start_date and start_date > today_str:
+                    continue
+                prog_r = await client.get(
+                    f"{SB_URL}/rest/v1/progress",
+                    headers=SB_HEADERS,
+                    params={
+                        "book_id": f"eq.{b['id']}",
+                        "select": "user_id,pages_read",
+                        "order": "pages_read.desc",
+                    },
+                )
+                progress = prog_r.json()
+                if not progress:
+                    continue
+                tracker_r = await client.get(
+                    f"{SB_URL}/rest/v1/rank_tracker",
+                    headers=SB_HEADERS,
+                    params={"book_id": f"eq.{b['id']}", "select": "user_id,last_rank"},
+                )
+                tracker_map = {row["user_id"]: row["last_rank"] for row in tracker_r.json()}
+                for idx, p in enumerate(progress):
+                    current_rank = idx + 1
+                    uid = p["user_id"]
+                    prev_rank = tracker_map.get(uid)
+                    if prev_rank is not None and current_rank > prev_rank:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=uid,
+                                text=f"📉 \"{b['title']}\" kitobida darajangiz pastladi: endi {current_rank}-o'rindasiz.",
+                            )
+                        except Exception as e:
+                            logger.error(f"Daraja xabari yuborilmadi (user_id={uid}): {e}")
+                    try:
+                        await client.post(
+                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=book_id,user_id",
+                            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
+                            json={"book_id": b["id"], "user_id": uid, "last_rank": current_rank},
+                        )
+                    except Exception as e:
+                        logger.error(f"rank_tracker yangilanmadi (book_id={b['id']}, user_id={uid}): {e}")
+    except Exception as e:
+        logger.error(f"check_rank_drops xato: {e}")
+
+
 # ===== Asosiy =====
 def main():
     application = Application.builder().token(TOKEN).build()
@@ -181,6 +237,7 @@ def main():
     if application.job_queue:
         application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
         application.job_queue.run_repeating(check_scheduled_books, interval=15, first=8)
+        application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
     else:
         logger.warning(
             "job_queue mavjud emas. Terminalda quyidagini ishga tushiring: "
