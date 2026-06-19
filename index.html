@@ -336,6 +336,7 @@ var editTarget = null;
 var expandedReplies = {};
 var isAdminMode = false;
 var _bdCache = null;
+var noteEditTarget = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
@@ -1101,9 +1102,21 @@ function renderBookDetailBody() {
 
     var notesHtml = myNotes.length
       ? myNotes.map(function (n) {
+          var fromPage = (n.pages_from !== null && n.pages_from !== undefined) ? n.pages_from : 0;
+          var rangeLabel = fromPage + '-' + n.pages_read;
+          if (noteEditTarget && String(noteEditTarget) === String(n.id)) {
+            return '<div class="note-entry">' +
+              '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:</div>' +
+              '<textarea class="input" id="noteEditInput" rows="3" maxlength="200">' + escapeHtml(n.note) + '</textarea>' +
+              '<div style="display:flex;gap:8px;margin-top:8px">' +
+              '<button class="btn-small" data-save-note-edit="' + n.id + '">Saqlash</button>' +
+              '<button class="btn-small" data-cancel-note-edit>Bekor qilish</button>' +
+              '</div></div>';
+          }
           return '<div class="note-entry">' +
-            '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + n.pages_read + ' bet uchun yozilgan fikr:</div>' +
+            '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:' + (n.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
             '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
+            '<button class="comment-action-btn" data-edit-note="' + n.id + '" style="margin-top:4px">✏ Tahrirlash</button>' +
             '</div>';
         }).join('')
       : '<div class="empty">Hali fikr yozilmagan.</div>';
@@ -1316,7 +1329,7 @@ function renderBookDetailBody() {
             book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
           }, 'resolution=merge-duplicates,return=representation');
           var insertedNote = await sbPost('reading_notes', {
-            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, note: noteText,
+            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText,
           });
           if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
           vibrate('light');
@@ -1334,8 +1347,39 @@ function renderBookDetailBody() {
           if (medalMsg) myFinishers.push({ id: 'local-' + Date.now() });
           if (medalMsg) showAlert(medalMsg);
           else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
+          else showAlert('Saqlandi.');
           renderBookDetail();
         } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
+
+      document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          noteEditTarget = btn.dataset.editNote;
+          renderBookDetail();
+        });
+      });
+      var cancelNoteEditBtn = document.querySelector('[data-cancel-note-edit]');
+      if (cancelNoteEditBtn) {
+        cancelNoteEditBtn.addEventListener('click', function () {
+          noteEditTarget = null;
+          renderBookDetail();
+        });
+      }
+      document.querySelectorAll('[data-save-note-edit]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var noteId = btn.dataset.saveNoteEdit;
+          var editInputEl = document.getElementById('noteEditInput');
+          var newText = editInputEl.value.trim();
+          if (!newText) { showAlert('Fikr matni bo\'sh bo\'lishi mumkin emas.'); return; }
+          try {
+            await sbPatch('reading_notes?id=eq.' + noteId, { note: newText, edited: true });
+            var editedNote = myNotes.find(function (nn) { return String(nn.id) === String(noteId); });
+            if (editedNote) { editedNote.note = newText; editedNote.edited = true; }
+            noteEditTarget = null;
+            vibrate('light');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
       });
 
       var removeBtn = document.getElementById('removeFromListBtn');
@@ -1367,7 +1411,7 @@ document.addEventListener('click', function (e) {
   var goEl = e.target.closest('[data-go]');
   if (goEl) {
     var view = goEl.dataset.go;
-    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; _bdCache = null; }
+    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; _bdCache = null; }
     if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
     state.view = view;
     render();
