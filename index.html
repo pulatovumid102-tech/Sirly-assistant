@@ -124,6 +124,7 @@ body{
 .note-entry{ padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
 .note-meta{ font-size:11px; color:var(--accent-1); margin-bottom:4px; }
 .note-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
+.note-photo-img{ width:100%; max-width:220px; border-radius:var(--radius-sm); margin-bottom:8px; display:block; box-shadow:5px 5px 12px var(--shadow-dark); }
 .comment-action-btn{ background:none; border:none; color:var(--text-muted); font-size:11px; font-family:inherit; display:flex; align-items:center; gap:4px; padding:2px 0; }
 .comment-action-btn.liked{ color:var(--accent-1); font-weight:700; }
 .reply-banner{ display:flex; align-items:center; justify-content:space-between; background:var(--surface-alt); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--accent-1); }
@@ -1169,6 +1170,7 @@ function renderBookDetailBody() {
           }
           return '<div class="note-entry">' +
             '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:' + (n.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
+            (n.photo_url ? '<img src="' + n.photo_url + '" class="note-photo-img" />' : '') +
             '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
             '<button class="comment-action-btn" data-edit-note="' + n.id + '" style="margin-top:4px">✏ Tahrirlash</button>' +
             '</div>';
@@ -1182,6 +1184,9 @@ function renderBookDetailBody() {
       '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '" />' +
       '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."></textarea>' +
       '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
+      '<label class="file-btn" for="noteCoverInput">📷 Rasm yuklash (majburiy)</label>' +
+      '<input type="file" id="noteCoverInput" accept="image/*" style="display:none" />' +
+      '<div id="noteCoverPreview"></div>' +
       '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
       '</div>' +
       (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '') +
@@ -1362,48 +1367,71 @@ function renderBookDetailBody() {
           noteCharCountEl.textContent = noteInputEl.value.length;
         });
       }
-      document.getElementById('updateProgressBtn').addEventListener('click', async function () {
+      var noteCoverInputEl = document.getElementById('noteCoverInput');
+      if (noteCoverInputEl) {
+        noteCoverInputEl.addEventListener('change', function () {
+          var f = this.files[0];
+          var prevEl = document.getElementById('noteCoverPreview');
+          if (!f) { prevEl.innerHTML = ''; return; }
+          if (f.size > 8 * 1024 * 1024) { showAlert('Rasm hajmi katta (8MB dan oshmasin).'); this.value = ''; prevEl.innerHTML = ''; return; }
+          prevEl.innerHTML = '<div style="position:relative;display:inline-block">' +
+            '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />' +
+            '<button type="button" id="removeNoteCoverBtn" style="position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:14px;font-weight:700;line-height:1;cursor:pointer">✕</button>' +
+            '</div>';
+          document.getElementById('removeNoteCoverBtn').addEventListener('click', function () {
+            document.getElementById('noteCoverInput').value = '';
+            prevEl.innerHTML = '';
+          });
+        });
+      }
+      document.getElementById('updateProgressBtn').addEventListener('click', function () {
         if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
         var pagesInputEl = document.getElementById('pagesInput');
         var requestedPages = parseInt(pagesInputEl.value, 10);
         if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
         var noteText = noteInputEl.value.trim();
         if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
+        var photoFile = document.getElementById('noteCoverInput').files[0];
+        if (!photoFile) { showAlert("Rasm yuklang — rasmsiz saqlab bo'lmaydi."); return; }
         if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
         var oldPages = mine ? mine.pages_read : 0;
         var delta = requestedPages - oldPages;
-        try {
-          var limitInfo = await recordDailyProgress(delta);
-          if (limitInfo.blocked) {
-            showAlert("Bugungi o'qish limitingiz (" + limitInfo.limit + " bet) tugadi. Ertaga davom etasiz!");
-            return;
-          }
-          var finalPages = oldPages + limitInfo.allowedDelta;
-          await sbPost('progress?on_conflict=book_id,user_id', {
-            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
-          }, 'resolution=merge-duplicates,return=representation');
-          var insertedNote = await sbPost('reading_notes', {
-            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText,
-          });
-          if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
-          vibrate('light');
-          var nowIso = new Date().toISOString();
-          if (mine) {
-            mine.pages_read = finalPages;
-            mine.updated_at = nowIso;
-          } else {
-            mine = { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: nowIso, started_at: nowIso };
-            progress.push(mine);
-          }
-          progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
-          var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
-          var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
-          if (medalMsg) myFinishers.push({ id: 'local-' + Date.now() });
-          if (medalMsg) showAlert(medalMsg);
-          else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
-          else showAlert('Saqlandi.');
-          renderBookDetail();
-        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
+          try {
+            var limitInfo = await recordDailyProgress(delta);
+            if (limitInfo.blocked) {
+              showAlert("Bugungi o'qish limitingiz (" + limitInfo.limit + " bet) tugadi. Ertaga davom etasiz!");
+              return;
+            }
+            var finalPages = oldPages + limitInfo.allowedDelta;
+            await sbPost('progress?on_conflict=book_id,user_id', {
+              book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
+            }, 'resolution=merge-duplicates,return=representation');
+            var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
+            var photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
+            var insertedNote = await sbPost('reading_notes', {
+              book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl,
+            });
+            if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
+            vibrate('light');
+            var nowIso = new Date().toISOString();
+            if (mine) {
+              mine.pages_read = finalPages;
+              mine.updated_at = nowIso;
+            } else {
+              mine = { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: nowIso, started_at: nowIso };
+              progress.push(mine);
+            }
+            progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+            var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
+            var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
+            if (medalMsg) myFinishers.push({ id: 'local-' + Date.now() });
+            if (medalMsg) showAlert(medalMsg);
+            else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
+            else showAlert('Saqlandi.');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
       });
 
       document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
