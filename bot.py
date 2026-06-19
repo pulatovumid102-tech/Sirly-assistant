@@ -227,20 +227,25 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_rank_drops xato: {e}")
 
 
+async def get_all_user_ids(client):
+    user_ids = set()
+    for table in ("progress", "comments", "finishers"):
+        r = await client.get(
+            f"{SB_URL}/rest/v1/{table}",
+            headers=SB_HEADERS,
+            params={"select": "user_id"},
+        )
+        for row in r.json():
+            uid = row.get("user_id")
+            if uid:
+                user_ids.add(uid)
+    return user_ids
+
+
 async def send_daily_limit_reset(context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            user_ids = set()
-            for table in ("progress", "comments", "finishers"):
-                r = await client.get(
-                    f"{SB_URL}/rest/v1/{table}",
-                    headers=SB_HEADERS,
-                    params={"select": "user_id"},
-                )
-                for row in r.json():
-                    uid = row.get("user_id")
-                    if uid:
-                        user_ids.add(uid)
+            user_ids = await get_all_user_ids(client)
             text = (
                 "🌅 Yangi kun boshlandi!\n\n"
                 "Kunlik o'qish limitlaringiz yangilandi — endi yana kitob o'qishingiz mumkin. Omad!"
@@ -252,6 +257,24 @@ async def send_daily_limit_reset(context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Limit xabari yuborilmadi (user_id={uid}): {e}")
     except Exception as e:
         logger.error(f"send_daily_limit_reset xato: {e}")
+
+
+async def send_daily_motivation(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            user_ids = await get_all_user_ids(client)
+            text = (
+                "Bugun vaqt topib 1 bet bo'lsa ham kitob o'qing, shoshmasdan tushunib o'qing "
+                "va o'qiganingizni boshqaga tushuntirib bera oling.\n\n"
+                "O'zingizdan faxrlaning, siz kechagidan kuchliroq, aqlliroq siz."
+            )
+            for uid in user_ids:
+                try:
+                    await context.bot.send_message(chat_id=uid, text=text)
+                except Exception as e:
+                    logger.error(f"Motivatsiya xabari yuborilmadi (user_id={uid}): {e}")
+    except Exception as e:
+        logger.error(f"send_daily_motivation xato: {e}")
 
 
 # ===== Asosiy =====
@@ -268,6 +291,10 @@ def main():
         application.job_queue.run_daily(
             send_daily_limit_reset,
             time=dt_time(19, 0, 1, tzinfo=timezone.utc),
+        )
+        application.job_queue.run_daily(
+            send_daily_motivation,
+            time=dt_time(5, 0, 0, tzinfo=timezone.utc),
         )
     else:
         logger.warning(
