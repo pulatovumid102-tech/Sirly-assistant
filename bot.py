@@ -1,6 +1,7 @@
 import logging
+import calendar
 import httpx
-from datetime import datetime, timezone, time as dt_time
+from datetime import datetime, timezone, time as dt_time, date as dt_date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application,
@@ -30,8 +31,8 @@ SB_HEADERS = {
     "Prefer": "return=minimal",
 }
 
-# Mini App manzili (deploy qilganingizdan keyin shu yerga qo'ying)
-WEBAPP_URL = "https://example.com"
+# Mini App manzili
+WEBAPP_URL = "https://sirly-assistant-production.up.railway.app"
 
 
 # ===== Buyruqlar =====
@@ -40,7 +41,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [[InlineKeyboardButton("📚 Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]]
     )
     await update.message.reply_text(
-        "Salom! Kitob o'qish klubiga xush kelibsiz 📖\n\n"
+        "Salom! \"Bir bet\" ilovasiga xush kelibsiz 📖\n\n"
         "Ilovani ochish uchun pastdagi tugmani bosing.",
         reply_markup=keyboard,
     )
@@ -139,36 +140,48 @@ async def contact_response_callback(update: Update, context: ContextTypes.DEFAUL
                 pass
 
 
-# ===== Rejalashtirilgan kitoblar haqida guruhga e'lon =====
-async def check_scheduled_books(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(
-                f"{SB_URL}/rest/v1/books",
-                headers=SB_HEADERS,
-                params={"start_date": "not.is.null", "announced": "eq.false", "select": "*"},
-            )
-            rows = r.json()
-            for b in rows:
-                try:
-                    text = f"📖 Yangi o'qish boshlanadi!\n\n<b>{b['title']}</b>"
-                    if b.get("author"):
-                        text += f"\n✍️ {b['author']}"
-                    text += f"\n📅 Boshlanish sanasi: {b['start_date']}"
-                    if b.get("purchase_link"):
-                        text += f"\n🛒 Sotib olish: {b['purchase_link']}"
-                    text += "\n\nQo'shilish uchun ilovaga o'ting 👇"
-                    await context.bot.send_message(chat_id=CHAT_ID, text=text, parse_mode="HTML")
-                    await client.patch(
-                        f"{SB_URL}/rest/v1/books",
-                        headers=SB_HEADERS,
-                        params={"id": f"eq.{b['id']}"},
-                        json={"announced": True},
-                    )
-                except Exception as e:
-                    logger.error(f"E'lon yuborilmadi (book_id={b.get('id')}): {e}")
-    except Exception as e:
-        logger.error(f"check_scheduled_books xato: {e}")
+# ===== Kogort (guruh) sikli hisoblash =====
+COHORT_SIGNUP_DAYS = 5
+COHORT_READING_DAYS = 20
+COHORT_CLOSING_DAYS = 5
+
+
+def month_cohort_markers(year: int, month: int):
+    days_in_month = calendar.monthrange(year, month)[1]
+    days = [5, 10, 15, 20, 25, min(30, days_in_month)]
+    return [dt_date(year, month, d) for d in days]
+
+
+def nearby_cohort_markers(today: dt_date):
+    markers = set()
+    for offset in range(-2, 2):
+        y = today.year
+        m = today.month + offset
+        while m < 1:
+            m += 12
+            y -= 1
+        while m > 12:
+            m -= 12
+            y += 1
+        markers.update(month_cohort_markers(y, m))
+    return sorted(markers)
+
+
+def cohort_phase(marker: dt_date, today: dt_date):
+    diff = (today - marker).days
+    if diff < 0:
+        return None
+    if diff < COHORT_SIGNUP_DAYS:
+        return "signup"
+    if diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS:
+        return "reading"
+    if diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS:
+        return "closing"
+    return "ended"
+
+
+def parse_date_str(s: str) -> dt_date:
+    return dt_date.fromisoformat(s)
 
 
 async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
@@ -177,33 +190,48 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
             books_r = await client.get(
                 f"{SB_URL}/rest/v1/books",
                 headers=SB_HEADERS,
-                params={"select": "id,title,start_date"},
+                params={"select": "id,title"},
             )
-            books = books_r.json()
-            today_str = datetime.now(timezone.utc).date().isoformat()
-            for b in books:
-                start_date = b.get("start_date")
-                if start_date and start_date > today_str:
+            books = {b["id"]: b for b in books_r.json()}
+            today = datetime.now(timezone.utc).date()
+
+            prog_r = await client.get(
+                f"{SB_URL}/rest/v1/progress",
+                headers=SB_HEADERS,
+                params={
+                    "select": "book_id,user_id,pages_read,cohort_start_date",
+                    "cohort_start_date": "not.is.null",
+                    "order": "pages_read.desc",
+                },
+            )
+            all_progress = prog_r.json()
+
+            groups = {}
+            for p in all_progress:
+                key = (p["book_id"], p["cohort_start_date"])
+                groups.setdefault(key, []).append(p)
+
+            for (book_id, cohort_str), members in groups.items():
+                marker = parse_date_str(cohort_str)
+                phase = cohort_phase(marker, today)
+                if phase not in ("reading", "closing"):
                     continue
-                prog_r = await client.get(
-                    f"{SB_URL}/rest/v1/progress",
-                    headers=SB_HEADERS,
-                    params={
-                        "book_id": f"eq.{b['id']}",
-                        "select": "user_id,pages_read",
-                        "order": "pages_read.desc",
-                    },
-                )
-                progress = prog_r.json()
-                if not progress:
+                book = books.get(book_id)
+                if not book:
                     continue
+
                 tracker_r = await client.get(
                     f"{SB_URL}/rest/v1/rank_tracker",
                     headers=SB_HEADERS,
-                    params={"book_id": f"eq.{b['id']}", "select": "user_id,last_rank"},
+                    params={
+                        "book_id": f"eq.{book_id}",
+                        "cohort_start_date": f"eq.{cohort_str}",
+                        "select": "user_id,last_rank",
+                    },
                 )
                 tracker_map = {row["user_id"]: row["last_rank"] for row in tracker_r.json()}
-                for idx, p in enumerate(progress):
+
+                for idx, p in enumerate(members):
                     current_rank = idx + 1
                     uid = p["user_id"]
                     prev_rank = tracker_map.get(uid)
@@ -211,18 +239,23 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                         try:
                             await context.bot.send_message(
                                 chat_id=uid,
-                                text=f"📉 \"{b['title']}\" kitobida darajangiz pastladi: endi {current_rank}-o'rindasiz.",
+                                text=f"📉 \"{book['title']}\" guruhida darajangiz pastladi: endi {current_rank}-o'rindasiz.",
                             )
                         except Exception as e:
                             logger.error(f"Daraja xabari yuborilmadi (user_id={uid}): {e}")
                     try:
                         await client.post(
-                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=book_id,user_id",
+                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=book_id,user_id,cohort_start_date",
                             headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
-                            json={"book_id": b["id"], "user_id": uid, "last_rank": current_rank},
+                            json={
+                                "book_id": book_id,
+                                "user_id": uid,
+                                "cohort_start_date": cohort_str,
+                                "last_rank": current_rank,
+                            },
                         )
                     except Exception as e:
-                        logger.error(f"rank_tracker yangilanmadi (book_id={b['id']}, user_id={uid}): {e}")
+                        logger.error(f"rank_tracker yangilanmadi (book_id={book_id}, user_id={uid}): {e}")
     except Exception as e:
         logger.error(f"check_rank_drops xato: {e}")
 
@@ -240,23 +273,6 @@ async def get_all_user_ids(client):
             if uid:
                 user_ids.add(uid)
     return user_ids
-
-
-async def send_daily_limit_reset(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            user_ids = await get_all_user_ids(client)
-            text = (
-                "🌅 Yangi kun boshlandi!\n\n"
-                "Kunlik o'qish limitlaringiz yangilandi — endi yana kitob o'qishingiz mumkin. Omad!"
-            )
-            for uid in user_ids:
-                try:
-                    await context.bot.send_message(chat_id=uid, text=text)
-                except Exception as e:
-                    logger.error(f"Limit xabari yuborilmadi (user_id={uid}): {e}")
-    except Exception as e:
-        logger.error(f"send_daily_limit_reset xato: {e}")
 
 
 async def send_daily_motivation(context: ContextTypes.DEFAULT_TYPE):
@@ -286,12 +302,7 @@ def main():
 
     if application.job_queue:
         application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
-        application.job_queue.run_repeating(check_scheduled_books, interval=15, first=8)
         application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
-        application.job_queue.run_daily(
-            send_daily_limit_reset,
-            time=dt_time(19, 0, 1, tzinfo=timezone.utc),
-        )
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
