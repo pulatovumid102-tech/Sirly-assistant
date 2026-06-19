@@ -120,6 +120,10 @@ body{
 .comment-name{ font-weight:700; color:var(--text); }
 .edited-tag{ font-size:11px; color:var(--text-muted); font-style:italic; }
 .comment-actions{ display:flex; gap:16px; margin-top:5px; }
+.notes-list{ display:flex; flex-direction:column; gap:0; }
+.note-entry{ padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.note-meta{ font-size:11px; color:var(--accent-1); margin-bottom:4px; }
+.note-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
 .comment-action-btn{ background:none; border:none; color:var(--text-muted); font-size:11px; font-family:inherit; display:flex; align-items:center; gap:4px; padding:2px 0; }
 .comment-action-btn.liked{ color:var(--accent-1); font-weight:700; }
 .reply-banner{ display:flex; align-items:center; justify-content:space-between; background:var(--surface-alt); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--accent-1); }
@@ -624,8 +628,9 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books) {
+function profileBodyHtml(isOwn, finishedCount, medals, books, remainingToday) {
   var limit = computeDailyLimit(finishedCount);
+  var limitDisplay = (isOwn && remainingToday !== null) ? (limit + ' / ' + remainingToday) : String(limit);
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var medalSlotsHtml = '<div class="medal-slots-row">';
@@ -637,7 +642,7 @@ function profileBodyHtml(isOwn, finishedCount, medals, books) {
     ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
     : '<div class="empty">Hali kitob yo\'q.</div>';
   return '<div class="profile-stats">' +
-    '<div class="profile-stat-box"><div class="profile-stat-num">' + limit + '</div><div class="profile-stat-label">kunlik limit (bet)</div></div>' +
+    '<div class="profile-stat-box"><div class="profile-stat-num">' + limitDisplay + '</div><div class="profile-stat-label">kunlik limit (bet)</div></div>' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
     '</div>' +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
@@ -651,6 +656,7 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
     var profileResults = await Promise.all([
       sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
       sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
+      isOwn ? sbGet('streaks?select=*&user_id=eq.' + userId) : Promise.resolve([]),
     ]);
     var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
@@ -660,7 +666,15 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
       return { book: b, pct: pct, pagesRead: r.pages_read };
     });
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books);
+    var remainingToday = null;
+    if (isOwn) {
+      var limit = computeDailyLimit(finishers.length);
+      var streakRow = profileResults[2][0];
+      var today = localDateStr();
+      var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
+      remainingToday = Math.max(0, limit - pagesToday);
+    }
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, remainingToday);
     if (!isOwn) {
       document.getElementById('contactBtn').addEventListener('click', async function () {
         var btn = this;
@@ -1022,12 +1036,14 @@ async function renderBookDetail() {
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
       sbGet('finishers?select=id&user_id=eq.' + ME.id),
       sbGet('streaks?select=*&user_id=eq.' + ME.id),
+      sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&user_id=eq.' + ME.id + '&order=created_at.desc'),
     ]);
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
     var myFinishers = results[3];
     var myStreakRows = results[4];
+    var myNotes = results[5];
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
@@ -1036,7 +1052,7 @@ async function renderBookDetail() {
     }
     _bdCache = {
       bookId: state.bookId, today: today, book: book, progress: progress, comments: comments,
-      myFinishers: myFinishers, myStreakRows: myStreakRows, likeCounts: likeCounts, myLiked: myLiked,
+      myFinishers: myFinishers, myStreakRows: myStreakRows, likeCounts: likeCounts, myLiked: myLiked, myNotes: myNotes,
     };
     renderBookDetailBody();
   } catch (e) {
@@ -1055,6 +1071,7 @@ function renderBookDetailBody() {
   var myStreakRows = _bdCache.myStreakRows;
   var likeCounts = _bdCache.likeCounts;
   var myLiked = _bdCache.myLiked;
+  var myNotes = _bdCache.myNotes;
   try {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
@@ -1082,14 +1099,27 @@ function renderBookDetailBody() {
           '</div>';
       }).join('') + '</div>';
 
+    var notesHtml = myNotes.length
+      ? myNotes.map(function (n) {
+          return '<div class="note-entry">' +
+            '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + n.pages_read + ' bet uchun yozilgan fikr:</div>' +
+            '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
+            '</div>';
+        }).join('')
+      : '<div class="empty">Hali fikr yozilmagan.</div>';
+
     var progressTabHtml =
       (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
       '<div class="hint" style="margin-bottom:14px">Bugun ' + maxReadableNow + ' betgacha o\'qishingiz mumkin.</div>' +
       '<div class="form">' +
       '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '" />' +
+      '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."></textarea>' +
+      '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
       '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
       '</div>' +
-      (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '');
+      (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '') +
+      '<div class="section-label" style="margin-top:20px">Kitob haqida</div>' +
+      '<div class="notes-list">' + notesHtml + '</div>';
 
     var topLevelComments = comments.filter(function (c) { return !c.reply_to_id; }).sort(function (a, b) {
       var diff = (likeCounts[b.id] || 0) - (likeCounts[a.id] || 0);
@@ -1258,11 +1288,20 @@ function renderBookDetailBody() {
         });
       });
     } else if (state.detailTab === 'progress') {
+      var noteInputEl = document.getElementById('noteInput');
+      var noteCharCountEl = document.getElementById('noteCharCount');
+      if (noteInputEl) {
+        noteInputEl.addEventListener('input', function () {
+          noteCharCountEl.textContent = noteInputEl.value.length;
+        });
+      }
       document.getElementById('updateProgressBtn').addEventListener('click', async function () {
         if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
         var pagesInputEl = document.getElementById('pagesInput');
         var requestedPages = parseInt(pagesInputEl.value, 10);
         if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
+        var noteText = noteInputEl.value.trim();
+        if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
         if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
         var oldPages = mine ? mine.pages_read : 0;
         var delta = requestedPages - oldPages;
@@ -1276,6 +1315,10 @@ function renderBookDetailBody() {
           await sbPost('progress?on_conflict=book_id,user_id', {
             book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
           }, 'resolution=merge-duplicates,return=representation');
+          var insertedNote = await sbPost('reading_notes', {
+            book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, note: noteText,
+          });
+          if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
           vibrate('light');
           var nowIso = new Date().toISOString();
           if (mine) {
