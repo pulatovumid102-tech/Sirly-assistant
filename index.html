@@ -324,6 +324,7 @@ var replyTarget = null;
 var editTarget = null;
 var expandedReplies = {};
 var isAdminMode = false;
+var _bdCache = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
@@ -925,10 +926,17 @@ function renderAddBook() {
 async function renderBookDetail() {
   var backView = isAdminMode ? 'admin' : 'home';
   setBackButton(true, function () { state.view = backView; render(); });
+  var sameBookCached = _bdCache && _bdCache.bookId === state.bookId;
   var headerHtml = '<div class="header"><button class="back" data-go="' + backView + '">←</button><div class="h-title">Kitob</div></div>' +
-    '<div id="bookDetailBody"><div class="loading">Yuklanmoqda...</div></div>';
+    '<div id="bookDetailBody">' + (sameBookCached ? '' : '<div class="loading">Yuklanmoqda...</div>') + '</div>';
   if (isAdminMode) app.innerHTML = '<div class="screen">' + headerHtml + '</div>';
   else renderShell(headerHtml);
+
+  if (sameBookCached) {
+    renderBookDetailBody();
+    return;
+  }
+
   var body = document.getElementById('bookDetailBody');
   try {
     var today = new Date().toISOString().slice(0, 10);
@@ -950,6 +958,28 @@ async function renderBookDetail() {
       var likeRows = await sbGet('comment_likes?select=comment_id,user_id&comment_id=in.(' + comments.map(function (c) { return c.id; }).join(',') + ')');
       likeRows.forEach(function (l) { likeCounts[l.comment_id] = (likeCounts[l.comment_id] || 0) + 1; if (l.user_id === ME.id) myLiked[l.comment_id] = true; });
     }
+    _bdCache = {
+      bookId: state.bookId, today: today, book: book, progress: progress, comments: comments,
+      myFinishers: myFinishers, myStreakRows: myStreakRows, likeCounts: likeCounts, myLiked: myLiked,
+    };
+    renderBookDetailBody();
+  } catch (e) {
+    body.innerHTML = '<div class="empty">Xatolik: kitob topilmadi.</div>';
+    console.error(e);
+  }
+}
+
+function renderBookDetailBody() {
+  var body = document.getElementById('bookDetailBody');
+  var today = _bdCache.today;
+  var book = _bdCache.book;
+  var progress = _bdCache.progress;
+  var comments = _bdCache.comments;
+  var myFinishers = _bdCache.myFinishers;
+  var myStreakRows = _bdCache.myStreakRows;
+  var likeCounts = _bdCache.likeCounts;
+  var myLiked = _bdCache.myLiked;
+  try {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
@@ -1004,7 +1034,7 @@ async function renderBookDetail() {
         '<button class="comment-action-btn' + (liked ? ' liked' : '') + '" data-like-comment="' + c.id + '">' + (liked ? '❤️' : '🤍') + (count ? ' ' + count : '') + '</button>' +
         (!isReply ? '<button class="comment-action-btn" data-reply-comment="' + c.id + '" data-reply-name="' + escapeHtml(c.user_name) + '">↩ Javob</button>' : '') +
         (replyCount > 0 ? '<button class="comment-action-btn" data-toggle-replies="' + c.id + '">' + (expandedReplies[c.id] ? '▴ Javoblarni yashirish' : '▾ Javoblar (' + replyCount + ')') + '</button>' : '') +
-        (isMine ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
+        (!isAdminMode && isMine && c.user_name !== 'Admin' ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
         ((isMine || ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
         '</div></div>';
     }
@@ -1065,6 +1095,8 @@ async function renderBookDetail() {
           btn.classList.toggle('liked', newLiked);
           btn.textContent = (newLiked ? '❤️' : '🤍') + (newCount ? ' ' + newCount : '');
           vibrate('light');
+          likeCounts[cid] = newCount;
+          if (newLiked) myLiked[cid] = true; else delete myLiked[cid];
           try {
             if (alreadyLiked) await sbDelete('comment_likes?comment_id=eq.' + cid + '&user_id=eq.' + ME.id);
             else await sbPost('comment_likes', { comment_id: cid, user_id: ME.id });
@@ -1072,6 +1104,8 @@ async function renderBookDetail() {
             console.error(e);
             btn.classList.toggle('liked', alreadyLiked);
             btn.textContent = (alreadyLiked ? '❤️' : '🤍') + (oldCount ? ' ' + oldCount : '');
+            likeCounts[cid] = oldCount;
+            if (alreadyLiked) myLiked[cid] = true; else delete myLiked[cid];
             showAlert('Xatolik yuz berdi.');
           }
         });
@@ -1105,7 +1139,12 @@ async function renderBookDetail() {
         btn.addEventListener('click', function () {
           var cid = btn.dataset.delComment;
           confirmAction("Komentariyani o'chirish?", async function () {
-            try { await sbDelete('comments?id=eq.' + cid); vibrate('medium'); renderBookDetail(); }
+            try {
+              await sbDelete('comments?id=eq.' + cid);
+              _bdCache.comments = comments.filter(function (c) { return String(c.id) !== String(cid) && String(c.reply_to_id) !== String(cid); });
+              vibrate('medium');
+              renderBookDetail();
+            }
             catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
           });
         });
@@ -1120,6 +1159,8 @@ async function renderBookDetail() {
           showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
             try {
               await sbPatch('comments?id=eq.' + editId, { text: text, edited: true });
+              var editedC = comments.find(function (cc) { return String(cc.id) === String(editId); });
+              if (editedC) { editedC.text = text; editedC.edited = true; }
               input.value = '';
               editTarget = null;
               vibrate('light');
@@ -1130,7 +1171,8 @@ async function renderBookDetail() {
         }
         showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
           try {
-            await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
+            var inserted = await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
+            if (inserted && inserted[0]) comments.push(inserted[0]);
             input.value = '';
             if (replyTarget) expandedReplies[replyTarget.id] = true;
             replyTarget = null;
@@ -1159,8 +1201,18 @@ async function renderBookDetail() {
             book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
           }, 'resolution=merge-duplicates,return=representation');
           vibrate('light');
+          var nowIso = new Date().toISOString();
+          if (mine) {
+            mine.pages_read = finalPages;
+            mine.updated_at = nowIso;
+          } else {
+            mine = { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: nowIso, started_at: nowIso };
+            progress.push(mine);
+          }
+          progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
           var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
           var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
+          if (medalMsg) myFinishers.push({ id: 'local-' + Date.now() });
           if (medalMsg) showAlert(medalMsg);
           else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
           renderBookDetail();
@@ -1173,6 +1225,7 @@ async function renderBookDetail() {
           try {
             await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
             vibrate('medium');
+            _bdCache = null;
             state.view = 'home'; state.detailTab = 'readers'; render();
           } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
         });
@@ -1195,7 +1248,7 @@ document.addEventListener('click', function (e) {
   var goEl = e.target.closest('[data-go]');
   if (goEl) {
     var view = goEl.dataset.go;
-    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; }
+    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; _bdCache = null; }
     if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
     state.view = view;
     render();
