@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>O'qish Klubi</title>
+<title>Bir bet</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -64,6 +64,7 @@ body{
 .streak-fire{ font-size:22px; }
 .streak-num{ font-size:16px; font-weight:800; }
 .streak-label{ font-size:11px; color:var(--text-muted); }
+.streak-daraja{ font-size:12px; font-weight:700; color:var(--accent-1); margin-top:10px; text-align:center; }
 .streak-days-row{ display:flex; justify-content:space-between; gap:6px; }
 .streak-day{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
 .streak-day-icon{ font-size:19px; filter:grayscale(1) opacity(0.35); }
@@ -334,7 +335,7 @@ async function tryRecordFinish(book) {
 }
 
 // ===== Holat =====
-var state = { view: 'modeSelect', tab: 'mine', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'users' };
+var state = { view: 'modeSelect', tab: 'top', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'users' };
 var replyTarget = null;
 var editTarget = null;
 var expandedReplies = {};
@@ -418,7 +419,7 @@ function renderModeSelect() {
   setBackButton(false);
   app.innerHTML =
     '<div class="screen" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh;gap:14px">' +
-    '<div style="text-align:center;margin-bottom:24px"><div style="font-size:46px;margin-bottom:8px">📚</div><div style="font-size:21px;font-weight:700">O\'qish Klubi</div></div>' +
+    '<div style="text-align:center;margin-bottom:24px"><div style="font-size:46px;margin-bottom:8px">📚</div><div style="font-size:21px;font-weight:700">Bir bet</div></div>' +
     '<button class="btn-primary full" data-go="home" style="padding:18px 16px;font-size:15px">🌱 Shaxsiy rivojlanish</button>' +
     '<button class="btn-primary full" data-go="adminLogin" style="padding:18px 16px;font-size:15px;background:var(--surface);color:var(--text);box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light)">🔐 Admin rejimi</button>' +
     '</div>';
@@ -553,6 +554,30 @@ async function loadTopLists() {
   }
 }
 
+var DARAJA_TITLES = [
+  "Molodets",
+  "VAOO",
+  "Aqltoy",
+  "Miyyasi ikkita",
+  "Qoyil",
+  "O'zga sayyoralik",
+  "Bu ketishingizda sizga kitob yetqazib bo'lmay qoladi",
+  "Vahshiy",
+  "O'zingizni bosing",
+  "Kamroq o'qing, miyangiz portlab ketadi",
+  "Faylasuf",
+  "Sizniyam ona tuqqanmi",
+  "Marslik",
+  "Boshingiz 400 kg bo'lib ketdi",
+  "Ko'p o'qisham zarar",
+  "Buncha o'qib nimaga tayyorlanyapsiz bilmadim-u, lekin tayyorsiz",
+  "Boshingizda qasdingiz bormi",
+];
+function darajaTitle(n) {
+  var idx = Math.min(n, DARAJA_TITLES.length) - 1;
+  return DARAJA_TITLES[idx];
+}
+
 async function loadStreakBadge() {
   var el = document.getElementById('streakBadge');
   try {
@@ -562,14 +587,15 @@ async function loadStreakBadge() {
     var yesterday = localDateStr(new Date(Date.now() - 86400000));
     var n = (s && (s.last_active_date === today || s.last_active_date === yesterday)) ? s.current_streak : 0;
     if (n <= 0) { el.innerHTML = ''; return; }
-    var lit = ((n - 1) % 7) + 1;
+    var lit = ((n - 1) % 3) + 1;
     var daysRow = '';
-    for (var i = 1; i <= 7; i++) {
+    for (var i = 1; i <= 3; i++) {
       daysRow += '<div class="streak-day"><div class="streak-day-icon' + (i <= lit ? ' lit' : '') + '">🔥</div><div class="streak-day-num">' + i + '</div></div>';
     }
     el.innerHTML = '<div class="streak-badge">' +
       '<div class="streak-top-row"><div class="streak-fire">🔥</div><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div></div>' +
       '<div class="streak-days-row">' + daysRow + '</div>' +
+      '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div>' +
       '</div>';
   } catch (e) { el.innerHTML = ''; console.error(e); }
 }
@@ -1151,7 +1177,6 @@ function renderBookDetailBody() {
     var streakRow = myStreakRows[0];
     var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
     var remainingAllowance = Math.max(0, dailyLimit - pagesToday);
-    var maxReadableNow = totalPages ? Math.min(totalPages, myPages + remainingAllowance) : (myPages + remainingAllowance);
 
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
     var started = !book.start_date || new Date(book.start_date + 'T00:00:00') <= new Date();
@@ -1192,17 +1217,23 @@ function renderBookDetailBody() {
         }).join('')
       : '<div class="empty">Hali fikr yozilmagan.</div>';
 
+    var limitExhausted = remainingAllowance <= 0;
+    var limitHintHtml = limitExhausted
+      ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Kunlik o\'qish limiti tugadi.</div>'
+      : '<div class="hint" style="margin-bottom:14px">Bugun ' + remainingAllowance + ' bet o\'qishingiz mumkin.</div>';
+    var disabledAttr = limitExhausted ? ' disabled' : '';
+
     var progressTabHtml =
       (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
-      '<div class="hint" style="margin-bottom:14px">Bugun ' + maxReadableNow + ' betgacha o\'qishingiz mumkin.</div>' +
+      limitHintHtml +
       '<div class="form">' +
-      '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '" />' +
-      '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."></textarea>' +
+      '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
+      '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
       '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
-      '<label class="file-btn" for="noteCoverInput">📷 Rasm yuklash (majburiy)</label>' +
-      '<input type="file" id="noteCoverInput" accept="image/*" style="display:none" />' +
+      '<label class="file-btn" for="noteCoverInput" style="' + (limitExhausted ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
+      '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
       '<div id="noteCoverPreview"></div>' +
-      '<button id="updateProgressBtn" class="btn-primary full">Saqlash</button>' +
+      '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
       '</div>' +
       (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '') +
       '<div class="section-label" style="margin-top:20px">Kitob haqida</div>' +
@@ -1262,8 +1293,19 @@ function renderBookDetailBody() {
       activeTabHtml;
 
     document.querySelectorAll('[data-detailtab]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        state.detailTab = btn.dataset.detailtab;
+      btn.addEventListener('click', async function () {
+        var newTab = btn.dataset.detailtab;
+        state.detailTab = newTab;
+        if (newTab === 'progress' && _bdCache) {
+          try {
+            var fresh = await Promise.all([
+              sbGet('finishers?select=id&user_id=eq.' + ME.id),
+              sbGet('streaks?select=*&user_id=eq.' + ME.id),
+            ]);
+            _bdCache.myFinishers = fresh[0];
+            _bdCache.myStreakRows = fresh[1];
+          } catch (e) { console.error(e); }
+        }
         renderBookDetail();
       });
     });
@@ -1411,19 +1453,33 @@ function renderBookDetailBody() {
         if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
         var oldPages = mine ? mine.pages_read : 0;
         var delta = requestedPages - oldPages;
+        var saveBtn = document.getElementById('updateProgressBtn');
         confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Yuklanmoqda...';
+          var photoUrl = null;
+          try {
+            var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
+            photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
+          } catch (e) {
+            console.error(e);
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Saqlash';
+            showAlert("Rasm yuklanmadi. Internetni tekshirib qayta urinib ko'ring.");
+            return;
+          }
           try {
             var limitInfo = await recordDailyProgress(delta);
             if (limitInfo.blocked) {
-              showAlert("Bugungi o'qish limitingiz (" + limitInfo.limit + " bet) tugadi. Ertaga davom etasiz!");
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Saqlash';
+              showAlert('Limit tugadi. Saqlay olmaysiz.');
               return;
             }
             var finalPages = oldPages + limitInfo.allowedDelta;
             await sbPost('progress?on_conflict=book_id,user_id', {
               book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
             }, 'resolution=merge-duplicates,return=representation');
-            var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
-            var photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
             var insertedNote = await sbPost('reading_notes', {
               book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl,
             });
@@ -1445,7 +1501,12 @@ function renderBookDetailBody() {
             else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
             else showAlert('Saqlandi.');
             renderBookDetail();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          } catch (e) {
+            console.error(e);
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Saqlash';
+            showAlert('Xatolik yuz berdi.');
+          }
         });
       });
 
