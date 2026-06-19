@@ -1,6 +1,6 @@
 import logging
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time as dt_time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application,
@@ -227,6 +227,33 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_rank_drops xato: {e}")
 
 
+async def send_daily_limit_reset(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            user_ids = set()
+            for table in ("progress", "comments", "finishers"):
+                r = await client.get(
+                    f"{SB_URL}/rest/v1/{table}",
+                    headers=SB_HEADERS,
+                    params={"select": "user_id"},
+                )
+                for row in r.json():
+                    uid = row.get("user_id")
+                    if uid:
+                        user_ids.add(uid)
+            text = (
+                "🌅 Yangi kun boshlandi!\n\n"
+                "Kunlik o'qish limitlaringiz yangilandi — endi yana kitob o'qishingiz mumkin. Omad!"
+            )
+            for uid in user_ids:
+                try:
+                    await context.bot.send_message(chat_id=uid, text=text)
+                except Exception as e:
+                    logger.error(f"Limit xabari yuborilmadi (user_id={uid}): {e}")
+    except Exception as e:
+        logger.error(f"send_daily_limit_reset xato: {e}")
+
+
 # ===== Asosiy =====
 def main():
     application = Application.builder().token(TOKEN).build()
@@ -238,6 +265,10 @@ def main():
         application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
         application.job_queue.run_repeating(check_scheduled_books, interval=15, first=8)
         application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
+        application.job_queue.run_daily(
+            send_daily_limit_reset,
+            time=dt_time(19, 0, 1, tzinfo=timezone.utc),
+        )
     else:
         logger.warning(
             "job_queue mavjud emas. Terminalda quyidagini ishga tushiring: "
