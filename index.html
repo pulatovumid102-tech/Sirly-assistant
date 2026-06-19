@@ -60,11 +60,11 @@ body{
 .cover-thumb-placeholder{ width:48px; height:68px; border-radius:10px; flex-shrink:0; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:20px; }
 
 .streak-badge{ background:var(--surface); border-radius:var(--radius-md); padding:16px; margin-bottom:14px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
-.streak-top-row{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.streak-top-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
 .streak-fire{ font-size:22px; }
 .streak-num{ font-size:16px; font-weight:800; }
 .streak-label{ font-size:11px; color:var(--text-muted); }
-.streak-daraja{ font-size:12px; font-weight:700; color:var(--accent-1); margin-top:10px; text-align:center; }
+.streak-daraja{ font-size:12px; font-weight:700; color:var(--accent-1); text-align:right; }
 .streak-days-row{ display:flex; justify-content:space-between; gap:6px; }
 .streak-day{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
 .streak-day-icon{ font-size:19px; filter:grayscale(1) opacity(0.35); }
@@ -166,9 +166,10 @@ var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
 var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 var HUJJATLAR_BUCKET = 'hujjatlar';
-var BASE_DAILY_LIMIT = 20;
-var FINISH_BONUS = 5;
-var MAX_DAILY_LIMIT = 100;
+var COHORT_SIGNUP_DAYS = 5;
+var COHORT_READING_DAYS = 20;
+var COHORT_CLOSING_DAYS = 5;
+var COHORT_SUGGESTED_DAILY_PAGES = 20;
 var ADMIN_ID = 1645167548;
 
 // ===== Telegram WebApp init =====
@@ -262,7 +263,51 @@ async function sbUploadFile(bucket, path, file) {
   return SB_URL + '/storage/v1/object/public/' + bucket + '/' + path;
 }
 
-// ===== Kunlik limit hisoblash =====
+// ===== Kogort (guruh) sikli hisoblash =====
+function monthCohortMarkers(year, month) {
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var days = [5, 10, 15, 20, 25, Math.min(30, daysInMonth)];
+  return days.map(function (d) {
+    return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  });
+}
+function nearbyCohortMarkers(todayStr) {
+  var today = new Date(todayStr + 'T00:00:00');
+  var set = {};
+  for (var offset = -2; offset <= 1; offset++) {
+    var d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    monthCohortMarkers(d.getFullYear(), d.getMonth()).forEach(function (m) { set[m] = true; });
+  }
+  return Object.keys(set).sort();
+}
+function cohortDiffDays(markerStr, todayStr) {
+  var marker = new Date(markerStr + 'T00:00:00');
+  var today = new Date(todayStr + 'T00:00:00');
+  return Math.round((today - marker) / 86400000);
+}
+function cohortPhase(markerStr, todayStr) {
+  var diff = cohortDiffDays(markerStr, todayStr);
+  if (diff < 0) return null;
+  if (diff < COHORT_SIGNUP_DAYS) return 'signup';
+  if (diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS) return 'reading';
+  if (diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS) return 'closing';
+  return 'ended';
+}
+function currentSignupCohortMarker(todayStr) {
+  var markers = nearbyCohortMarkers(todayStr);
+  for (var i = 0; i < markers.length; i++) {
+    if (cohortPhase(markers[i], todayStr) === 'signup') return markers[i];
+  }
+  return null;
+}
+function cohortPhaseLabel(phase, diff) {
+  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + (COHORT_SIGNUP_DAYS - diff) + " kundan keyin boshlanadi";
+  if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + COHORT_READING_DAYS + ' kunlik challenge';
+  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
+  return 'Guruh yopilgan';
+}
+
+// ===== Kunlik odat (streak) =====
 function localDateStr(d) {
   d = d || new Date();
   var y = d.getFullYear();
@@ -270,38 +315,12 @@ function localDateStr(d) {
   var day = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + day;
 }
-function computeDailyLimit(finishedCount) {
-  return Math.min(MAX_DAILY_LIMIT, BASE_DAILY_LIMIT + FINISH_BONUS * finishedCount);
-}
-function effectiveDailyLimit(finishedCount, overrideVal) {
-  return (overrideVal !== null && overrideVal !== undefined) ? overrideVal : computeDailyLimit(finishedCount);
-}
 
-// ===== Kunlik odat va o'qish limiti =====
-async function recordDailyProgress(delta) {
+async function recordReadingActivity() {
   var today = localDateStr();
-  var result = { allowedDelta: delta, limit: null, capped: false, blocked: false };
   try {
-    var finishers = await sbGet('finishers?select=id&user_id=eq.' + ME.id);
     var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
     var row = rows[0];
-    var limit = effectiveDailyLimit(finishers.length, row ? row.limit_override : null);
-    result.limit = limit;
-
-    var pagesToday = (row && row.last_active_date === today) ? (row.pages_today || 0) : 0;
-
-    if (delta > 0) {
-      var remaining = Math.max(0, limit - pagesToday);
-      if (remaining <= 0) {
-        result.blocked = true;
-        result.allowedDelta = 0;
-        return result;
-      }
-      result.allowedDelta = Math.min(delta, remaining);
-      result.capped = result.allowedDelta < delta;
-    }
-
-    var newPagesToday = pagesToday + Math.max(0, result.allowedDelta);
     var current = 1, longest = 1;
     if (row) {
       if (row.last_active_date === today) {
@@ -314,10 +333,9 @@ async function recordDailyProgress(delta) {
       }
     }
     await sbPost('streaks?on_conflict=user_id', {
-      user_id: ME.id, current_streak: current, longest_streak: longest, last_active_date: today, pages_today: newPagesToday,
+      user_id: ME.id, current_streak: current, longest_streak: longest, last_active_date: today,
     }, 'resolution=merge-duplicates,return=representation');
   } catch (e) { console.error(e); }
-  return result;
 }
 
 // ===== Kitobni tugatganlik (medal) =====
@@ -328,9 +346,9 @@ async function tryRecordFinish(book) {
     var allFinishers = await sbGet('finishers?select=user_id&book_id=eq.' + book.id);
     var medal = allFinishers.length === 0 ? 1 : allFinishers.length === 1 ? 2 : 0;
     await sbPost('finishers', { book_id: book.id, book_title: book.title, user_id: ME.id, user_name: ME.name, medal: medal });
-    if (medal === 1) return "🥇 Tabriklaymiz! Bu kitobni BIRINCHI bo'lib tugatdingiz. Kunlik limitingiz +5 betga oshdi!";
-    if (medal === 2) return "🥈 Tabriklaymiz! Bu kitobni IKKINCHI bo'lib tugatdingiz. Kunlik limitingiz +5 betga oshdi!";
-    return "🎉 Kitobni tugatdingiz! Kunlik limitingiz +5 betga oshdi.";
+    if (medal === 1) return "🥇 Tabriklaymiz! Bu kitobni BIRINCHI bo'lib tugatdingiz!";
+    if (medal === 2) return "🥈 Tabriklaymiz! Bu kitobni IKKINCHI bo'lib tugatdingiz!";
+    return "🎉 Kitobni tugatdingiz!";
   } catch (e) { console.error(e); return null; }
 }
 
@@ -344,8 +362,6 @@ var _bdCache = null;
 var noteEditTarget = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
-var _adminLimitOverrides = {};
-var _adminLimitEditId = null;
 var _adminBooksCache = [];
 var app = document.getElementById('app');
 var _backHandler = null;
@@ -389,11 +405,13 @@ function render() {
   else if (state.view === 'userBooks') renderUserBooks();
   else if (state.view === 'profile') renderMyProfile();
   else if (state.view === 'admin') renderAdmin();
+  else if (state.view === 'til') renderComingSoon('🗣️', 'Chet tili');
   else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
   else if (state.view === 'ovqat') renderComingSoon('🥗', "To'g'ri ovqatlanish");
 }
 
 function currentSection() {
+  if (state.view === 'til') return 'til';
   if (state.view === 'sport') return 'sport';
   if (state.view === 'ovqat') return 'ovqat';
   if (state.view === 'profile') return 'profile';
@@ -407,7 +425,7 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('ovqat', '🥗', 'Ovqat') + tabBtn('profile', '👤', 'Profil');
+  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('til', '🗣️', 'Chet tili') + tabBtn('sport', '🏃', 'Sport') + tabBtn('ovqat', '🥗', 'Ovqat') + tabBtn('profile', '👤', 'Profil');
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
     (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
@@ -587,15 +605,17 @@ async function loadStreakBadge() {
     var yesterday = localDateStr(new Date(Date.now() - 86400000));
     var n = (s && (s.last_active_date === today || s.last_active_date === yesterday)) ? s.current_streak : 0;
     if (n <= 0) { el.innerHTML = ''; return; }
+    var cycleIndex = Math.floor((n - 1) / 3);
     var lit = ((n - 1) % 3) + 1;
     var daysRow = '';
     for (var i = 1; i <= 3; i++) {
-      daysRow += '<div class="streak-day"><div class="streak-day-icon' + (i <= lit ? ' lit' : '') + '">🔥</div><div class="streak-day-num">' + i + '</div></div>';
+      var dayLabel = cycleIndex * 3 + i;
+      daysRow += '<div class="streak-day"><div class="streak-day-icon' + (i <= lit ? ' lit' : '') + '">🔥</div><div class="streak-day-num">' + dayLabel + '</div></div>';
     }
     el.innerHTML = '<div class="streak-badge">' +
-      '<div class="streak-top-row"><div class="streak-fire">🔥</div><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div></div>' +
+      '<div class="streak-top-row"><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div>' +
+      '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div></div>' +
       '<div class="streak-days-row">' + daysRow + '</div>' +
-      '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div>' +
       '</div>';
   } catch (e) { el.innerHTML = ''; console.error(e); }
 }
@@ -676,9 +696,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, remainingToday, limitOverride) {
-  var limit = effectiveDailyLimit(finishedCount, limitOverride);
-  var limitDisplay = (isOwn && remainingToday !== null) ? (limit + ' / ' + remainingToday) : String(limit);
+function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead) {
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var medalSlotsHtml = '<div class="medal-slots-row">';
@@ -690,7 +708,7 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, remainingToday, li
     ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
     : '<div class="empty">Hali kitob yo\'q.</div>';
   return '<div class="profile-stats">' +
-    '<div class="profile-stat-box"><div class="profile-stat-num">' + limitDisplay + '</div><div class="profile-stat-label">kunlik limit (bet)</div></div>' +
+    '<div class="profile-stat-box"><div class="profile-stat-num">' + totalPagesRead + '</div><div class="profile-stat-label">umumiy o\'qilgan bet</div></div>' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
     '</div>' +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
@@ -704,26 +722,18 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
     var profileResults = await Promise.all([
       sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
       sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
-      sbGet('streaks?select=*&user_id=eq.' + userId),
     ]);
     var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
     var progRows = profileResults[1];
+    var totalPagesRead = 0;
     var books = progRows.map(function (r) {
       var b = r.books;
+      totalPagesRead += r.pages_read || 0;
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
       return { book: b, pct: pct, pagesRead: r.pages_read };
     });
-    var streakRow = profileResults[2][0];
-    var limitOverride = streakRow ? streakRow.limit_override : null;
-    var remainingToday = null;
-    if (isOwn) {
-      var limit = effectiveDailyLimit(finishers.length, limitOverride);
-      var today = localDateStr();
-      var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
-      remainingToday = Math.max(0, limit - pagesToday);
-    }
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, remainingToday, limitOverride);
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, totalPagesRead);
     if (!isOwn) {
       document.getElementById('contactBtn').addEventListener('click', async function () {
         var btn = this;
@@ -804,15 +814,12 @@ async function loadAllUsersMerged() {
 
 async function loadAdminUsers() {
   var el = document.getElementById('adminBody');
-  _adminLimitEditId = null;
   try {
-    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id'), sbGet('streaks?select=user_id,limit_override')]);
+    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id')]);
     _adminUsersCache = usersAndBlocked[0];
     var blockedRows = usersAndBlocked[1];
     _adminBlockedSet = {};
     blockedRows.forEach(function (b) { _adminBlockedSet[b.user_id] = true; });
-    _adminLimitOverrides = {};
-    usersAndBlocked[2].forEach(function (s) { if (s.limit_override !== null && s.limit_override !== undefined) _adminLimitOverrides[s.user_id] = s.limit_override; });
     el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:10px" />' +
       '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
       '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminUserDateFrom" class="input" type="date" style="flex:1" /><input id="adminUserDateTo" class="input" type="date" style="flex:1" /></div>' +
@@ -842,24 +849,9 @@ function renderAdminUsersList() {
   if (toVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) <= toVal; });
   listEl.innerHTML = users.length ? users.map(function (u) {
     var isBlocked = !!_adminBlockedSet[u.id];
-    var hasOverride = _adminLimitOverrides[u.id] !== undefined;
-    if (_adminLimitEditId === u.id) {
-      return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
-        '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
-        '<div class="reader-note">ID: ' + u.id + '</div></div>' +
-        '<input id="limitEditInput" class="input" type="number" min="0" placeholder="Limit (bo\'sh = avtomatik)" value="' + (hasOverride ? _adminLimitOverrides[u.id] : '') + '" />' +
-        '<div style="display:flex;gap:8px;margin-top:8px">' +
-        '<button class="btn-small" data-save-limit="' + u.id + '">Saqlash</button>' +
-        '<button class="btn-small" data-cancel-limit>Bekor qilish</button>' +
-        '</div></div>';
-    }
     return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
-      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDate(u.firstSeen) + '</div>' +
-      '<div class="reader-note">Limit: ' + (hasOverride ? (_adminLimitOverrides[u.id] + ' (qo\'lda)') : 'Avtomatik') + '</div></div>' +
-      '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
-      '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button>' +
-      '<button class="btn-small" data-edit-limit="' + u.id + '">Limitni o\'zgartirish</button>' +
-      '</div></div>';
+      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDate(u.firstSeen) + '</div></div>' +
+      '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button></div>';
   }).join('') : '<div class="empty">Foydalanuvchi topilmadi.</div>';
   document.querySelectorAll('[data-block-id]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
@@ -868,36 +860,6 @@ function renderAdminUsersList() {
       try {
         if (wasBlocked) { await sbDelete('blocked_users?user_id=eq.' + id); delete _adminBlockedSet[id]; }
         else { await sbPost('blocked_users?on_conflict=user_id', { user_id: id }, 'resolution=merge-duplicates,return=representation'); _adminBlockedSet[id] = true; }
-        vibrate('light');
-        renderAdminUsersList();
-      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-    });
-  });
-  document.querySelectorAll('[data-edit-limit]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      _adminLimitEditId = parseInt(btn.dataset.editLimit, 10);
-      renderAdminUsersList();
-    });
-  });
-  var cancelLimitBtn = document.querySelector('[data-cancel-limit]');
-  if (cancelLimitBtn) {
-    cancelLimitBtn.addEventListener('click', function () {
-      _adminLimitEditId = null;
-      renderAdminUsersList();
-    });
-  }
-  document.querySelectorAll('[data-save-limit]').forEach(function (btn) {
-    btn.addEventListener('click', async function () {
-      var id = parseInt(btn.dataset.saveLimit, 10);
-      var inputEl = document.getElementById('limitEditInput');
-      var raw = inputEl.value.trim();
-      var overrideVal = raw === '' ? null : parseInt(raw, 10);
-      if (raw !== '' && (isNaN(overrideVal) || overrideVal < 0)) { showAlert("Limitni to'g'ri kiriting."); return; }
-      try {
-        await sbPost('streaks?on_conflict=user_id', { user_id: id, limit_override: overrideVal }, 'resolution=merge-duplicates,return=representation');
-        if (overrideVal === null) delete _adminLimitOverrides[id];
-        else _adminLimitOverrides[id] = overrideVal;
-        _adminLimitEditId = null;
         vibrate('light');
         renderAdminUsersList();
       } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
@@ -981,8 +943,6 @@ function openEditBookForm(book) {
     (book.cover_url ? '<img src="' + book.cover_url + '" class="cover-preview-img" />' : '') +
     '<label class="file-btn" for="editCoverInput">🖼️ Rasmni almashtirish</label>' +
     '<input type="file" id="editCoverInput" accept="image/*" style="display:none" />' +
-    '<div class="hint">Rejalashtirilgan o\'qish boshlanishi (ixtiyoriy) — sana qo\'yilsa, guruhga e\'lon yuboriladi</div>' +
-    '<input id="editStartDate" class="input" type="date" value="' + (book.start_date || '') + '" />' +
     '<input id="editPurchaseLink" class="input" placeholder="Sotib olish linki" value="' + escapeHtml(book.purchase_link || '') + '" />' +
     '<button id="saveEditBookBtn" class="btn-primary full">Saqlash</button>' +
     '</div>';
@@ -996,10 +956,8 @@ function openEditBookForm(book) {
         title: document.getElementById('editTitle').value.trim(),
         author: document.getElementById('editAuthor').value.trim() || null,
         total_pages: tpVal ? parseInt(tpVal, 10) : null,
-        start_date: document.getElementById('editStartDate').value || null,
         purchase_link: document.getElementById('editPurchaseLink').value.trim() || null,
       };
-      if (patch.start_date && !book.start_date) patch.announced = false;
       if (coverFile) {
         var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
         patch.cover_url = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
@@ -1131,16 +1089,14 @@ async function renderBookDetail() {
       sbGet('books?select=*&id=eq.' + state.bookId),
       sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
-      sbGet('finishers?select=id&user_id=eq.' + ME.id),
-      sbGet('streaks?select=*&user_id=eq.' + ME.id),
       sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&user_id=eq.' + ME.id + '&order=created_at.desc'),
+      sbGet('progress?select=book_id,cohort_start_date&user_id=eq.' + ME.id),
     ]);
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
-    var myFinishers = results[3];
-    var myStreakRows = results[4];
-    var myNotes = results[5];
+    var myNotes = results[3];
+    var myAllProgress = results[4];
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
@@ -1149,7 +1105,7 @@ async function renderBookDetail() {
     }
     _bdCache = {
       bookId: state.bookId, today: today, book: book, progress: progress, comments: comments,
-      myFinishers: myFinishers, myStreakRows: myStreakRows, likeCounts: likeCounts, myLiked: myLiked, myNotes: myNotes,
+      likeCounts: likeCounts, myLiked: myLiked, myNotes: myNotes, myAllProgress: myAllProgress,
     };
     renderBookDetailBody();
   } catch (e) {
@@ -1164,36 +1120,38 @@ function renderBookDetailBody() {
   var book = _bdCache.book;
   var progress = _bdCache.progress;
   var comments = _bdCache.comments;
-  var myFinishers = _bdCache.myFinishers;
-  var myStreakRows = _bdCache.myStreakRows;
   var likeCounts = _bdCache.likeCounts;
   var myLiked = _bdCache.myLiked;
   var myNotes = _bdCache.myNotes;
+  var myAllProgress = _bdCache.myAllProgress;
   try {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
-    var dailyLimit = effectiveDailyLimit(myFinishers.length, (myStreakRows[0] && myStreakRows[0].limit_override));
-    var streakRow = myStreakRows[0];
-    var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
-    var remainingAllowance = Math.max(0, dailyLimit - pagesToday);
-
+    var myCohortMarker = mine ? mine.cohort_start_date : null;
+    var myCohortPhase = myCohortMarker ? cohortPhase(myCohortMarker, today) : null;
+    var signupMarker = currentSignupCohortMarker(today);
+    var otherActive = myAllProgress.find(function (p) {
+      if (String(p.book_id) === String(book.id)) return false;
+      if (!p.cohort_start_date) return false;
+      var ph = cohortPhase(p.cohort_start_date, today);
+      return ph && ph !== 'ended';
+    });
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
-    var started = !book.start_date || new Date(book.start_date + 'T00:00:00') <= new Date();
 
-    var readersList = started ? progress : progress.slice().sort(function (a, b) { return new Date(a.started_at) - new Date(b.started_at); });
-    var readersTabHtml =
-      (!started ? '<div class="hint" style="margin-bottom:12px">📅 O\'qish ' + formatDate(book.start_date) + ' da boshlanadi. Hozircha faqat qo\'shilganlar ro\'yxati.</div>' : '') +
-      '<div class="readers">' + readersList.map(function (p, i) {
-        var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
-        var rankMark = !started ? '•' : (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1));
-        return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
-          '<div class="reader-rank">' + rankMark + '</div>' +
-          '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-          '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
-          '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
-          '</div>';
-      }).join('') + '</div>';
+    var cohortMates = myCohortMarker ? progress.filter(function (p) { return p.cohort_start_date === myCohortMarker; }) : [];
+    var readersTabHtml = !myCohortMarker
+      ? '<div class="empty">Bu kitobning o\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling ("Mening progressim" tabida).</div>'
+      : '<div class="readers">' + cohortMates.map(function (p, i) {
+          var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
+          var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+          return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
+            '<div class="reader-rank">' + rankMark + '</div>' +
+            '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+            '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
+            '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+            '</div>';
+        }).join('') + '</div>';
 
     var notesHtml = myNotes.length
       ? myNotes.map(function (n) {
@@ -1217,27 +1175,44 @@ function renderBookDetailBody() {
         }).join('')
       : '<div class="empty">Hali fikr yozilmagan.</div>';
 
-    var limitExhausted = remainingAllowance <= 0;
-    var limitHintHtml = limitExhausted
-      ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Kunlik o\'qish limiti tugadi.</div>'
-      : '<div class="hint" style="margin-bottom:14px">Bugun ' + remainingAllowance + ' bet o\'qishingiz mumkin.</div>';
-    var disabledAttr = limitExhausted ? ' disabled' : '';
+    var purchaseLinkHtml = book.purchase_link ? '<a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" class="btn-primary full" style="display:block;text-align:center;text-decoration:none;margin-top:10px">🛒 Kitobni sotib olish</a>' : '';
 
-    var progressTabHtml =
-      (mine && mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
-      limitHintHtml +
-      '<div class="form">' +
-      '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
-      '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
-      '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
-      '<label class="file-btn" for="noteCoverInput" style="' + (limitExhausted ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
-      '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
-      '<div id="noteCoverPreview"></div>' +
-      '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
-      '</div>' +
-      (mine ? '<button id="removeFromListBtn" class="remove-link">Ro\'yxatimdan olib tashlash</button>' : '') +
-      '<div class="section-label" style="margin-top:20px">Kitob haqida</div>' +
-      '<div class="notes-list">' + notesHtml + '</div>';
+    var progressTabHtml;
+    if (otherActive) {
+      progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
+    } else if (!mine) {
+      var signupDiff = signupMarker ? cohortDiffDays(signupMarker, today) : null;
+      var signupInfoHtml = signupMarker
+        ? '<div class="hint" style="margin-bottom:14px">🆕 ' + cohortPhaseLabel('signup', signupDiff) + '. Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + COHORT_READING_DAYS + ' kun.</div>'
+        : '<div class="hint" style="margin-bottom:14px">Hozir yangi guruh ochilishini kuting.</div>';
+      progressTabHtml = signupInfoHtml +
+        (signupMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + signupMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '') +
+        purchaseLinkHtml;
+    } else {
+      var diff = cohortDiffDays(myCohortMarker, today);
+      var phaseLabel = cohortPhaseLabel(myCohortPhase, diff);
+      var cohortLocked = myCohortPhase === 'ended';
+      var disabledAttr = cohortLocked ? ' disabled' : '';
+      var phaseHintHtml = '<div class="hint" style="margin-bottom:14px' + (cohortLocked ? ';color:var(--danger)' : '') + '">' + (cohortLocked ? '⛔ ' : '📌 ') + phaseLabel + '</div>';
+
+      var notesHtmlForTab = notesHtml;
+      progressTabHtml =
+        (mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
+        phaseHintHtml +
+        '<div class="form">' +
+        '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
+        '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
+        '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
+        '<label class="file-btn" for="noteCoverInput" style="' + (cohortLocked ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
+        '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
+        '<div id="noteCoverPreview"></div>' +
+        '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
+        '</div>' +
+        '<button id="removeFromListBtn" class="remove-link">Guruhdan chiqish</button>' +
+        purchaseLinkHtml +
+        '<div class="section-label" style="margin-top:20px">Kitob haqida</div>' +
+        '<div class="notes-list">' + notesHtmlForTab + '</div>';
+    }
 
     var topLevelComments = comments.filter(function (c) { return !c.reply_to_id; }).sort(function (a, b) {
       var diff = (likeCounts[b.id] || 0) - (likeCounts[a.id] || 0);
@@ -1282,7 +1257,6 @@ function renderBookDetailBody() {
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
       (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet</div>' : '') +
-      (book.start_date ? '<div class="book-hero-sub">📅 ' + formatDate(book.start_date) + (started ? '' : ' — hali boshlanmagan') + '</div>' : '') +
       (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
       '</div></div>' +
       '<div class="segment">' +
@@ -1293,19 +1267,8 @@ function renderBookDetailBody() {
       activeTabHtml;
 
     document.querySelectorAll('[data-detailtab]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        var newTab = btn.dataset.detailtab;
-        state.detailTab = newTab;
-        if (newTab === 'progress' && _bdCache) {
-          try {
-            var fresh = await Promise.all([
-              sbGet('finishers?select=id&user_id=eq.' + ME.id),
-              sbGet('streaks?select=*&user_id=eq.' + ME.id),
-            ]);
-            _bdCache.myFinishers = fresh[0];
-            _bdCache.myStreakRows = fresh[1];
-          } catch (e) { console.error(e); }
-        }
+      btn.addEventListener('click', function () {
+        state.detailTab = btn.dataset.detailtab;
         renderBookDetail();
       });
     });
@@ -1441,74 +1404,87 @@ function renderBookDetailBody() {
           });
         });
       }
-      document.getElementById('updateProgressBtn').addEventListener('click', function () {
-        if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
-        var pagesInputEl = document.getElementById('pagesInput');
-        var requestedPages = parseInt(pagesInputEl.value, 10);
-        if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
-        var noteText = noteInputEl.value.trim();
-        if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
-        var photoFile = document.getElementById('noteCoverInput').files[0];
-        if (!photoFile) { showAlert("Rasm yuklang — rasmsiz saqlab bo'lmaydi."); return; }
-        if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
-        var oldPages = mine ? mine.pages_read : 0;
-        var delta = requestedPages - oldPages;
-        var saveBtn = document.getElementById('updateProgressBtn');
-        confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
-          saveBtn.disabled = true;
-          saveBtn.textContent = 'Yuklanmoqda...';
-          var photoUrl = null;
-          try {
-            var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
-            photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
-          } catch (e) {
-            console.error(e);
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Saqlash';
-            showAlert("Rasm yuklanmadi. Internetni tekshirib qayta urinib ko'ring.");
-            return;
-          }
-          try {
-            var limitInfo = await recordDailyProgress(delta);
-            if (limitInfo.blocked) {
+      var joinBtn = document.getElementById('joinCohortBtn');
+      if (joinBtn) {
+        joinBtn.addEventListener('click', function () {
+          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+          var marker = joinBtn.dataset.marker;
+          confirmAction("Guruhga qo'shilasizmi?", async function () {
+            try {
+              var nowIso = new Date().toISOString();
+              var inserted = await sbPost('progress?on_conflict=book_id,user_id', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0, updated_at: nowIso, started_at: nowIso, cohort_start_date: marker,
+              }, 'resolution=merge-duplicates,return=representation');
+              if (inserted && inserted[0]) {
+                progress.push(inserted[0]);
+                progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+              }
+              vibrate('light');
+              showAlert('Guruhga qo\'shildingiz!');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      }
+
+      var updateBtnEl = document.getElementById('updateProgressBtn');
+      if (updateBtnEl) {
+        updateBtnEl.addEventListener('click', function () {
+          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+          var pagesInputEl = document.getElementById('pagesInput');
+          var requestedPages = parseInt(pagesInputEl.value, 10);
+          if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
+          var noteText = noteInputEl.value.trim();
+          if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
+          var photoFile = document.getElementById('noteCoverInput').files[0];
+          if (!photoFile) { showAlert("Rasm yuklang — rasmsiz saqlab bo'lmaydi."); return; }
+          if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
+          var oldPages = mine ? mine.pages_read : 0;
+          var delta = requestedPages - oldPages;
+          var saveBtn = document.getElementById('updateProgressBtn');
+          confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Yuklanmoqda...';
+            var photoUrl = null;
+            try {
+              var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
+              photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
+            } catch (e) {
+              console.error(e);
               saveBtn.disabled = false;
               saveBtn.textContent = 'Saqlash';
-              showAlert('Limit tugadi. Saqlay olmaysiz.');
+              showAlert("Rasm yuklanmadi. Internetni tekshirib qayta urinib ko'ring.");
               return;
             }
-            var finalPages = oldPages + limitInfo.allowedDelta;
-            await sbPost('progress?on_conflict=book_id,user_id', {
-              book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(),
-            }, 'resolution=merge-duplicates,return=representation');
-            var insertedNote = await sbPost('reading_notes', {
-              book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl,
-            });
-            if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
-            vibrate('light');
-            var nowIso = new Date().toISOString();
-            if (mine) {
+            try {
+              await recordReadingActivity();
+              var finalPages = requestedPages;
+              await sbPost('progress?on_conflict=book_id,user_id', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(), cohort_start_date: myCohortMarker,
+              }, 'resolution=merge-duplicates,return=representation');
+              var insertedNote = await sbPost('reading_notes', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl,
+              });
+              if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
+              vibrate('light');
+              var nowIso = new Date().toISOString();
               mine.pages_read = finalPages;
               mine.updated_at = nowIso;
-            } else {
-              mine = { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: nowIso, started_at: nowIso };
-              progress.push(mine);
+              progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+              var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
+              var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
+              if (medalMsg) showAlert(medalMsg);
+              else showAlert('Saqlandi.');
+              renderBookDetail();
+            } catch (e) {
+              console.error(e);
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Saqlash';
+              showAlert('Xatolik yuz berdi.');
             }
-            progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
-            var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
-            var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
-            if (medalMsg) myFinishers.push({ id: 'local-' + Date.now() });
-            if (medalMsg) showAlert(medalMsg);
-            else if (limitInfo.capped) showAlert('Kunlik limitdan oshib ketdi, ' + finalPages + ' betgacha saqlandi.');
-            else showAlert('Saqlandi.');
-            renderBookDetail();
-          } catch (e) {
-            console.error(e);
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Saqlash';
-            showAlert('Xatolik yuz berdi.');
-          }
+          });
         });
-      });
+      }
 
       document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -1542,13 +1518,15 @@ function renderBookDetailBody() {
 
       var removeBtn = document.getElementById('removeFromListBtn');
       if (removeBtn) {
-        removeBtn.addEventListener('click', async function () {
-          try {
-            await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
-            vibrate('medium');
-            _bdCache = null;
-            state.view = 'home'; state.detailTab = 'readers'; render();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        removeBtn.addEventListener('click', function () {
+          confirmAction("Guruhdan chiqasizmi? Progressingiz o'chib ketadi.", async function () {
+            try {
+              await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
+              vibrate('medium');
+              _bdCache = null;
+              state.view = 'home'; state.detailTab = 'readers'; render();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
         });
       }
     }
