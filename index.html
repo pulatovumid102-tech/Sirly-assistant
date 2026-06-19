@@ -483,21 +483,35 @@ async function loadTopLists() {
   try {
     var results = await Promise.all([
       sbGet('finishers?select=user_id,user_name'),
-      sbGet('progress?select=book_id'),
+      sbGet('progress?select=book_id,user_id,user_name,pages_read'),
       sbGet('books?select=*'),
     ]);
     var finishers = results[0];
     var progressRows = results[1];
     var books = results[2];
 
-    var readerCounts = {}, readerNames = {};
-    finishers.forEach(function (f) {
-      readerCounts[f.user_id] = (readerCounts[f.user_id] || 0) + 1;
-      readerNames[f.user_id] = f.user_name;
-    });
-    var topReaders = Object.keys(readerCounts).map(function (uid) {
-      return { id: parseInt(uid, 10), name: readerNames[uid], count: readerCounts[uid] };
-    }).sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+    var usingPagesFallback = finishers.length === 0;
+    var topReaders;
+    if (!usingPagesFallback) {
+      var readerCounts = {}, readerNames = {};
+      finishers.forEach(function (f) {
+        readerCounts[f.user_id] = (readerCounts[f.user_id] || 0) + 1;
+        readerNames[f.user_id] = f.user_name;
+      });
+      topReaders = Object.keys(readerCounts).map(function (uid) {
+        return { id: parseInt(uid, 10), name: readerNames[uid], count: readerCounts[uid], unit: ' ta kitob' };
+      }).sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+    } else {
+      var pageSums = {}, pageNames = {};
+      progressRows.forEach(function (p) {
+        pageSums[p.user_id] = (pageSums[p.user_id] || 0) + (p.pages_read || 0);
+        pageNames[p.user_id] = p.user_name;
+      });
+      topReaders = Object.keys(pageSums).map(function (uid) {
+        return { id: parseInt(uid, 10), name: pageNames[uid], count: pageSums[uid], unit: ' bet' };
+      }).filter(function (r) { return r.count > 0; })
+        .sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+    }
 
     var bookCounts = {};
     progressRows.forEach(function (p) { bookCounts[p.book_id] = (bookCounts[p.book_id] || 0) + 1; });
@@ -512,9 +526,9 @@ async function loadTopLists() {
       return '<div class="reader-row' + (r.id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + r.id + '" data-username="' + escapeHtml(r.name) + '">' +
         '<div class="reader-rank">' + medalMark(i) + '</div>' +
         '<div class="reader-info"><div class="reader-name">' + escapeHtml(r.name) + '</div></div>' +
-        '<div class="reader-pages">' + r.count + ' ta kitob</div>' +
+        '<div class="reader-pages">' + r.count + r.unit + '</div>' +
         '</div>';
-    }).join('') : '<div class="empty">Hali hech kim kitob tugatmagan.</div>';
+    }).join('') : '<div class="empty">Hali hech kim kitob o\'qishni boshlamagan.</div>';
 
     var booksHtml = topBooks.length ? topBooks.map(function (x, i) {
       var b = x.book;
@@ -528,7 +542,8 @@ async function loadTopLists() {
     }).join('') : '<div class="empty">Hozircha hech kim kitob o\'qimayapti.</div>';
 
     el.innerHTML =
-      '<div class="h-title" style="font-size:16px;margin-bottom:10px">🏅 Top 5 kitobxon</div>' +
+      '<div class="h-title" style="font-size:16px;margin-bottom:4px">🏅 Top 5 kitobxon</div>' +
+      (usingPagesFallback ? '<div class="hint" style="margin-bottom:10px">Hali hech kim kitob tugatmagan — hozircha umumiy o\'qilgan betlar bo\'yicha.</div>' : '<div style="margin-bottom:10px"></div>') +
       '<div class="readers" style="margin-bottom:24px">' + readersHtml + '</div>' +
       '<div class="h-title" style="font-size:16px;margin-bottom:10px">📚 Top 5 kitob</div>' +
       '<div class="book-list">' + booksHtml + '</div>';
