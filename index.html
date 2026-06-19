@@ -271,6 +271,9 @@ function localDateStr(d) {
 function computeDailyLimit(finishedCount) {
   return Math.min(MAX_DAILY_LIMIT, BASE_DAILY_LIMIT + FINISH_BONUS * finishedCount);
 }
+function effectiveDailyLimit(finishedCount, overrideVal) {
+  return (overrideVal !== null && overrideVal !== undefined) ? overrideVal : computeDailyLimit(finishedCount);
+}
 
 // ===== Kunlik odat va o'qish limiti =====
 async function recordDailyProgress(delta) {
@@ -278,11 +281,11 @@ async function recordDailyProgress(delta) {
   var result = { allowedDelta: delta, limit: null, capped: false, blocked: false };
   try {
     var finishers = await sbGet('finishers?select=id&user_id=eq.' + ME.id);
-    var limit = computeDailyLimit(finishers.length);
-    result.limit = limit;
-
     var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
     var row = rows[0];
+    var limit = effectiveDailyLimit(finishers.length, row ? row.limit_override : null);
+    result.limit = limit;
+
     var pagesToday = (row && row.last_active_date === today) ? (row.pages_today || 0) : 0;
 
     if (delta > 0) {
@@ -339,6 +342,8 @@ var _bdCache = null;
 var noteEditTarget = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
+var _adminLimitOverrides = {};
+var _adminLimitEditId = null;
 var _adminBooksCache = [];
 var app = document.getElementById('app');
 var _backHandler = null;
@@ -629,8 +634,8 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, remainingToday) {
-  var limit = computeDailyLimit(finishedCount);
+function profileBodyHtml(isOwn, finishedCount, medals, books, remainingToday, limitOverride) {
+  var limit = effectiveDailyLimit(finishedCount, limitOverride);
   var limitDisplay = (isOwn && remainingToday !== null) ? (limit + ' / ' + remainingToday) : String(limit);
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
@@ -657,7 +662,7 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
     var profileResults = await Promise.all([
       sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
       sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
-      isOwn ? sbGet('streaks?select=*&user_id=eq.' + userId) : Promise.resolve([]),
+      sbGet('streaks?select=*&user_id=eq.' + userId),
     ]);
     var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
@@ -667,15 +672,16 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
       return { book: b, pct: pct, pagesRead: r.pages_read };
     });
+    var streakRow = profileResults[2][0];
+    var limitOverride = streakRow ? streakRow.limit_override : null;
     var remainingToday = null;
     if (isOwn) {
-      var limit = computeDailyLimit(finishers.length);
-      var streakRow = profileResults[2][0];
+      var limit = effectiveDailyLimit(finishers.length, limitOverride);
       var today = localDateStr();
       var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
       remainingToday = Math.max(0, limit - pagesToday);
     }
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, remainingToday);
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, remainingToday, limitOverride);
     if (!isOwn) {
       document.getElementById('contactBtn').addEventListener('click', async function () {
         var btn = this;
@@ -756,12 +762,15 @@ async function loadAllUsersMerged() {
 
 async function loadAdminUsers() {
   var el = document.getElementById('adminBody');
+  _adminLimitEditId = null;
   try {
-    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id')]);
+    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id'), sbGet('streaks?select=user_id,limit_override')]);
     _adminUsersCache = usersAndBlocked[0];
     var blockedRows = usersAndBlocked[1];
     _adminBlockedSet = {};
     blockedRows.forEach(function (b) { _adminBlockedSet[b.user_id] = true; });
+    _adminLimitOverrides = {};
+    usersAndBlocked[2].forEach(function (s) { if (s.limit_override !== null && s.limit_override !== undefined) _adminLimitOverrides[s.user_id] = s.limit_override; });
     el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:10px" />' +
       '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
       '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminUserDateFrom" class="input" type="date" style="flex:1" /><input id="adminUserDateTo" class="input" type="date" style="flex:1" /></div>' +
@@ -791,9 +800,24 @@ function renderAdminUsersList() {
   if (toVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) <= toVal; });
   listEl.innerHTML = users.length ? users.map(function (u) {
     var isBlocked = !!_adminBlockedSet[u.id];
+    var hasOverride = _adminLimitOverrides[u.id] !== undefined;
+    if (_adminLimitEditId === u.id) {
+      return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
+        '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
+        '<div class="reader-note">ID: ' + u.id + '</div></div>' +
+        '<input id="limitEditInput" class="input" type="number" min="0" placeholder="Limit (bo\'sh = avtomatik)" value="' + (hasOverride ? _adminLimitOverrides[u.id] : '') + '" />' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn-small" data-save-limit="' + u.id + '">Saqlash</button>' +
+        '<button class="btn-small" data-cancel-limit>Bekor qilish</button>' +
+        '</div></div>';
+    }
     return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
-      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDate(u.firstSeen) + '</div></div>' +
-      '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button></div>';
+      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDate(u.firstSeen) + '</div>' +
+      '<div class="reader-note">Limit: ' + (hasOverride ? (_adminLimitOverrides[u.id] + ' (qo\'lda)') : 'Avtomatik') + '</div></div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+      '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button>' +
+      '<button class="btn-small" data-edit-limit="' + u.id + '">Limitni o\'zgartirish</button>' +
+      '</div></div>';
   }).join('') : '<div class="empty">Foydalanuvchi topilmadi.</div>';
   document.querySelectorAll('[data-block-id]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
@@ -802,6 +826,36 @@ function renderAdminUsersList() {
       try {
         if (wasBlocked) { await sbDelete('blocked_users?user_id=eq.' + id); delete _adminBlockedSet[id]; }
         else { await sbPost('blocked_users?on_conflict=user_id', { user_id: id }, 'resolution=merge-duplicates,return=representation'); _adminBlockedSet[id] = true; }
+        vibrate('light');
+        renderAdminUsersList();
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+    });
+  });
+  document.querySelectorAll('[data-edit-limit]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      _adminLimitEditId = parseInt(btn.dataset.editLimit, 10);
+      renderAdminUsersList();
+    });
+  });
+  var cancelLimitBtn = document.querySelector('[data-cancel-limit]');
+  if (cancelLimitBtn) {
+    cancelLimitBtn.addEventListener('click', function () {
+      _adminLimitEditId = null;
+      renderAdminUsersList();
+    });
+  }
+  document.querySelectorAll('[data-save-limit]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = parseInt(btn.dataset.saveLimit, 10);
+      var inputEl = document.getElementById('limitEditInput');
+      var raw = inputEl.value.trim();
+      var overrideVal = raw === '' ? null : parseInt(raw, 10);
+      if (raw !== '' && (isNaN(overrideVal) || overrideVal < 0)) { showAlert("Limitni to'g'ri kiriting."); return; }
+      try {
+        await sbPost('streaks?on_conflict=user_id', { user_id: id, limit_override: overrideVal }, 'resolution=merge-duplicates,return=representation');
+        if (overrideVal === null) delete _adminLimitOverrides[id];
+        else _adminLimitOverrides[id] = overrideVal;
+        _adminLimitEditId = null;
         vibrate('light');
         renderAdminUsersList();
       } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
@@ -1077,7 +1131,7 @@ function renderBookDetailBody() {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
-    var dailyLimit = computeDailyLimit(myFinishers.length);
+    var dailyLimit = effectiveDailyLimit(myFinishers.length, (myStreakRows[0] && myStreakRows[0].limit_override));
     var streakRow = myStreakRows[0];
     var pagesToday = (streakRow && streakRow.last_active_date === today) ? (streakRow.pages_today || 0) : 0;
     var remainingAllowance = Math.max(0, dailyLimit - pagesToday);
