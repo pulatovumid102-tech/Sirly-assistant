@@ -300,6 +300,10 @@ async function addToTreasury(qovunDelta) {
   var current = (rows[0] && rows[0].qovun_balance) || 0;
   await sbPatch('treasury?id=eq.1', { qovun_balance: current + qovunDelta });
 }
+function formatSom(n) {
+  n = Math.round(n || 0);
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + " so'm";
+}
 function furaLabel(qovun) {
   var fura = Math.floor((qovun || 0) / FURA_SIZE);
   var rest = (qovun || 0) % FURA_SIZE;
@@ -447,6 +451,7 @@ var isAdminMode = false;
 var _bdCache = null;
 var noteEditTarget = null;
 var _cohortCountdownInterval = null;
+var selectedCohortMarker = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
@@ -914,11 +919,20 @@ async function loadWalletBody() {
           '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
           '</select>' +
           '<input id="buyAmount" class="input" type="number" min="1" placeholder="Nechta sotib olmoqchisiz?" style="margin-top:8px" />' +
+          '<div id="buyAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
           '<div class="hint" style="margin-top:8px">To\'lov uchun karta:<br><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><b id="paymentCardText">' + PAYMENT_CARD + '</b><button type="button" id="copyCardBtn" class="btn-small" style="flex-shrink:0">📋 Nusxalash</button></div><div style="margin-top:6px">To\'lov qilib, kvitansiya rasmini yuklang. Kvitansiyada SANA, SOAT va SUMMA aniq ko\'rinib turishi shart.</div></div>' +
           '<label class="file-btn" for="buyReceiptInput" style="margin-top:8px">🧾 Kvitansiya yuklash</label>' +
           '<input type="file" id="buyReceiptInput" accept="image/*" style="display:none" />' +
           '<div id="buyReceiptPreview"></div>' +
           '<button id="submitBuyBtn" class="btn-primary full" style="margin-top:8px">Yuborish</button>';
+        var updateBuySom = function () {
+          var amt = parseInt(document.getElementById('buyAmount').value, 10) || 0;
+          var cur = document.getElementById('buyCurrency').value;
+          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
+          document.getElementById('buyAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
+        };
+        document.getElementById('buyAmount').addEventListener('input', updateBuySom);
+        document.getElementById('buyCurrency').addEventListener('change', updateBuySom);
         document.getElementById('copyCardBtn').addEventListener('click', function () {
           var text = PAYMENT_CARD;
           var btnEl = this;
@@ -964,9 +978,18 @@ async function loadWalletBody() {
           '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
           '</select>' +
           '<input id="withdrawAmount" class="input" type="number" min="1" placeholder="Miqdor" />' +
+          '<div id="withdrawAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
           '<input id="withdrawCardHolder" class="input" placeholder="Karta egasining F.I.Sh" />' +
           '<input id="withdrawCard" class="input" placeholder="Karta raqamingiz" />' +
           '<button id="submitWithdrawBtn" class="btn-primary full" style="margin-top:8px">So\'rov yuborish</button>';
+        var updateWithdrawSom = function () {
+          var amt = parseInt(document.getElementById('withdrawAmount').value, 10) || 0;
+          var cur = document.getElementById('withdrawCurrency').value;
+          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
+          document.getElementById('withdrawAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
+        };
+        document.getElementById('withdrawAmount').addEventListener('input', updateWithdrawSom);
+        document.getElementById('withdrawCurrency').addEventListener('change', updateWithdrawSom);
         document.getElementById('submitWithdrawBtn').addEventListener('click', async function () {
           var currency = document.getElementById('withdrawCurrency').value;
           var amt = parseInt(document.getElementById('withdrawAmount').value, 10);
@@ -1616,20 +1639,30 @@ function renderBookDetailBody() {
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
-    var activeMarkers = [], endedMarkers = [];
+    var activeMarkers = [], endedMarkers = [], nextFutureMarker = null, nextFutureDiff = -Infinity;
     allMarkers.forEach(function (m) {
-      if (!membersByMarker[m]) return;
       var ph = cohortPhase(m, today, readingDays);
-      if (ph === 'ended') { endedMarkers.push(m); return; }
-      if (ph === null) return;
-      activeMarkers.push(m);
+      if (ph === null) {
+        var d = cohortDiffDays(m, today);
+        if (d > nextFutureDiff) { nextFutureDiff = d; nextFutureMarker = m; }
+        return;
+      }
+      if (ph === 'ended') { if (membersByMarker[m]) endedMarkers.push(m); return; }
+      if (membersByMarker[m]) activeMarkers.push(m);
     });
+    if (nextFutureMarker) activeMarkers.push(nextFutureMarker);
     activeMarkers.sort();
     endedMarkers.sort();
 
+    var viewMarker = selectedCohortMarker || myCohortMarker || signupMarker;
+
     function schedRowHtml(m) {
-      return '<div class="cohort-sched-row' + (m === myCohortMarker ? ' mine' : '') + '">' +
-        '<div class="cohort-sched-date">' + formatDate(m) + '</div>' +
+      var count = membersByMarker[m] || 0;
+      var isMine = m === myCohortMarker;
+      var isSelected = m === viewMarker;
+      return '<div class="cohort-sched-row' + (isSelected ? ' mine' : '') + '" data-view-cohort="' + m + '" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
+        '<div class="cohort-sched-date">' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : '') + '</div>' +
+        '<div class="cohort-sched-meta">' + count + ' kishi</div>' +
         '</div>';
     }
     var scheduleHtml = '<div class="cohort-schedule">' + activeMarkers.map(schedRowHtml).join('') + '</div>' +
@@ -1638,24 +1671,21 @@ function renderBookDetailBody() {
           '<div id="archiveList" class="cohort-schedule" style="display:none;margin-top:8px">' + endedMarkers.map(schedRowHtml).join('') + '</div>'
         : '');
 
-    var cohortMates = myCohortMarker ? progress.filter(function (p) { return p.cohort_start_date === myCohortMarker; }) : [];
-    var allActiveParticipants = progress.filter(function (p) {
-      if (!p.cohort_start_date) return false;
-      var ph = cohortPhase(p.cohort_start_date, today, readingDays);
-      return ph && ph !== 'ended';
-    });
-    var joinTopBtnHtml = (!mine && !otherActive && signupMarker) ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + signupMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish</button>' : '';
-    var displayedParticipants = myCohortMarker ? cohortMates : allActiveParticipants;
-    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Barcha ishtirokchilar') + '</div>' +
-      (!displayedParticipants.length
+    var viewParticipants = viewMarker ? progress.filter(function (p) { return p.cohort_start_date === viewMarker; }) : [];
+    var viewMarkerPhase = viewMarker ? cohortPhase(viewMarker, today, readingDays) : null;
+    var canJoinViewMarker = !mine && !otherActive && viewMarker && (viewMarkerPhase === 'signup' || viewMarkerPhase === null);
+    var joinTopBtnHtml = canJoinViewMarker ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + viewMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish (' + formatDate(viewMarker) + ')</button>' : '';
+    var sectionTitle = viewMarker === myCohortMarker ? 'Sizning guruhingiz' : (formatDate(viewMarker || '') + ' guruhi');
+    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + sectionTitle + '</div>' +
+      (!viewParticipants.length
       ? '<div class="empty">Hozircha hech kim qo\'shilmagan.</div>'
-      : '<div class="readers">' + displayedParticipants.map(function (p, i) {
+      : '<div class="readers">' + viewParticipants.map(function (p, i) {
           var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
-          var rankMark = myCohortMarker ? (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)) : '👤';
+          var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
           return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
             '<div class="reader-rank">' + rankMark + '</div>' +
             '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + (!myCohortMarker ? ' · ' + formatDate(p.cohort_start_date) + ' guruhi' : '') + '</div></div>' +
+            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + '</div></div>' +
             '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
             '</div>';
         }).join('') + '</div>');
@@ -1688,11 +1718,11 @@ function renderBookDetailBody() {
     if (otherActive) {
       progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
     } else if (!mine) {
-      var signupInfoHtml = signupMarker
-        ? '<div class="hint" style="margin-bottom:14px">Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + readingDays + ' kun.</div>'
+      var signupInfoHtml = canJoinViewMarker
+        ? '<div class="hint" style="margin-bottom:14px">Tanlangan guruh: ' + formatDate(viewMarker) + '. Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + readingDays + ' kun.</div>'
         : '';
       progressTabHtml = signupInfoHtml +
-        (signupMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + signupMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '') +
+        (canJoinViewMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + viewMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '<div class="empty">Hozir qo\'shilish uchun guruh tanlanmagan. "Qatnashuvchilar" tabidan sana tanlang.</div>') +
         purchaseLinkHtml;
     } else {
       var cohortLocked = myCohortPhase === 'ended';
@@ -1790,6 +1820,12 @@ function renderBookDetailBody() {
     });
 
     if (state.detailTab === 'readers') {
+      document.querySelectorAll('[data-view-cohort]').forEach(function (row) {
+        row.addEventListener('click', function () {
+          selectedCohortMarker = row.dataset.viewCohort;
+          renderBookDetail();
+        });
+      });
       var archiveToggleBtn = document.getElementById('archiveToggleBtn');
       if (archiveToggleBtn) {
         archiveToggleBtn.addEventListener('click', function () {
@@ -1808,6 +1844,7 @@ function renderBookDetailBody() {
             try {
               var ok = await joinCohortFlow(book, marker, progress);
               if (!ok) return;
+              selectedCohortMarker = null;
               vibrate('light');
               showAlert('Guruhga qo\'shildingiz!');
               renderBookDetail();
@@ -1967,6 +2004,7 @@ function renderBookDetailBody() {
             try {
               var ok = await joinCohortFlow(book, marker, progress);
               if (!ok) return;
+              selectedCohortMarker = null;
               vibrate('light');
               showAlert('Guruhga qo\'shildingiz!');
               renderBookDetail();
@@ -2106,7 +2144,7 @@ document.addEventListener('click', function (e) {
   if (goEl) {
     var view = goEl.dataset.go;
     if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
-    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; _bdCache = null; }
+    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; selectedCohortMarker = null; _bdCache = null; }
     if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
     state.view = view;
     render();
