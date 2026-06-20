@@ -37,13 +37,9 @@ WEBAPP_URL = "https://sirly-assistant-production.up.railway.app"
 
 # ===== Buyruqlar =====
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📚 Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]]
-    )
     await update.message.reply_text(
         "Salom! \"Bir bet\" ilovasiga xush kelibsiz 📖\n\n"
-        "Ilovani ochish uchun pastdagi tugmani bosing.",
-        reply_markup=keyboard,
+        "Ilovani ochish uchun Menu tugmasini bosing."
     )
 
 
