@@ -418,12 +418,16 @@ async def check_payment_notifications(context: ContextTypes.DEFAULT_TYPE):
 # ===== Asosiy =====
 # ===== Ilova faylini (index.html) servisga chiqarish =====
 def run_web_server():
-    port = int(os.environ.get("PORT", 8080))
-    handler = http.server.SimpleHTTPRequestHandler
-    http.server.ThreadingHTTPServer.allow_reuse_address = True
-    httpd = http.server.ThreadingHTTPServer(("0.0.0.0", port), handler)
-    logger.info(f"Veb-server {port}-portda ishga tushdi (index.html shu yerdan ko'rinadi).")
-    httpd.serve_forever()
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Veb-server {port}-portda ishga tushirilmoqda...")
+    try:
+        handler = http.server.SimpleHTTPRequestHandler
+        http.server.ThreadingHTTPServer.allow_reuse_address = True
+        httpd = http.server.ThreadingHTTPServer(("0.0.0.0", port), handler)
+        logger.info(f"Veb-server {port}-portda muvaffaqiyatli ishga tushdi (index.html shu yerdan ko'rinadi).")
+        httpd.serve_forever()
+    except Exception:
+        logger.exception("Veb-server ishga tushmadi (xatolik yuqorida):")
 
 
 def main():
