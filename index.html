@@ -836,12 +836,22 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         document.getElementById('withdrawForm').style.display = 'none';
         if (!showing) {
           buyForm.innerHTML =
-            '<div class="hint">To\'lov uchun karta: <b>' + PAYMENT_CARD + '</b><br>To\'lov qilib, kvitansiya rasmini yuklang. Kvitansiyada SANA, SOAT va SUMMA aniq ko\'rinib turishi shart.</div>' +
+            '<div class="hint">To\'lov uchun karta:<br><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><b id="paymentCardText">' + PAYMENT_CARD + '</b><button type="button" id="copyCardBtn" class="btn-small" style="flex-shrink:0">📋 Nusxalash</button></div><div style="margin-top:6px">To\'lov qilib, kvitansiya rasmini yuklang. Kvitansiyada SANA, SOAT va SUMMA aniq ko\'rinib turishi shart.</div></div>' +
             '<input id="buyQovunAmount" class="input" type="number" min="1" placeholder="Nechta qovun sotib olmoqchisiz?" style="margin-top:8px" />' +
             '<label class="file-btn" for="buyReceiptInput">🧾 Kvitansiya yuklash</label>' +
             '<input type="file" id="buyReceiptInput" accept="image/*" style="display:none" />' +
             '<div id="buyReceiptPreview"></div>' +
             '<button id="submitBuyBtn" class="btn-primary full" style="margin-top:8px">Yuborish</button>';
+          document.getElementById('copyCardBtn').addEventListener('click', function () {
+            var text = PAYMENT_CARD;
+            var btnEl = this;
+            function done() { vibrate('light'); var old = btnEl.textContent; btnEl.textContent = '✅ Nusxalandi'; setTimeout(function () { btnEl.textContent = old; }, 1500); }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(done).catch(function () { showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text); });
+            } else {
+              showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text);
+            }
+          });
           document.getElementById('buyReceiptInput').addEventListener('change', function () {
             var f = this.files[0];
             var prevEl = document.getElementById('buyReceiptPreview');
@@ -1121,8 +1131,13 @@ async function renderDashboardBody(period) {
 async function loadAdminTransactions() {
   var el = document.getElementById('adminBody');
   try {
-    var rows = await sbGet('qovun_purchase_requests?select=*&status=eq.pending&order=created_at.desc');
-    el.innerHTML = rows.length ? rows.map(function (r) {
+    var results = await Promise.all([
+      sbGet('qovun_purchase_requests?select=*&status=eq.pending&order=created_at.desc'),
+      sbGet('qovun_purchase_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=50'),
+    ]);
+    var pending = results[0];
+    var history = results[1];
+    var pendingHtml = pending.length ? pending.map(function (r) {
       return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
         '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
         '<div class="reader-note">' + r.qovun_amount + ' ta qovun uchun to\'lov bo\'ldi — tekshirib tasdiqlang</div>' +
@@ -1132,7 +1147,16 @@ async function loadAdminTransactions() {
         '<button class="btn-small" data-approve-purchase="' + r.id + '" data-amount="' + r.qovun_amount + '" data-uid="' + r.user_id + '">Tasdiqlash</button>' +
         '<button class="btn-small danger" data-reject-purchase="' + r.id + '">Rad etish</button>' +
         '</div></div>';
-    }).join('') : '<div class="empty">Hozircha tranzaksiya yo\'q.</div>';
+    }).join('') : '<div class="empty">Hozircha kutilayotgan tranzaksiya yo\'q.</div>';
+    var historyHtml = history.length ? history.map(function (r) {
+      var statusLabel = r.status === 'approved' ? '✅ Tasdiqlandi' : '❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : '');
+      return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
+        '<div class="reader-note">' + r.qovun_amount + ' ta qovun · ' + statusLabel + '</div>' +
+        '<div class="reader-note">' + formatDate(r.resolved_at || r.created_at) + '</div></div></div>';
+    }).join('') : '<div class="empty">Tarix yo\'q.</div>';
+    el.innerHTML =
+      '<div class="section-label">Kutilayotgan</div>' + pendingHtml +
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' + historyHtml;
     document.querySelectorAll('[data-approve-purchase]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         confirmAction("To'lovni tasdiqlaysizmi?", async function () {
@@ -1540,17 +1564,23 @@ function renderBookDetailBody() {
         : '');
 
     var cohortMates = myCohortMarker ? progress.filter(function (p) { return p.cohort_start_date === myCohortMarker; }) : [];
+    var allActiveParticipants = progress.filter(function (p) {
+      if (!p.cohort_start_date) return false;
+      var ph = cohortPhase(p.cohort_start_date, today, readingDays);
+      return ph && ph !== 'ended';
+    });
     var joinTopBtnHtml = (!mine && !otherActive && signupMarker) ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + signupMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish</button>' : '';
-    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Guruhga qo\'shilmagansiz') + '</div>' +
-      (!myCohortMarker
-      ? '<div class="empty">O\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling.</div>'
-      : '<div class="readers">' + cohortMates.map(function (p, i) {
+    var displayedParticipants = myCohortMarker ? cohortMates : allActiveParticipants;
+    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Barcha ishtirokchilar') + '</div>' +
+      (!displayedParticipants.length
+      ? '<div class="empty">Hozircha hech kim qo\'shilmagan.</div>'
+      : '<div class="readers">' + displayedParticipants.map(function (p, i) {
           var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
-          var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+          var rankMark = myCohortMarker ? (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)) : '👤';
           return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
             '<div class="reader-rank">' + rankMark + '</div>' +
             '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + '</div></div>' +
+            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + (!myCohortMarker ? ' · ' + formatDate(p.cohort_start_date) + ' guruhi' : '') + '</div></div>' +
             '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
             '</div>';
         }).join('') + '</div>');
