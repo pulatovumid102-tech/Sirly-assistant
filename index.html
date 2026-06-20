@@ -577,7 +577,6 @@ async function renderHome() {
       '<div id="bookList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>';
   renderShell(
     '<div class="header"><div class="h-title">Kitoblar</div></div>' +
-    '<div id="streakBadge"></div>' +
     '<div class="segment">' +
     '<button class="seg-btn' + (state.tab === 'top' ? ' active' : '') + '" data-tab="top">🏆 TOP</button>' +
     '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
@@ -585,7 +584,6 @@ async function renderHome() {
     bodyHtml,
     { fab: !isTop }
   );
-  loadStreakBadge();
   if (isTop) {
     await loadTopLists();
   } else {
@@ -694,8 +692,9 @@ function darajaTitle(n) {
   return DARAJA_TITLES[idx];
 }
 
-async function loadStreakBadge() {
-  var el = document.getElementById('streakBadge');
+async function loadStreakBadge(targetId) {
+  var el = document.getElementById(targetId || 'streakBadge');
+  if (!el) return;
   try {
     var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
     var s = rows[0];
@@ -885,8 +884,10 @@ async function renderMyProfile() {
   setBackButton(false);
   renderShell(
     '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div></div>' +
+    '<div id="profileStreakBadge"></div>' +
     '<div id="profileBody"><div class="loading">Yuklanmoqda...</div></div>'
   );
+  loadStreakBadge('profileStreakBadge');
   await loadProfileInto('profileBody', ME.id, ME.name, true);
 }
 
