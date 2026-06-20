@@ -291,12 +291,18 @@ function cohortDiffDays(markerStr, todayStr) {
   var today = new Date(todayStr + 'T00:00:00');
   return Math.round((today - marker) / 86400000);
 }
-function cohortPhase(markerStr, todayStr) {
+function bookReadingDays(book) {
+  var pages = book && book.total_pages;
+  if (!pages || pages <= 0) return COHORT_READING_DAYS;
+  return Math.max(1, Math.ceil(pages / COHORT_SUGGESTED_DAILY_PAGES));
+}
+function cohortPhase(markerStr, todayStr, readingDays) {
+  readingDays = readingDays || COHORT_READING_DAYS;
   var diff = cohortDiffDays(markerStr, todayStr);
   if (diff < 0) return null;
   if (diff < COHORT_SIGNUP_DAYS) return 'signup';
-  if (diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS) return 'reading';
-  if (diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS) return 'closing';
+  if (diff < COHORT_SIGNUP_DAYS + readingDays) return 'reading';
+  if (diff < COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS) return 'closing';
   return 'ended';
 }
 function currentSignupCohortMarker(todayStr) {
@@ -311,10 +317,11 @@ function addDaysToDateStr(markerStr, days) {
   d.setDate(d.getDate() + days);
   return formatDate(localDateStr(d));
 }
-function cohortPhaseLabel(phase, diff, markerStr) {
+function cohortPhaseLabel(phase, diff, markerStr, readingDays) {
+  readingDays = readingDays || COHORT_READING_DAYS;
   if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
-  if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + COHORT_READING_DAYS + ' kunlik challenge';
-  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
+  if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + readingDays + ' kunlik challenge';
+  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
   return 'Guruh yopilgan';
 }
 
@@ -1146,8 +1153,9 @@ function renderBookDetailBody() {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
+    var readingDays = bookReadingDays(book);
     var myCohortMarker = mine ? mine.cohort_start_date : null;
-    var myCohortPhase = myCohortMarker ? cohortPhase(myCohortMarker, today) : null;
+    var myCohortPhase = myCohortMarker ? cohortPhase(myCohortMarker, today, readingDays) : null;
     var signupMarker = currentSignupCohortMarker(today);
     var otherActive = myAllProgress.find(function (p) {
       if (String(p.book_id) === String(book.id)) return false;
@@ -1159,9 +1167,9 @@ function renderBookDetailBody() {
 
     var headerStatusText;
     if (myCohortMarker) {
-      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker);
+      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker, readingDays);
     } else if (signupMarker) {
-      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker);
+      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker, readingDays);
     } else {
       headerStatusText = "Hozir yangi guruh ochilishini kuting.";
     }
@@ -1169,25 +1177,21 @@ function renderBookDetailBody() {
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
-    var activeMarkers = [], endedMarkers = [], nextFutureMarker = null, nextFutureDiff = -Infinity;
+    var activeMarkers = [], endedMarkers = [];
     allMarkers.forEach(function (m) {
-      var ph = cohortPhase(m, today);
+      if (!membersByMarker[m]) return;
+      var ph = cohortPhase(m, today, readingDays);
       if (ph === 'ended') { endedMarkers.push(m); return; }
-      if (ph === null) {
-        var d = cohortDiffDays(m, today);
-        if (d > nextFutureDiff) { nextFutureDiff = d; nextFutureMarker = m; }
-        return;
-      }
+      if (ph === null) return;
       activeMarkers.push(m);
     });
-    if (nextFutureMarker) activeMarkers.push(nextFutureMarker);
     activeMarkers.sort();
     endedMarkers.sort();
 
     function schedRowHtml(m) {
       var diff = cohortDiffDays(m, today);
-      var phase = cohortPhase(m, today);
-      var label = phase ? cohortPhaseLabel(phase, diff, m) : ('O\'qish ' + addDaysToDateStr(m, COHORT_SIGNUP_DAYS) + ' da boshlanadi');
+      var phase = cohortPhase(m, today, readingDays);
+      var label = phase ? cohortPhaseLabel(phase, diff, m, readingDays) : ('O\'qish ' + addDaysToDateStr(m, COHORT_SIGNUP_DAYS) + ' da boshlanadi');
       var count = membersByMarker[m] || 0;
       return '<div class="cohort-sched-row' + (m === myCohortMarker ? ' mine' : '') + '">' +
         '<div class="cohort-sched-date">' + formatDate(m) + (m === myCohortMarker ? ' (sizniki)' : '') + '</div>' +
@@ -1245,7 +1249,7 @@ function renderBookDetailBody() {
       progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
     } else if (!mine) {
       var signupInfoHtml = signupMarker
-        ? '<div class="hint" style="margin-bottom:14px">Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + COHORT_READING_DAYS + ' kun.</div>'
+        ? '<div class="hint" style="margin-bottom:14px">Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + readingDays + ' kun.</div>'
         : '';
       progressTabHtml = signupInfoHtml +
         (signupMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + signupMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '') +
@@ -1316,7 +1320,7 @@ function renderBookDetailBody() {
       '<div class="hero-row">' + coverHtml +
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
-      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet</div>' : '') +
+      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet · Challenge: ' + readingDays + ' kun</div>' : '') +
       '<div class="book-hero-sub" style="color:var(--accent-1);font-weight:600">📌 ' + headerStatusText + '</div>' +
       (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
       '</div></div>' +
