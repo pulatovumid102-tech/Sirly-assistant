@@ -2,7 +2,7 @@ import logging
 import calendar
 import httpx
 from datetime import datetime, timezone, time as dt_time, date as dt_date
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -37,13 +37,9 @@ WEBAPP_URL = "https://sirly-assistant-production.up.railway.app"
 
 # ===== Buyruqlar =====
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📚 Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]]
-    )
     await update.message.reply_text(
         "Salom! \"Bir bet\" ilovasiga xush kelibsiz 📖\n\n"
-        "Ilovani ochish uchun pastdagi tugmani bosing.",
-        reply_markup=keyboard,
+        "Ilovani ochish uchun pastdagi (chap tomondagi) Menu tugmasini bosing."
     )
 
 
@@ -304,9 +300,69 @@ async def send_daily_motivation(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"send_daily_motivation xato: {e}")
 
 
+async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{SB_URL}/rest/v1/join_notifications",
+                headers=SB_HEADERS,
+                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
+            )
+            rows = r.json()
+            for row in rows:
+                try:
+                    book_r = await client.get(
+                        f"{SB_URL}/rest/v1/books",
+                        headers=SB_HEADERS,
+                        params={"id": f"eq.{row['book_id']}", "select": "title"},
+                    )
+                    book_rows = book_r.json()
+                    title = book_rows[0]["title"] if book_rows else "Kitob"
+
+                    count_r = await client.get(
+                        f"{SB_URL}/rest/v1/progress",
+                        headers=SB_HEADERS,
+                        params={
+                            "book_id": f"eq.{row['book_id']}",
+                            "cohort_start_date": f"eq.{row['cohort_start_date']}",
+                            "select": "user_id",
+                        },
+                    )
+                    total = len(count_r.json())
+
+                    text = (
+                        f"📈 {row['cohort_start_date']}da boshlanadigan \"{title}\" o'qish "
+                        f"challenjiga yana 1 kishi qo'shildi, jami {total} kishi."
+                    )
+                    await context.bot.send_message(chat_id=row["creator_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Qo'shilish xabari yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/join_notifications",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"sent": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"join_notifications belgilanmadi (id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_join_notifications xato: {e}")
+
+
 # ===== Asosiy =====
+async def setup_menu_button(application):
+    try:
+        await application.bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))
+        )
+    except Exception as e:
+        logger.error(f"Menu tugmasi sozlanmadi: {e}")
+
+
 def main():
-    application = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TOKEN).post_init(setup_menu_button).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(contact_response_callback, pattern=r"^cr_(yes|no)_\d+$"))
@@ -314,6 +370,7 @@ def main():
     if application.job_queue:
         application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
         application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
+        application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
