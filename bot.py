@@ -35,7 +35,7 @@ SB_HEADERS = {
 }
 
 # Mini App manzili
-WEBAPP_URL = "https://sirly-assistant-production.up.railway.app"
+WEBAPP_URL = "https://pulatovumid102-tech.github.io/Sirly-assistant/"
 
 
 # ===== Buyruqlar =====
