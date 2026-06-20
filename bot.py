@@ -22,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===== Sozlamalar =====
-TOKEN = "8884776513:AAHKQM0QRuxawBeMUSi4rAz3czwHby4By4s"
+TOKEN = "8935324683:AAFodefRJosNs_oAI7TYeKXxrHTKHlSnAJs"
 CHAT_ID = -1003914304171
 
 SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
