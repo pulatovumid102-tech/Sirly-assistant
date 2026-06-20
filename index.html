@@ -580,14 +580,12 @@ async function renderHome() {
     '<div id="streakBadge"></div>' +
     '<div class="segment">' +
     '<button class="seg-btn' + (state.tab === 'top' ? ' active' : '') + '" data-tab="top">🏆 TOP</button>' +
-    '<button class="seg-btn' + (state.tab === 'mine' ? ' active' : '') + '" data-tab="mine">Mening kitoblarim</button>' +
     '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
     '</div>' +
     bodyHtml,
     { fab: !isTop }
   );
-  if (state.tab === 'mine') loadStreakBadge();
-  else document.getElementById('streakBadge').innerHTML = '';
+  loadStreakBadge();
   if (isTop) {
     await loadTopLists();
   } else {
@@ -784,7 +782,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
     inner = '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
       '<div class="card-meta">' + metaText + '</div>';
   } else {
-    inner = '<div class="card-meta">👥 ' + (readerCount || 0) + ' kishi o\'qiyapti' + (b.total_pages ? ' · ' + b.total_pages + ' bet' : '') + '</div>';
+    inner = '';
   }
   var thumb = b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>';
   return '<div class="card book-card" data-go="bookDetail" data-id="' + b.id + '">' +
@@ -1762,7 +1760,7 @@ function renderBookDetailBody() {
             '<div class="reader-rank">' + rankMark + '</div>' +
             '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
             '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + '</div></div>' +
-            '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+            '<div class="reader-pages">' + p.pages_read + ' bet - ' + pPct + '%</div>' +
             '</div>';
         }).join('') + '</div>');
 
