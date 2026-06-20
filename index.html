@@ -213,9 +213,9 @@ function confirmAction(msg, onYes) {
 var ME = (function () {
   try {
     var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
-    if (u) return { id: u.id, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || ('Foydalanuvchi ' + u.id), photoUrl: u.photo_url || null };
+    if (u) return { id: u.id, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || ('Foydalanuvchi ' + u.id), photoUrl: u.photo_url || null, username: u.username || null };
   } catch (e) {}
-  return { id: 0, name: 'Mehmon', photoUrl: null };
+  return { id: 0, name: 'Mehmon', photoUrl: null, username: null };
 })();
 
 var iAmBlocked = false;
@@ -228,17 +228,23 @@ var iAmBlocked = false;
 // Foydalanuvchini darhol saqlash (hamyon yaratish orqali)
 (function () {
   if (ME.id) {
-    getOrCreateWallet(ME.id, ME.name).catch(function () {});
+    getOrCreateWallet(ME.id, ME.name, ME.username).catch(function () {});
   }
 })();
 
 // ===== Yordamchi: sana formatlash =====
+var UZ_MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
 function formatDate(iso) {
   if (!iso) return '';
   var d = new Date(iso);
-  var dd = String(d.getDate()).padStart(2, '0');
-  var mm = String(d.getMonth() + 1).padStart(2, '0');
-  return dd + '.' + mm + '.' + d.getFullYear();
+  return d.getDate() + '-' + UZ_MONTHS[d.getMonth()] + ', ' + d.getFullYear();
+}
+function formatDateTime(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  var hh = String(d.getHours()).padStart(2, '0');
+  var mi = String(d.getMinutes()).padStart(2, '0');
+  return formatDate(iso) + ' ' + hh + ':' + mi;
 }
 
 // ===== Supabase yordamchi funksiyalar =====
@@ -282,11 +288,11 @@ async function sbUploadFile(bucket, path, file) {
 }
 
 // ===== Hamyon (qovuncha/proteincha) =====
-async function getOrCreateWallet(userId, userName) {
+async function getOrCreateWallet(userId, userName, username) {
   var rows = await sbGet('wallets?select=*&user_id=eq.' + userId);
   if (rows[0]) return rows[0];
-  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '' }, 'resolution=merge-duplicates,return=representation');
-  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 5000, proteincha_balance: 1 };
+  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '', username: username || null, qovun_balance: 0, proteincha_balance: 0 }, 'resolution=merge-duplicates,return=representation');
+  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 0, proteincha_balance: 0 };
 }
 async function adjustWallet(userId, qovunDelta, proteinchaDelta) {
   var w = await getOrCreateWallet(userId);
@@ -312,7 +318,7 @@ function furaLabel(qovun) {
 async function joinCohortFlow(book, marker, progress) {
   var isCreator = String(book.created_by_id) === String(ME.id);
   if (!isCreator) {
-    var wallet = await getOrCreateWallet(ME.id);
+    var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
     if ((wallet.qovun_balance || 0) < JOIN_COST_QOVUN) {
       showAlert("Qovunchangiz yetarli emas. Challenjga qo'shilish uchun " + JOIN_COST_QOVUN + " ta qovuncha kerak.");
       return false;
@@ -454,6 +460,9 @@ var noteEditTarget = null;
 var _cohortCountdownInterval = null;
 var selectedCohortMarker = null;
 var _adminUsersCache = [];
+var _adminTxHistoryCache = [];
+var _adminWdHistoryCache = [];
+function txCurrencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
 var app = document.getElementById('app');
@@ -873,7 +882,7 @@ async function loadWalletBody() {
   var el = document.getElementById('walletBody');
   try {
     var results = await Promise.all([
-      getOrCreateWallet(ME.id, ME.name),
+      getOrCreateWallet(ME.id, ME.name, ME.username),
       sbGet('qovun_purchase_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
       sbGet('withdrawal_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
     ]);
@@ -958,7 +967,7 @@ async function loadWalletBody() {
           try {
             var ext = (receiptFile.name.split('.').pop() || 'jpg').toLowerCase();
             var receiptUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'receipts/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, receiptFile);
-            await sbPost('qovun_purchase_requests', { user_id: ME.id, user_name: ME.name, qovun_amount: amt, currency: currency, receipt_url: receiptUrl });
+            await sbPost('qovun_purchase_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, qovun_amount: amt, currency: currency, receipt_url: receiptUrl });
             vibrate('light');
             showAlert("So'rovingiz yuborildi. Admin tekshirib tasdiqlagach, hisobingizga qo'shiladi.");
             renderWallet();
@@ -1004,7 +1013,7 @@ async function loadWalletBody() {
           var moneyAmount = currency === 'qovun' ? amt * QOVUN_PER_SOM : amt * PROTEINCHA_PER_SOM;
           var sBtn = this; sBtn.disabled = true; sBtn.textContent = 'Yuborilmoqda...';
           try {
-            await sbPost('withdrawal_requests', { user_id: ME.id, user_name: ME.name, currency: currency, amount: amt, money_amount: moneyAmount, card_number: card, card_holder_name: holder });
+            await sbPost('withdrawal_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, currency: currency, amount: amt, money_amount: moneyAmount, card_number: card, card_holder_name: holder });
             vibrate('light');
             showAlert("So'rovingiz yuborildi. Admin to'lab, tasdiqlagach mablag' hisobingizdan yechiladi.");
             renderWallet();
@@ -1112,7 +1121,7 @@ function renderAdminUsersList() {
   listEl.innerHTML = users.length ? users.map(function (u) {
     var isBlocked = !!_adminBlockedSet[u.id];
     return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
-      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDate(u.firstSeen) + '</div></div>' +
+      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDateTime(u.firstSeen) + '</div></div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
       '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button>' +
       '<button class="btn-small" data-add-qovun="' + u.id + '" data-name="' + escapeHtml(u.name) + '">💰 Qovuncha qo\'shish</button>' +
@@ -1213,31 +1222,29 @@ async function loadAdminTransactions() {
   try {
     var results = await Promise.all([
       sbGet('qovun_purchase_requests?select=*&status=eq.pending&order=created_at.desc'),
-      sbGet('qovun_purchase_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=50'),
+      sbGet('qovun_purchase_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=200'),
     ]);
     var pending = results[0];
-    var history = results[1];
-    function currencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
+    _adminTxHistoryCache = results[1];
     var pendingHtml = pending.length ? pending.map(function (r) {
       return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
-        '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
-        '<div class="reader-note">' + r.qovun_amount + ' ta ' + currencyLabel(r) + ' uchun to\'lov bo\'ldi — tekshirib tasdiqlang</div>' +
-        '<div class="reader-note">' + formatDate(r.created_at) + '</div></div>' +
+        '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+        '<div class="reader-note">' + r.qovun_amount + ' ta ' + txCurrencyLabel(r) + ' uchun to\'lov bo\'ldi — tekshirib tasdiqlang</div>' +
+        '<div class="reader-note">' + formatDateTime(r.created_at) + '</div></div>' +
         '<img src="' + r.receipt_url + '" class="note-photo-img" style="max-width:100%" />' +
         '<div style="display:flex;gap:8px;margin-top:8px">' +
         '<button class="btn-small" data-approve-purchase="' + r.id + '" data-amount="' + r.qovun_amount + '" data-uid="' + r.user_id + '" data-currency="' + r.currency + '">Tasdiqlash</button>' +
         '<button class="btn-small danger" data-reject-purchase="' + r.id + '">Rad etish</button>' +
         '</div></div>';
     }).join('') : '<div class="empty">Hozircha kutilayotgan tranzaksiya yo\'q.</div>';
-    var historyHtml = history.length ? history.map(function (r) {
-      var statusLabel = r.status === 'approved' ? '✅ Tasdiqlandi' : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
-      return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
-        '<div class="reader-note">' + r.qovun_amount + ' ta ' + currencyLabel(r) + ' · ' + statusLabel + '</div>' +
-        '<div class="reader-note">' + formatDate(r.resolved_at || r.created_at) + '</div></div></div>';
-    }).join('') : '<div class="empty">Tarix yo\'q.</div>';
     el.innerHTML =
       '<div class="section-label">Kutilayotgan</div>' + pendingHtml +
-      '<div class="section-label" style="margin-top:20px">Tarix</div>' + historyHtml;
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="adminTxDateFrom" class="input" type="date" style="flex:1" /><input id="adminTxDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminTxHistoryList"></div>';
+    document.getElementById('adminTxDateFrom').addEventListener('change', renderAdminTxHistory);
+    document.getElementById('adminTxDateTo').addEventListener('change', renderAdminTxHistory);
+    renderAdminTxHistory();
     document.querySelectorAll('[data-approve-purchase]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         confirmAction("To'lovni tasdiqlaysizmi?", async function () {
@@ -1267,37 +1274,50 @@ async function loadAdminTransactions() {
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
 }
 
+function renderAdminTxHistory() {
+  var listEl = document.getElementById('adminTxHistoryList');
+  var fromVal = document.getElementById('adminTxDateFrom').value;
+  var toVal = document.getElementById('adminTxDateTo').value;
+  var history = _adminTxHistoryCache;
+  if (fromVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) >= fromVal; });
+  if (toVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) <= toVal; });
+  listEl.innerHTML = history.length ? history.map(function (r) {
+    var statusLabel = r.status === 'approved' ? '✅ Tasdiqlandi' : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
+    return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+      '<div class="reader-note">' + r.qovun_amount + ' ta ' + txCurrencyLabel(r) + ' · ' + statusLabel + '</div>' +
+      '<div class="reader-note">' + formatDateTime(r.resolved_at || r.created_at) + '</div></div></div>';
+  }).join('') : '<div class="empty">Tarix yo\'q.</div>';
+}
+
 async function loadAdminWithdrawals() {
   var el = document.getElementById('adminBody');
   try {
     var results = await Promise.all([
       sbGet('withdrawal_requests?select=*&status=eq.pending&order=created_at.desc'),
-      sbGet('withdrawal_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=50'),
+      sbGet('withdrawal_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=200'),
     ]);
     var rows = results[0];
-    var history = results[1];
-    function wCurrencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
+    _adminWdHistoryCache = results[1];
     var pendingHtml = rows.length ? rows.map(function (r) {
       return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
-        '<div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
-        '<div class="reader-note">' + r.amount + ' ta ' + wCurrencyLabel(r) + ' → ' + r.money_amount + " so'm</div>" +
+        '<div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+        '<div class="reader-note">' + r.amount + ' ta ' + txCurrencyLabel(r) + ' → ' + r.money_amount + " so'm</div>" +
         '<div class="reader-note">Karta egasi: ' + escapeHtml(r.card_holder_name || '—') + '</div>' +
         '<div class="reader-note">Karta: ' + escapeHtml(r.card_number) + '</div>' +
-        '<div class="reader-note">' + formatDate(r.created_at) + '</div></div>' +
+        '<div class="reader-note">' + formatDateTime(r.created_at) + '</div></div>' +
         '<div style="display:flex;gap:8px;margin-top:8px">' +
         '<button class="btn-small" data-approve-withdrawal="' + r.id + '" data-currency="' + r.currency + '" data-amount="' + r.amount + '" data-uid="' + r.user_id + '">To\'landi</button>' +
         '<button class="btn-small danger" data-reject-withdrawal="' + r.id + '">Rad etish</button>' +
         '</div></div>';
     }).join('') : '<div class="empty">Hozircha so\'rov yo\'q.</div>';
-    var historyHtml = history.length ? history.map(function (r) {
-      var statusLabel = r.status === 'paid' ? "✅ To'landi" : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
-      return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + '</div>' +
-        '<div class="reader-note">' + r.amount + ' ta ' + wCurrencyLabel(r) + ' → ' + r.money_amount + " so'm · " + statusLabel + '</div>' +
-        '<div class="reader-note">' + formatDate(r.resolved_at || r.created_at) + '</div></div></div>';
-    }).join('') : '<div class="empty">Tarix yo\'q.</div>';
     el.innerHTML =
       '<div class="section-label">Kutilayotgan</div>' + pendingHtml +
-      '<div class="section-label" style="margin-top:20px">Tarix</div>' + historyHtml;
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="adminWdDateFrom" class="input" type="date" style="flex:1" /><input id="adminWdDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminWdHistoryList"></div>';
+    document.getElementById('adminWdDateFrom').addEventListener('change', renderAdminWdHistory);
+    document.getElementById('adminWdDateTo').addEventListener('change', renderAdminWdHistory);
+    renderAdminWdHistory();
     document.querySelectorAll('[data-approve-withdrawal]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         confirmAction("To'lov qildingizmi? Tasdiqlasangiz balansdan yechiladi.", async function () {
@@ -1325,6 +1345,21 @@ async function loadAdminWithdrawals() {
       });
     });
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+function renderAdminWdHistory() {
+  var listEl = document.getElementById('adminWdHistoryList');
+  var fromVal = document.getElementById('adminWdDateFrom').value;
+  var toVal = document.getElementById('adminWdDateTo').value;
+  var history = _adminWdHistoryCache;
+  if (fromVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) >= fromVal; });
+  if (toVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) <= toVal; });
+  listEl.innerHTML = history.length ? history.map(function (r) {
+    var statusLabel = r.status === 'paid' ? "✅ To'landi" : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
+    return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+      '<div class="reader-note">' + r.amount + ' ta ' + txCurrencyLabel(r) + ' → ' + r.money_amount + " so'm · " + statusLabel + '</div>' +
+      '<div class="reader-note">' + formatDateTime(r.resolved_at || r.created_at) + '</div></div></div>';
+  }).join('') : '<div class="empty">Tarix yo\'q.</div>';
 }
 
 async function loadAdminBooks() {
@@ -1363,6 +1398,8 @@ function renderAdminBooksList() {
       (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
       '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
       (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
+      '<div class="reader-note">👤 ' + escapeHtml(b.created_by_name || 'Noma\'lum') + '</div>' +
+      '<div class="reader-note">📅 ' + formatDateTime(b.created_at) + '</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px">' +
       '<button class="btn-small" data-edit-book="' + b.id + '">Tahrirlash</button>' +
       '<button class="btn-small danger" data-delete-book="' + b.id + '">O\'chirish</button>' +
@@ -1621,19 +1658,6 @@ function renderBookDetailBody() {
     });
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
 
-    var headerStatusText;
-    var endDateStr = null;
-    if (myCohortMarker) {
-      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker, readingDays);
-      endDateStr = addDaysToDateStr(myCohortMarker, readingDays + COHORT_CLOSING_DAYS);
-    } else if (signupMarker) {
-      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker, readingDays);
-      endDateStr = addDaysToDateStr(signupMarker, readingDays + COHORT_CLOSING_DAYS);
-    } else {
-      headerStatusText = "Hozir yangi guruh ochilishini kuting.";
-    }
-    if (endDateStr) headerStatusText += ' (tugashi: ' + endDateStr + ')';
-
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
@@ -1653,10 +1677,8 @@ function renderBookDetailBody() {
       var count = membersByMarker[m] || 0;
       var isMine = m === myCohortMarker;
       var isSelected = m === viewMarker;
-      var mPhase = cohortPhase(m, today, readingDays);
-      var startedLabel = (mPhase === 'reading' || mPhase === 'closing' || mPhase === 'ended') ? ' <span style="color:var(--text-muted)">(challenj boshlangan)</span>' : '';
       return '<div class="cohort-sched-row' + (isSelected ? ' mine' : '') + '" data-view-cohort="' + m + '" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
-        '<div class="cohort-sched-date">Start sanasi: ' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : startedLabel) + '</div>' +
+        '<div class="cohort-sched-date">Start sanasi: ' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : '') + '</div>' +
         '<div class="cohort-sched-meta">' + count + ' kishi</div>' +
         '</div>';
     }
@@ -1691,12 +1713,7 @@ function renderBookDetailBody() {
     if (otherActive) {
       progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
     } else if (!mine) {
-      var signupInfoHtml = canJoinViewMarker
-        ? '<div class="hint" style="margin-bottom:14px">Tanlangan guruh: ' + formatDate(viewMarker) + '. Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + readingDays + ' kun.</div>'
-        : '';
-      progressTabHtml = signupInfoHtml +
-        (canJoinViewMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + viewMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '<div class="empty">Hozir qo\'shilish uchun guruh tanlanmagan. "Qatnashuvchilar" tabidan sana tanlang.</div>') +
-        purchaseLinkHtml;
+      progressTabHtml = '<div class="empty">Siz hali bu kitob guruhiga qo\'shilmagansiz. Qo\'shilish uchun "Qatnashuvchilar" tabiga o\'ting.</div>' + purchaseLinkHtml;
     } else {
       var cohortLocked = myCohortPhase === 'ended';
       var cohortWaiting = myCohortPhase === 'signup' || myCohortPhase === null;
@@ -1722,11 +1739,13 @@ function renderBookDetailBody() {
         '<div class="hint" style="margin-top:14px">Yozgan fikringizni "Izohlar" tabidan ko\'rishingiz mumkin.</div>';
     }
 
-    var unifiedItems = comments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
-      .concat(allNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
+    var myCohortComments = myCohortMarker ? comments.filter(function (c) { return c.cohort_start_date === myCohortMarker; }) : [];
+    var myCohortNotes = myCohortMarker ? allNotes.filter(function (n) { return n.cohort_start_date === myCohortMarker; }) : [];
+    var unifiedItems = myCohortComments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
+      .concat(myCohortNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
       .sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
     var repliesByParent = {};
-    comments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
+    myCohortComments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
 
     function commentRow(c, isReply) {
       var liked = !!myLiked[c.id];
@@ -1740,7 +1759,7 @@ function renderBookDetailBody() {
         (!isReply ? '<button class="comment-action-btn" data-reply-comment="' + c.id + '" data-reply-name="' + escapeHtml(c.user_name) + '">↩ Javob</button>' : '') +
         (replyCount > 0 ? '<button class="comment-action-btn" data-toggle-replies="' + c.id + '">' + (expandedReplies[c.id] ? '▴ Javoblarni yashirish' : '▾ Javoblar (' + replyCount + ')') + '</button>' : '') +
         (!isAdminMode && isMine && c.user_name !== 'Admin' ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
-        ((ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
+        (isAdminMode ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
         '</div></div>';
     }
 
@@ -1766,7 +1785,7 @@ function renderBookDetailBody() {
         '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
         '<div class="comment-actions">' +
         (!isAdminMode && isMine ? '<button class="comment-action-btn" data-edit-note="' + n.id + '">✏ Tahrirlash</button>' : '') +
-        ((ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-note="' + n.id + '">🗑 O\'chir</button>' : '') +
+        (isAdminMode ? '<button class="comment-action-btn" data-del-note="' + n.id + '">🗑 O\'chir</button>' : '') +
         '</div></div>';
     }
 
@@ -1777,16 +1796,18 @@ function renderBookDetailBody() {
       return commentRow(c, false) + repliesHtml;
     }).join('');
 
-    var canComment = !mine || (myCohortPhase !== 'signup' && myCohortPhase !== null);
+    var canComment = !!mine && myCohortPhase !== 'signup' && myCohortPhase !== null;
     var commentFormHtml = canComment
       ? ((editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
          replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
         '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '">' + (editTarget ? escapeHtml(editTarget.text) : '') + '</textarea>' +
         '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>')
-      : '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>';
+      : (!mine
+          ? '<div class="hint" style="margin-bottom:10px">Izohlarni ko\'rish va yozish uchun avval guruhga qo\'shiling.</div>'
+          : '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>');
 
     var commentsTabHtml = commentFormHtml +
-      '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>';
+      (canComment ? '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>' : '');
 
     var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
@@ -1794,8 +1815,7 @@ function renderBookDetailBody() {
       '<div class="hero-row">' + coverHtml +
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
-      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet · Challenge: ' + readingDays + ' kun</div>' : '') +
-      '<div class="book-hero-sub" style="color:var(--accent-1);font-weight:600">📌 ' + headerStatusText + '</div>' +
+      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet · Challenge: ' + readingDays + ' kun · Kunlik o\'qish me\'yori: ' + COHORT_SUGGESTED_DAILY_PAGES + ' bet</div>' : '') +
       (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
       '</div></div>' +
       '<div class="segment">' +
@@ -2001,7 +2021,7 @@ function renderBookDetailBody() {
         }
         showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
           try {
-            var inserted = await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null });
+            var inserted = await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null, cohort_start_date: myCohortMarker || null });
             if (inserted && inserted[0]) comments.push(inserted[0]);
             input.value = '';
             if (replyTarget) expandedReplies[replyTarget.id] = true;
@@ -2052,26 +2072,6 @@ function renderBookDetailBody() {
           });
         });
       }
-      var joinBtn = document.getElementById('joinCohortBtn');
-      if (joinBtn) {
-        joinBtn.addEventListener('click', function () {
-          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
-          var marker = joinBtn.dataset.marker;
-          var isCreatorJoin2 = String(book.created_by_id) === String(ME.id);
-          var confirmMsg2 = isCreatorJoin2 ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi " + JOIN_COST_QOVUN + " ta qovuncha. Tasdiqlaysizmi?");
-          confirmAction(confirmMsg2, async function () {
-            try {
-              var ok = await joinCohortFlow(book, marker, progress);
-              if (!ok) return;
-              selectedCohortMarker = null;
-              vibrate('light');
-              showAlert('Guruhga qo\'shildingiz!');
-              renderBookDetail();
-            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-          });
-        });
-      }
-
       var updateBtnEl = document.getElementById('updateProgressBtn');
       if (updateBtnEl) {
         updateBtnEl.addEventListener('click', function () {
