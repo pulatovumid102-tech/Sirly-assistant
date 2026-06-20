@@ -354,6 +354,67 @@ async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_join_notifications xato: {e}")
 
 
+async def check_payment_notifications(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            pr = await client.get(
+                f"{SB_URL}/rest/v1/qovun_purchase_requests",
+                headers=SB_HEADERS,
+                params={"status": "neq.pending", "notified": "eq.false", "select": "*"},
+            )
+            for row in pr.json():
+                try:
+                    if row["status"] == "approved":
+                        text = f"✅ {row['qovun_amount']} ta qovun sotib olish so'rovingiz tasdiqlandi va hisobingizga qo'shildi."
+                    else:
+                        reason = row.get("reject_reason") or "sabab ko'rsatilmagan"
+                        text = f"❌ {row['qovun_amount']} ta qovun sotib olish so'rovingiz rad etildi. Sabab: {reason}"
+                    await context.bot.send_message(chat_id=row["user_id"], text=text)
+                except Exception as e:
+                    logger.error(f"To'lov xabari yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/qovun_purchase_requests",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"notified": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"notified belgilanmadi (purchase id={row.get('id')}): {e}")
+
+            wr = await client.get(
+                f"{SB_URL}/rest/v1/withdrawal_requests",
+                headers=SB_HEADERS,
+                params={"status": "neq.pending", "notified": "eq.false", "select": "*"},
+            )
+            for row in wr.json():
+                try:
+                    if row["status"] == "paid":
+                        text = (
+                            f"✅ {row['amount']} ta {row['currency']} ({row['money_amount']} so'm) "
+                            f"pulga aylantirish so'rovingiz to'landi."
+                        )
+                    else:
+                        reason = row.get("reject_reason") or "sabab ko'rsatilmagan"
+                        text = f"❌ Pulga aylantirish so'rovingiz rad etildi. Sabab: {reason}"
+                    await context.bot.send_message(chat_id=row["user_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Pul chiqarish xabari yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/withdrawal_requests",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"notified": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"notified belgilanmadi (withdrawal id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_payment_notifications xato: {e}")
+
+
 # ===== Asosiy =====
 # ===== Ilova faylini (index.html) servisga chiqarish =====
 def run_web_server():
@@ -377,6 +438,7 @@ def main():
         application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
         application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
         application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
+        application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
