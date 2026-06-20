@@ -1,6 +1,8 @@
 import logging
 import calendar
-import httpx
+import os
+import threading
+import http.server
 from datetime import datetime, timezone, time as dt_time, date as dt_date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
@@ -11,6 +13,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+import httpx
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -352,7 +355,19 @@ async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ===== Asosiy =====
+# ===== Ilova faylini (index.html) servisga chiqarish =====
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    handler = http.server.SimpleHTTPRequestHandler
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
+    httpd = http.server.ThreadingHTTPServer(("0.0.0.0", port), handler)
+    logger.info(f"Veb-server {port}-portda ishga tushdi (index.html shu yerdan ko'rinadi).")
+    httpd.serve_forever()
+
+
 def main():
+    threading.Thread(target=run_web_server, daemon=True).start()
+
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
