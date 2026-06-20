@@ -146,6 +146,15 @@ COHORT_READING_DAYS = 20
 COHORT_CLOSING_DAYS = 5
 
 
+COHORT_SUGGESTED_DAILY_PAGES = 20
+
+
+def book_reading_days(total_pages):
+    if not total_pages or total_pages <= 0:
+        return COHORT_READING_DAYS
+    return max(1, -(-total_pages // COHORT_SUGGESTED_DAILY_PAGES))
+
+
 def month_cohort_markers(year: int, month: int):
     days_in_month = calendar.monthrange(year, month)[1]
     days = [5, 10, 15, 20, 25, min(30, days_in_month)]
@@ -167,15 +176,16 @@ def nearby_cohort_markers(today: dt_date):
     return sorted(markers)
 
 
-def cohort_phase(marker: dt_date, today: dt_date):
+def cohort_phase(marker: dt_date, today: dt_date, reading_days: int = None):
+    reading_days = reading_days or COHORT_READING_DAYS
     diff = (today - marker).days
     if diff < 0:
         return None
     if diff < COHORT_SIGNUP_DAYS:
         return "signup"
-    if diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS:
+    if diff < COHORT_SIGNUP_DAYS + reading_days:
         return "reading"
-    if diff < COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS:
+    if diff < COHORT_SIGNUP_DAYS + reading_days + COHORT_CLOSING_DAYS:
         return "closing"
     return "ended"
 
@@ -190,7 +200,7 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
             books_r = await client.get(
                 f"{SB_URL}/rest/v1/books",
                 headers=SB_HEADERS,
-                params={"select": "id,title"},
+                params={"select": "id,title,total_pages"},
             )
             books = {b["id"]: b for b in books_r.json()}
             today = datetime.now(timezone.utc).date()
@@ -213,11 +223,12 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
 
             for (book_id, cohort_str), members in groups.items():
                 marker = parse_date_str(cohort_str)
-                phase = cohort_phase(marker, today)
-                if phase not in ("reading", "closing"):
-                    continue
                 book = books.get(book_id)
                 if not book:
+                    continue
+                reading_days = book_reading_days(book.get("total_pages"))
+                phase = cohort_phase(marker, today, reading_days)
+                if phase not in ("reading", "closing"):
                     continue
 
                 tracker_r = await client.get(
