@@ -367,10 +367,10 @@ function bookReadingDays(book) {
 function cohortPhase(markerStr, todayStr, readingDays) {
   readingDays = readingDays || COHORT_READING_DAYS;
   var diff = cohortDiffDays(markerStr, todayStr);
-  if (diff < 0) return null;
-  if (diff < COHORT_SIGNUP_DAYS) return 'signup';
-  if (diff < COHORT_SIGNUP_DAYS + readingDays) return 'reading';
-  if (diff < COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS) return 'closing';
+  if (diff < -COHORT_SIGNUP_DAYS) return null;
+  if (diff < 0) return 'signup';
+  if (diff < readingDays) return 'reading';
+  if (diff < readingDays + COHORT_CLOSING_DAYS) return 'closing';
   return 'ended';
 }
 function currentSignupCohortMarker(todayStr) {
@@ -387,10 +387,10 @@ function addDaysToDateStr(markerStr, days) {
 }
 function cohortPhaseLabel(phase, diff, markerStr, readingDays) {
   readingDays = readingDays || COHORT_READING_DAYS;
-  if (phase === null || phase === undefined) return "Kelgusi guruh — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
-  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
-  if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + readingDays + ' kunlik challenge';
-  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
+  if (phase === null || phase === undefined) return "Hali ochilmagan — start sanasi " + formatDate(markerStr);
+  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + formatDate(markerStr) + " da boshlanadi";
+  if (phase === 'reading') return (diff + 1) + '-kun / ' + readingDays + ' kunlik challenge';
+  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (readingDays + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
   return 'Guruh yopilgan';
 }
 
@@ -1625,10 +1625,10 @@ function renderBookDetailBody() {
     var endDateStr = null;
     if (myCohortMarker) {
       headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker, readingDays);
-      endDateStr = addDaysToDateStr(myCohortMarker, COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS);
+      endDateStr = addDaysToDateStr(myCohortMarker, readingDays + COHORT_CLOSING_DAYS);
     } else if (signupMarker) {
       headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker, readingDays);
-      endDateStr = addDaysToDateStr(signupMarker, COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS);
+      endDateStr = addDaysToDateStr(signupMarker, readingDays + COHORT_CLOSING_DAYS);
     } else {
       headerStatusText = "Hozir yangi guruh ochilishini kuting.";
     }
@@ -1637,18 +1637,13 @@ function renderBookDetailBody() {
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
-    var activeMarkers = [], endedMarkers = [], nextFutureMarker = null, nextFutureDiff = -Infinity;
+    var activeMarkers = [], endedMarkers = [];
     allMarkers.forEach(function (m) {
       var ph = cohortPhase(m, today, readingDays);
-      if (ph === null) {
-        var d = cohortDiffDays(m, today);
-        if (d > nextFutureDiff) { nextFutureDiff = d; nextFutureMarker = m; }
-        return;
-      }
+      if (ph === null) return;
       if (ph === 'ended') { if (membersByMarker[m]) endedMarkers.push(m); return; }
-      if (membersByMarker[m]) activeMarkers.push(m);
+      if (membersByMarker[m] || ph === 'signup') activeMarkers.push(m);
     });
-    if (nextFutureMarker) activeMarkers.push(nextFutureMarker);
     activeMarkers.sort();
     endedMarkers.sort();
 
@@ -1658,8 +1653,10 @@ function renderBookDetailBody() {
       var count = membersByMarker[m] || 0;
       var isMine = m === myCohortMarker;
       var isSelected = m === viewMarker;
+      var mPhase = cohortPhase(m, today, readingDays);
+      var startedLabel = (mPhase === 'reading' || mPhase === 'closing' || mPhase === 'ended') ? ' <span style="color:var(--text-muted)">(challenj boshlangan)</span>' : '';
       return '<div class="cohort-sched-row' + (isSelected ? ' mine' : '') + '" data-view-cohort="' + m + '" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
-        '<div class="cohort-sched-date">' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : '') + '</div>' +
+        '<div class="cohort-sched-date">Start sanasi: ' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : startedLabel) + '</div>' +
         '<div class="cohort-sched-meta">' + count + ' kishi</div>' +
         '</div>';
     }
@@ -1671,7 +1668,7 @@ function renderBookDetailBody() {
 
     var viewParticipants = viewMarker ? progress.filter(function (p) { return p.cohort_start_date === viewMarker; }) : [];
     var viewMarkerPhase = viewMarker ? cohortPhase(viewMarker, today, readingDays) : null;
-    var canJoinViewMarker = !mine && !otherActive && viewMarker && (viewMarkerPhase === 'signup' || viewMarkerPhase === null);
+    var canJoinViewMarker = !mine && !otherActive && viewMarker && viewMarkerPhase === 'signup';
     var joinTopBtnHtml = canJoinViewMarker ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + viewMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish (' + formatDate(viewMarker) + ')</button>' : '';
     var sectionTitle = viewMarker === myCohortMarker ? 'Sizning guruhingiz' : (formatDate(viewMarker || '') + ' guruhi');
     var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + sectionTitle + '</div>' +
@@ -1704,7 +1701,7 @@ function renderBookDetailBody() {
       var cohortLocked = myCohortPhase === 'ended';
       var cohortWaiting = myCohortPhase === 'signup' || myCohortPhase === null;
       var disabledAttr = (cohortLocked || cohortWaiting) ? ' disabled' : '';
-      var readingStartMs = new Date(myCohortMarker + 'T00:00:00').getTime() + (COHORT_SIGNUP_DAYS * 86400000) + (4 * 3600000);
+      var readingStartMs = new Date(myCohortMarker + 'T00:00:00').getTime() + (4 * 3600000);
       var phaseHintHtml = cohortLocked
         ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>'
         : (cohortWaiting ? '<div class="hint cohort-countdown" id="cohortCountdown" data-target="' + readingStartMs + '" style="margin-bottom:14px"></div>' : '');
