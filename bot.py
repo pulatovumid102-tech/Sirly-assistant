@@ -178,13 +178,13 @@ def nearby_cohort_markers(today: dt_date):
 def cohort_phase(marker: dt_date, today: dt_date, reading_days: int = None):
     reading_days = reading_days or COHORT_READING_DAYS
     diff = (today - marker).days
-    if diff < 0:
+    if diff < -COHORT_SIGNUP_DAYS:
         return None
-    if diff < COHORT_SIGNUP_DAYS:
+    if diff < 0:
         return "signup"
-    if diff < COHORT_SIGNUP_DAYS + reading_days:
+    if diff < reading_days:
         return "reading"
-    if diff < COHORT_SIGNUP_DAYS + reading_days + COHORT_CLOSING_DAYS:
+    if diff < reading_days + COHORT_CLOSING_DAYS:
         return "closing"
     return "ended"
 
