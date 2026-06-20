@@ -382,6 +382,7 @@ var expandedReplies = {};
 var isAdminMode = false;
 var _bdCache = null;
 var noteEditTarget = null;
+var _cohortCountdownInterval = null;
 var _adminUsersCache = [];
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
@@ -427,15 +428,11 @@ function render() {
   else if (state.view === 'userBooks') renderUserBooks();
   else if (state.view === 'profile') renderMyProfile();
   else if (state.view === 'admin') renderAdmin();
-  else if (state.view === 'til') renderComingSoon('🗣️', 'Chet tili');
   else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
-  else if (state.view === 'ovqat') renderComingSoon('🥗', "To'g'ri ovqatlanish");
 }
 
 function currentSection() {
-  if (state.view === 'til') return 'til';
   if (state.view === 'sport') return 'sport';
-  if (state.view === 'ovqat') return 'ovqat';
   if (state.view === 'profile') return 'profile';
   return 'home';
 }
@@ -447,7 +444,7 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('til', '🗣️', 'Chet tili') + tabBtn('sport', '🏃', 'Sport') + tabBtn('ovqat', '🥗', 'Ovqat') + tabBtn('profile', '👤', 'Profil');
+  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
     (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
@@ -504,7 +501,7 @@ async function renderHome() {
     '<div class="segment">' +
     '<button class="seg-btn' + (state.tab === 'top' ? ' active' : '') + '" data-tab="top">🏆 TOP</button>' +
     '<button class="seg-btn' + (state.tab === 'mine' ? ' active' : '') + '" data-tab="mine">Mening kitoblarim</button>' +
-    '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Hammasi</button>' +
+    '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
     '</div>' +
     bodyHtml,
     { fab: !isTop }
@@ -1166,13 +1163,17 @@ function renderBookDetailBody() {
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
 
     var headerStatusText;
+    var endDateStr = null;
     if (myCohortMarker) {
       headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker, readingDays);
+      endDateStr = addDaysToDateStr(myCohortMarker, COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS);
     } else if (signupMarker) {
       headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker, readingDays);
+      endDateStr = addDaysToDateStr(signupMarker, COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS);
     } else {
       headerStatusText = "Hozir yangi guruh ochilishini kuting.";
     }
+    if (endDateStr) headerStatusText += ' (tugashi: ' + endDateStr + ')';
 
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
@@ -1189,13 +1190,8 @@ function renderBookDetailBody() {
     endedMarkers.sort();
 
     function schedRowHtml(m) {
-      var diff = cohortDiffDays(m, today);
-      var phase = cohortPhase(m, today, readingDays);
-      var label = phase ? cohortPhaseLabel(phase, diff, m, readingDays) : ('O\'qish ' + addDaysToDateStr(m, COHORT_SIGNUP_DAYS) + ' da boshlanadi');
-      var count = membersByMarker[m] || 0;
       return '<div class="cohort-sched-row' + (m === myCohortMarker ? ' mine' : '') + '">' +
         '<div class="cohort-sched-date">' + formatDate(m) + (m === myCohortMarker ? ' (sizniki)' : '') + '</div>' +
-        '<div class="cohort-sched-meta">' + label + ' · ' + count + ' kishi</div>' +
         '</div>';
     }
     var scheduleHtml = '<div class="cohort-schedule">' + activeMarkers.map(schedRowHtml).join('') + '</div>' +
@@ -1215,7 +1211,7 @@ function renderBookDetailBody() {
           return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
             '<div class="reader-rank">' + rankMark + '</div>' +
             '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
-            '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
+            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + '</div></div>' +
             '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
             '</div>';
         }).join('') + '</div>');
@@ -1256,18 +1252,21 @@ function renderBookDetailBody() {
         purchaseLinkHtml;
     } else {
       var cohortLocked = myCohortPhase === 'ended';
-      var disabledAttr = cohortLocked ? ' disabled' : '';
-      var phaseHintHtml = cohortLocked ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>' : '';
+      var cohortWaiting = myCohortPhase === 'signup';
+      var disabledAttr = (cohortLocked || cohortWaiting) ? ' disabled' : '';
+      var readingStartMs = new Date(myCohortMarker + 'T00:00:00').getTime() + (COHORT_SIGNUP_DAYS * 86400000) + (4 * 3600000);
+      var phaseHintHtml = cohortLocked
+        ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>'
+        : (cohortWaiting ? '<div class="hint cohort-countdown" id="cohortCountdown" data-target="' + readingStartMs + '" style="margin-bottom:14px"></div>' : '');
 
       var notesHtmlForTab = notesHtml;
       progressTabHtml =
-        (mine.started_at ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">📅 Boshlagan sana: ' + formatDate(mine.started_at) + '</div>' : '') +
         phaseHintHtml +
         '<div class="form">' +
         '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
         '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
         '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
-        '<label class="file-btn" for="noteCoverInput" style="' + (cohortLocked ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
+        '<label class="file-btn" for="noteCoverInput" style="' + ((cohortLocked || cohortWaiting) ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
         '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
         '<div id="noteCoverPreview"></div>' +
         '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
@@ -1477,6 +1476,22 @@ function renderBookDetailBody() {
         });
       });
     } else if (state.detailTab === 'progress') {
+      if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
+      var countdownEl = document.getElementById('cohortCountdown');
+      if (countdownEl) {
+        var targetMs = parseInt(countdownEl.dataset.target, 10);
+        var updateCountdown = function () {
+          var diffMs = targetMs - Date.now();
+          if (diffMs <= 0) { countdownEl.textContent = "O'qish boshlandi, sahifani yangilang."; clearInterval(_cohortCountdownInterval); return; }
+          var totalSec = Math.floor(diffMs / 1000);
+          var days = Math.floor(totalSec / 86400);
+          var hours = Math.floor((totalSec % 86400) / 3600);
+          var mins = Math.floor((totalSec % 3600) / 60);
+          countdownEl.textContent = '⏳ Boshlanishiga: ' + days + ' kun ' + hours + ' soat ' + mins + ' daqiqa qoldi';
+        };
+        updateCountdown();
+        _cohortCountdownInterval = setInterval(updateCountdown, 1000);
+      }
       var noteInputEl = document.getElementById('noteInput');
       var noteCharCountEl = document.getElementById('noteCharCount');
       if (noteInputEl) {
@@ -1644,6 +1659,7 @@ document.addEventListener('click', function (e) {
   var goEl = e.target.closest('[data-go]');
   if (goEl) {
     var view = goEl.dataset.go;
+    if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
     if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; _bdCache = null; }
     if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
     state.view = view;
