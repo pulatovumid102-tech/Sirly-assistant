@@ -387,6 +387,7 @@ function addDaysToDateStr(markerStr, days) {
 }
 function cohortPhaseLabel(phase, diff, markerStr, readingDays) {
   readingDays = readingDays || COHORT_READING_DAYS;
+  if (phase === null || phase === undefined) return "Kelgusi guruh — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
   if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
   if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + readingDays + ' kunlik challenge';
   if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + readingDays + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
@@ -1619,7 +1620,7 @@ function renderBookDetailBody() {
       if (String(p.book_id) === String(book.id)) return false;
       if (!p.cohort_start_date) return false;
       var ph = cohortPhase(p.cohort_start_date, today);
-      return ph && ph !== 'ended';
+      return ph !== 'ended';
     });
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
 
@@ -1726,7 +1727,7 @@ function renderBookDetailBody() {
         purchaseLinkHtml;
     } else {
       var cohortLocked = myCohortPhase === 'ended';
-      var cohortWaiting = myCohortPhase === 'signup';
+      var cohortWaiting = myCohortPhase === 'signup' || myCohortPhase === null;
       var disabledAttr = (cohortLocked || cohortWaiting) ? ' disabled' : '';
       var readingStartMs = new Date(myCohortMarker + 'T00:00:00').getTime() + (COHORT_SIGNUP_DAYS * 86400000) + (4 * 3600000);
       var phaseHintHtml = cohortLocked
