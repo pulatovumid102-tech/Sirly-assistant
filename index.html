@@ -1042,11 +1042,10 @@ async function renderAdmin() {
     '<div class="header"><div class="h-title">Admin</div><button class="back" id="adminExitBtn" style="margin-left:auto">✕</button></div>' +
     '<div class="segment" style="flex-wrap:wrap">' +
     '<button class="seg-btn' + (state.adminTab === 'dashboard' ? ' active' : '') + '" data-admintab="dashboard">Dashboard</button>' +
-    '<button class="seg-btn' + (state.adminTab === 'approvals' ? ' active' : '') + '" data-admintab="approvals">Tasdiqlash</button>' +
     '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar</button>' +
-    '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar</button>' +
-    '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar</button>' +
-    '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar<span id="badgeBooks"></span></button>' +
+    '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar<span id="badgeTx"></span></button>' +
+    '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish<span id="badgeWd"></span></button>' +
     '</div>' +
     '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
     '</div>';
@@ -1054,12 +1053,29 @@ async function renderAdmin() {
   document.querySelectorAll('[data-admintab]').forEach(function (b) {
     b.addEventListener('click', function () { state.adminTab = b.dataset.admintab; renderAdmin(); });
   });
+  loadAdminBadgeCounts();
   if (state.adminTab === 'books') await loadAdminBooks();
-  else if (state.adminTab === 'approvals') await loadAdminApprovals();
   else if (state.adminTab === 'transactions') await loadAdminTransactions();
   else if (state.adminTab === 'withdrawals') await loadAdminWithdrawals();
   else if (state.adminTab === 'dashboard') await loadAdminDashboard();
   else await loadAdminUsers();
+}
+
+async function loadAdminBadgeCounts() {
+  try {
+    var results = await Promise.all([
+      sbGet('books?select=id&approved=eq.false'),
+      sbGet('qovun_purchase_requests?select=id&status=eq.pending'),
+      sbGet('withdrawal_requests?select=id&status=eq.pending'),
+    ]);
+    function badgeHtml(n) { return n > 0 ? ' <span style="background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">' + n + '</span>' : ''; }
+    var bB = document.getElementById('badgeBooks');
+    var bT = document.getElementById('badgeTx');
+    var bW = document.getElementById('badgeWd');
+    if (bB) bB.innerHTML = badgeHtml(results[0].length);
+    if (bT) bT.innerHTML = badgeHtml(results[1].length);
+    if (bW) bW.innerHTML = badgeHtml(results[2].length);
+  } catch (e) { console.error(e); }
 }
 
 async function loadAllUsersMerged() {
@@ -1155,52 +1171,6 @@ function renderAdminUsersList() {
       } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
     });
   });
-}
-
-async function loadAdminApprovals() {
-  var el = document.getElementById('adminBody');
-  try {
-    var pending = await sbGet('books?select=*&approved=eq.false&order=created_at.desc');
-    el.innerHTML = pending.length ? pending.map(function (b) {
-      return '<div class="card" style="margin-bottom:10px"><div class="book-card-row">' +
-        (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
-        '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
-        (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
-        '<div class="reader-note">👤 ' + escapeHtml(b.created_by_name || '') + '</div>' +
-        '<div class="reader-note">📅 ' + formatDateTime(b.created_at) + '</div>' +
-        '<div style="display:flex;gap:8px;margin-top:8px">' +
-        '<button class="btn-small" data-approve-book="' + b.id + '" data-creator="' + b.created_by_id + '" data-title="' + escapeHtml(b.title) + '">✅ Tasdiqlash</button>' +
-        '<button class="btn-small danger" data-delete-book="' + b.id + '">🗑 O\'chirish</button>' +
-        '</div></div></div></div>';
-    }).join('') : '<div class="empty">Tasdiq kutayotgan kitob yo\'q.</div>';
-    document.querySelectorAll('[data-approve-book]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        confirmAction("Bu kitobni tasdiqlaysizmi? Hammaga ko'rinadigan bo'ladi.", async function () {
-          try {
-            var id = btn.dataset.approveBook;
-            var creatorId = btn.dataset.creator;
-            var title = btn.dataset.title;
-            await sbPatch('books?id=eq.' + id, { approved: true });
-            await sbPost('book_approval_notifications', { book_id: id, creator_id: creatorId, book_title: title });
-            vibrate('light');
-            loadAdminApprovals();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-        });
-      });
-    });
-    document.querySelectorAll('[data-delete-book]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = btn.dataset.deleteBook;
-        confirmAction("Kitobni butunlay o'chirish?", async function () {
-          try {
-            await sbDelete('books?id=eq.' + id);
-            vibrate('medium');
-            loadAdminApprovals();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-        });
-      });
-    });
-  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
 }
 
 async function loadAdminDashboard() {
@@ -1441,19 +1411,44 @@ function renderAdminBooksList() {
   }
   if (fromVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) >= fromVal; });
   if (toVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) <= toVal; });
+  books = books.slice().sort(function (a, b) {
+    if (a.approved === b.approved) return (a.title || '').localeCompare(b.title || '');
+    return a.approved ? 1 : -1;
+  });
   listEl.innerHTML = books.length ? books.map(function (b) {
     return '<div class="card" style="margin-bottom:10px" data-go="bookDetail" data-id="' + b.id + '"><div class="book-card-row">' +
       (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
       '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
+      (b.approved === false ? '<div class="reader-note" style="color:var(--danger);font-weight:600">⏳ Tasdiq kutilmoqda</div>' : '') +
       (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
       '<div class="reader-note">👤 ' + escapeHtml(b.created_by_name || 'Noma\'lum') + '</div>' +
       '<div class="reader-note">📅 ' + formatDateTime(b.created_at) + '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:8px">' +
+      '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
+      (b.approved === false ? '<button class="btn-small" data-approve-book="' + b.id + '" data-creator="' + b.created_by_id + '" data-title="' + escapeHtml(b.title) + '">✅ Tasdiqlash</button>' : '') +
       '<button class="btn-small" data-edit-book="' + b.id + '">Tahrirlash</button>' +
       '<button class="btn-small danger" data-delete-book="' + b.id + '">O\'chirish</button>' +
       '</div></div></div></div>';
   }).join('') : '<div class="empty">Kitob topilmadi.</div>';
 
+  document.querySelectorAll('[data-approve-book]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      confirmAction("Bu kitobni tasdiqlaysizmi? Hammaga ko'rinadigan bo'ladi.", async function () {
+        try {
+          var id = btn.dataset.approveBook;
+          var creatorId = btn.dataset.creator;
+          var title = btn.dataset.title;
+          await sbPatch('books?id=eq.' + id, { approved: true });
+          await sbPost('book_approval_notifications', { book_id: id, creator_id: creatorId, book_title: title });
+          var bk = _adminBooksCache.find(function (b) { return String(b.id) === String(id); });
+          if (bk) bk.approved = true;
+          vibrate('light');
+          renderAdminBooksList();
+          loadAdminBadgeCounts();
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
+    });
+  });
   document.querySelectorAll('[data-delete-book]').forEach(function (btn) {
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -1464,6 +1459,7 @@ function renderAdminBooksList() {
           _adminBooksCache = _adminBooksCache.filter(function (b) { return String(b.id) !== id; });
           vibrate('medium');
           renderAdminBooksList();
+          loadAdminBadgeCounts();
         } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
       });
     });
