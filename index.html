@@ -306,8 +306,13 @@ function currentSignupCohortMarker(todayStr) {
   }
   return null;
 }
-function cohortPhaseLabel(phase, diff) {
-  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + (COHORT_SIGNUP_DAYS - diff) + " kundan keyin boshlanadi";
+function addDaysToDateStr(markerStr, days) {
+  var d = new Date(markerStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return formatDate(localDateStr(d));
+}
+function cohortPhaseLabel(phase, diff, markerStr) {
+  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + addDaysToDateStr(markerStr, COHORT_SIGNUP_DAYS) + " da boshlanadi";
   if (phase === 'reading') return (diff - COHORT_SIGNUP_DAYS + 1) + '-kun / ' + COHORT_READING_DAYS + ' kunlik challenge';
   if (phase === 'closing') return "Challenge tugadi — guruh yana " + (COHORT_SIGNUP_DAYS + COHORT_READING_DAYS + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
   return 'Guruh yopilgan';
@@ -1154,9 +1159,9 @@ function renderBookDetailBody() {
 
     var headerStatusText;
     if (myCohortMarker) {
-      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today));
+      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today), myCohortMarker);
     } else if (signupMarker) {
-      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today));
+      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today), signupMarker);
     } else {
       headerStatusText = "Hozir yangi guruh ochilishini kuting.";
     }
@@ -1164,27 +1169,42 @@ function renderBookDetailBody() {
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
-    var nearestMarker = null, nearestAbsDiff = Infinity;
+    var activeMarkers = [], endedMarkers = [], nextFutureMarker = null, nextFutureDiff = -Infinity;
     allMarkers.forEach(function (m) {
-      var d = Math.abs(cohortDiffDays(m, today));
-      if (d < nearestAbsDiff) { nearestAbsDiff = d; nearestMarker = m; }
+      var ph = cohortPhase(m, today);
+      if (ph === 'ended') { endedMarkers.push(m); return; }
+      if (ph === null) {
+        var d = cohortDiffDays(m, today);
+        if (d > nextFutureDiff) { nextFutureDiff = d; nextFutureMarker = m; }
+        return;
+      }
+      activeMarkers.push(m);
     });
-    var scheduleHtml = '<div class="cohort-schedule">' + allMarkers.map(function (m) {
+    if (nextFutureMarker) activeMarkers.push(nextFutureMarker);
+    activeMarkers.sort();
+    endedMarkers.sort();
+
+    function schedRowHtml(m) {
       var diff = cohortDiffDays(m, today);
       var phase = cohortPhase(m, today);
-      var label = phase ? cohortPhaseLabel(phase, diff) : 'Hali boshlanmagan';
+      var label = phase ? cohortPhaseLabel(phase, diff, m) : ('O\'qish ' + addDaysToDateStr(m, COHORT_SIGNUP_DAYS) + ' da boshlanadi');
       var count = membersByMarker[m] || 0;
-      var isNearest = m === nearestMarker;
-      return '<div class="cohort-sched-row' + (isNearest ? ' nearest' : '') + (m === myCohortMarker ? ' mine' : '') + '">' +
-        '<div class="cohort-sched-date">' + formatDate(m) + (isNearest ? ' — eng yaqin' : '') + (m === myCohortMarker ? ' (sizniki)' : '') + '</div>' +
+      return '<div class="cohort-sched-row' + (m === myCohortMarker ? ' mine' : '') + '">' +
+        '<div class="cohort-sched-date">' + formatDate(m) + (m === myCohortMarker ? ' (sizniki)' : '') + '</div>' +
         '<div class="cohort-sched-meta">' + label + ' · ' + count + ' kishi</div>' +
         '</div>';
-    }).join('') + '</div>';
+    }
+    var scheduleHtml = '<div class="cohort-schedule">' + activeMarkers.map(schedRowHtml).join('') + '</div>' +
+      (endedMarkers.length
+        ? '<button id="archiveToggleBtn" class="btn-small" style="margin-top:10px">📦 Arxiv (' + endedMarkers.length + ')</button>' +
+          '<div id="archiveList" class="cohort-schedule" style="display:none;margin-top:8px">' + endedMarkers.map(schedRowHtml).join('') + '</div>'
+        : '');
 
     var cohortMates = myCohortMarker ? progress.filter(function (p) { return p.cohort_start_date === myCohortMarker; }) : [];
-    var readersTabHtml = scheduleHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Guruhga qo\'shilmagansiz') + '</div>' +
+    var joinTopBtnHtml = (!mine && !otherActive && signupMarker) ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + signupMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish</button>' : '';
+    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Guruhga qo\'shilmagansiz') + '</div>' +
       (!myCohortMarker
-      ? '<div class="empty">O\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling ("Mening progressim" tabida).</div>'
+      ? '<div class="empty">O\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling.</div>'
       : '<div class="readers">' + cohortMates.map(function (p, i) {
           var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
           var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
@@ -1321,6 +1341,38 @@ function renderBookDetailBody() {
         window.open(url, '_blank');
       });
     });
+
+    if (state.detailTab === 'readers') {
+      var archiveToggleBtn = document.getElementById('archiveToggleBtn');
+      if (archiveToggleBtn) {
+        archiveToggleBtn.addEventListener('click', function () {
+          var listEl = document.getElementById('archiveList');
+          listEl.style.display = listEl.style.display === 'none' ? 'block' : 'none';
+        });
+      }
+      var joinBtnTop = document.getElementById('joinCohortBtnTop');
+      if (joinBtnTop) {
+        joinBtnTop.addEventListener('click', function () {
+          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+          var marker = joinBtnTop.dataset.marker;
+          confirmAction("Guruhga qo'shilasizmi?", async function () {
+            try {
+              var nowIso = new Date().toISOString();
+              var inserted = await sbPost('progress?on_conflict=book_id,user_id', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0, updated_at: nowIso, started_at: nowIso, cohort_start_date: marker,
+              }, 'resolution=merge-duplicates,return=representation');
+              if (inserted && inserted[0]) {
+                progress.push(inserted[0]);
+                progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+              }
+              vibrate('light');
+              showAlert('Guruhga qo\'shildingiz!');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      }
+    }
 
     if (state.detailTab === 'comments') {
       document.querySelectorAll('[data-like-comment]').forEach(function (btn) {
