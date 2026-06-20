@@ -1,461 +1,2189 @@
-import logging
-import calendar
-import os
-import threading
-import http.server
-from datetime import datetime, timezone, time as dt_time, date as dt_date
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters,
-)
-import httpx
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bir bet</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1A5140;
+  --surface:#1F5C49;
+  --surface-alt:#173F32;
+  --text:#EAF4EE;
+  --text-muted:#8FB8A4;
+  --accent-1:#B7E5BA;
+  --accent-2:#5CA87C;
+  --accent-3:#288760;
+  --danger:#FF8A80;
+  --shadow-dark: rgba(6,26,19,0.55);
+  --shadow-light: rgba(120,210,165,0.14);
+  --ring-track: rgba(255,255,255,0.08);
+  --radius-lg:26px;
+  --radius-md:18px;
+  --radius-sm:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+#app{ min-height:100vh; padding-bottom:120px; }
+.screen{ padding:20px 16px 12px; }
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
+.header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; min-height:38px; }
+.h-title{ font-size:20px; font-weight:700; }
+.back{ background:var(--surface); box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 
-# ===== Sozlamalar =====
-TOKEN = "8935324683:AAFodefRJosNs_oAI7TYeKXxrHTKHlSnAJs"
-CHAT_ID = -1003914304171
+.segment{ display:flex; background:var(--surface-alt); border-radius:var(--radius-md); padding:5px; gap:4px; margin-bottom:14px; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.seg-btn{ flex:1; border:none; background:transparent; color:var(--text-muted); padding:10px 4px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; font-family:inherit; line-height:1.3; }
+.seg-btn.active{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); box-shadow:4px 4px 10px var(--shadow-dark); }
 
-SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
-SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU"
-SB_HEADERS = {
-    "apikey": SB_KEY,
-    "Authorization": f"Bearer {SB_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=minimal",
+.book-list{ display:flex; flex-direction:column; gap:12px; }
+.card{ background:var(--surface); border-radius:var(--radius-lg); padding:18px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
+.book-card{ cursor:pointer; }
+.book-card-row{ display:flex; gap:12px; align-items:flex-start; }
+.book-card-info{ flex:1; min-width:0; }
+.card-title{ font-size:16px; font-weight:700; }
+.card-author{ font-size:12px; color:var(--text-muted); margin-top:2px; margin-bottom:8px; }
+.card-meta{ font-size:12px; color:var(--text-muted); margin-top:8px; }
+.progress-track{ height:8px; background:var(--surface-alt); border-radius:99px; overflow:hidden; box-shadow:inset 2px 2px 4px var(--shadow-dark); }
+.progress-fill{ height:100%; background:linear-gradient(90deg,var(--accent-1),var(--accent-2)); border-radius:99px; }
+
+.cover-thumb{ width:48px; height:68px; object-fit:cover; border-radius:10px; flex-shrink:0; box-shadow:4px 4px 10px var(--shadow-dark); }
+.cover-thumb-placeholder{ width:48px; height:68px; border-radius:10px; flex-shrink:0; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:20px; }
+
+.streak-badge{ background:var(--surface); border-radius:var(--radius-md); padding:16px; margin-bottom:14px; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
+.streak-top-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.streak-fire{ font-size:22px; }
+.streak-num{ font-size:16px; font-weight:800; }
+.streak-label{ font-size:11px; color:var(--text-muted); }
+.streak-daraja{ font-size:12px; font-weight:700; color:var(--accent-1); text-align:right; }
+.streak-days-row{ display:flex; justify-content:space-between; gap:6px; }
+.streak-day{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.streak-day-icon{ font-size:19px; filter:grayscale(1) opacity(0.35); }
+.streak-day-icon.lit{ filter:none; }
+.streak-day-num{ font-size:9px; color:var(--text-muted); font-weight:700; }
+
+.loading,.empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:40px 16px; line-height:1.6; }
+
+.fab{ position:fixed; right:18px; bottom:118px; width:58px; height:58px; border-radius:50%; border:none; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); font-size:28px; font-weight:700; box-shadow:8px 8px 16px var(--shadow-dark), -6px -6px 14px var(--shadow-light); z-index:5; }
+
+.tabbar{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:8px; padding:14px 10px calc(14px + env(safe-area-inset-bottom)); }
+.tab{ flex:1; max-width:80px; height:64px; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border-radius:var(--radius-md); background:var(--surface); box-shadow:6px 6px 14px var(--shadow-dark), -5px -5px 12px var(--shadow-light); color:var(--text-muted); font-family:inherit; }
+.tab.active{ color:var(--bg); background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); }
+.tab-icon{ font-size:20px; }
+.tab-label{ font-size:10px; font-weight:600; }
+
+.form{ display:flex; flex-direction:column; gap:12px; }
+.input{ width:100%; background:var(--surface-alt); border:none; color:var(--text); border-radius:var(--radius-sm); padding:13px 14px; font-size:14px; font-family:inherit; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.input::placeholder{ color:var(--text-muted); }
+.hint{ font-size:12px; color:var(--accent-1); background:rgba(183,229,186,0.1); border-radius:var(--radius-sm); padding:10px 12px; line-height:1.5; }
+.btn-primary{ background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); border:none; border-radius:var(--radius-sm); padding:13px 18px; font-weight:700; font-size:14px; font-family:inherit; box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.btn-primary.full{ width:100%; margin-top:6px; }
+.btn-primary:disabled{ opacity:.6; }
+.result-card{ cursor:pointer; margin-bottom:8px; }
+
+.file-btn{ display:block; text-align:center; background:var(--surface-alt); color:var(--text-muted); border-radius:var(--radius-sm); padding:13px 14px; font-size:13px; font-weight:600; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); cursor:pointer; }
+.cover-preview-img{ width:84px; height:118px; object-fit:cover; border-radius:var(--radius-sm); margin-top:4px; box-shadow:5px 5px 12px var(--shadow-dark); }
+
+.hero-row{ display:flex; gap:16px; margin-bottom:18px; }
+.cover-hero{ width:84px; height:118px; object-fit:cover; border-radius:var(--radius-sm); flex-shrink:0; box-shadow:6px 6px 14px var(--shadow-dark); }
+.cover-hero-placeholder{ width:84px; height:118px; border-radius:var(--radius-sm); flex-shrink:0; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; font-size:32px; }
+.hero-info{ flex:1; min-width:0; padding-top:2px; }
+.book-hero-title{ font-size:20px; font-weight:800; margin-bottom:4px; }
+.book-hero-author{ font-size:13px; color:var(--text-muted); margin-bottom:8px; }
+.book-hero-sub{ font-size:12px; color:var(--text-muted); margin-top:4px; }
+
+
+
+.readers{ display:flex; flex-direction:column; gap:8px; }
+.reader-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); cursor:pointer; }
+.reader-row.me{ box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light), 0 0 0 2px var(--accent-1) inset; }
+.reader-rank{ width:26px; text-align:center; font-size:14px; font-weight:700; color:var(--text-muted); flex-shrink:0; }
+.reader-info{ flex:1; min-width:0; }
+.reader-name{ font-size:14px; font-weight:600; }
+.reader-note{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+.reader-pages{ font-size:12px; color:var(--accent-1); font-weight:700; white-space:nowrap; }
+
+.comment-form{ display:flex; align-items:flex-end; gap:8px; margin-bottom:16px; }
+.comment-form textarea{ resize:none; font-family:inherit; }
+.comments{ display:flex; flex-direction:column; gap:0; }
+.comment-block{ padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.comment-block.reply{ margin-left:22px; border-bottom:none; padding:8px 0 2px; }
+.comment-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
+.comment-name{ font-weight:700; color:var(--text); }
+.edited-tag{ font-size:11px; color:var(--text-muted); font-style:italic; }
+.comment-actions{ display:flex; gap:16px; margin-top:5px; }
+.notes-list{ display:flex; flex-direction:column; gap:0; }
+.note-entry{ padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+.note-meta{ font-size:11px; color:var(--accent-1); margin-bottom:4px; }
+.note-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
+.note-photo-img{ width:100%; max-width:220px; border-radius:var(--radius-sm); margin-bottom:8px; display:block; box-shadow:5px 5px 12px var(--shadow-dark); }
+.cohort-schedule{ display:flex; flex-direction:column; gap:6px; }
+.cohort-sched-row{ display:flex; justify-content:space-between; align-items:center; background:var(--surface); border-radius:var(--radius-sm); padding:10px 12px; box-shadow:4px 4px 10px var(--shadow-dark), -3px -3px 8px var(--shadow-light); font-size:12px; }
+.cohort-sched-row.nearest{ box-shadow:0 0 0 2px var(--accent-1), 4px 4px 10px var(--shadow-dark); }
+.cohort-sched-row.mine{ background:var(--surface-alt); }
+.cohort-sched-date{ font-weight:700; }
+.cohort-sched-meta{ color:var(--text-muted); text-align:right; }
+.comment-action-btn{ background:none; border:none; color:var(--text-muted); font-size:11px; font-family:inherit; display:flex; align-items:center; gap:4px; padding:2px 0; }
+.comment-action-btn.liked{ color:var(--accent-1); font-weight:700; }
+.reply-banner{ display:flex; align-items:center; justify-content:space-between; background:var(--surface-alt); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--accent-1); }
+.reply-banner button{ font-family:inherit; }
+
+.remove-link{ display:block; text-align:center; color:var(--text-muted); font-size:12px; margin-top:20px; text-decoration:underline; background:none; border:none; font-family:inherit; width:100%; padding:8px; }
+
+.profile-header{ display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:20px; }
+.profile-header-name{ font-size:18px; font-weight:700; }
+.avatar-img{ border-radius:50%; object-fit:cover; box-shadow:6px 6px 14px var(--shadow-dark), -5px -5px 12px var(--shadow-light); }
+.avatar-placeholder{ border-radius:50%; background:var(--surface-alt); display:flex; align-items:center; justify-content:center; box-shadow:6px 6px 14px var(--shadow-dark), -5px -5px 12px var(--shadow-light); }
+.profile-stats{ display:flex; gap:12px; margin-bottom:18px; }
+.profile-stat-box{ flex:1; background:var(--surface); border-radius:var(--radius-md); padding:16px; text-align:center; box-shadow:8px 8px 18px var(--shadow-dark), -6px -6px 14px var(--shadow-light); }
+.profile-stat-num{ font-size:24px; font-weight:800; color:var(--accent-1); }
+.profile-stat-label{ font-size:11px; color:var(--text-muted); margin-top:4px; }
+.section-label{ font-size:13px; font-weight:700; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.4px; }
+.medal-slots-row{ display:flex; gap:10px; margin-bottom:8px; }
+.medal-slot-icon{ font-size:26px; filter:grayscale(1) opacity(0.35); }
+.medal-slot-icon.lit{ filter:none; }
+.medal-count-label{ font-size:12px; color:var(--text-muted); font-weight:600; }
+
+.btn-small{ background:var(--surface-alt); color:var(--text); border:none; border-radius:var(--radius-sm); padding:9px 14px; font-size:12px; font-weight:600; font-family:inherit; box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light); }
+.btn-small.danger{ color:var(--danger); }
+.admin-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:8px; box-shadow:5px 5px 12px var(--shadow-dark), -4px -4px 10px var(--shadow-light); }
+.admin-row-info{ min-width:0; flex:1; }
+
+.coming-soon{ display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:65vh; text-align:center; }
+.cs-icon{ font-size:52px; margin-bottom:14px; }
+.cs-title{ font-size:20px; font-weight:700; margin-bottom:6px; }
+.cs-sub{ font-size:14px; color:var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ===== Supabase sozlamalari =====
+var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
+var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+var HUJJATLAR_BUCKET = 'hujjatlar';
+var JOIN_COST_QOVUN = 5000;
+var QOVUN_PER_SOM = 1;
+var PROTEINCHA_PER_SOM = 10000;
+var FURA_SIZE = 5000;
+var PAYMENT_CARD = "UMIDJON PULATOV 9860 1701 0633 3009";
+var COHORT_SIGNUP_DAYS = 5;
+var COHORT_READING_DAYS = 20;
+var COHORT_CLOSING_DAYS = 5;
+var COHORT_SUGGESTED_DAILY_PAGES = 20;
+var ADMIN_ID = 1645167548;
+
+// ===== Telegram WebApp init =====
+var tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) {
+  try {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('#1A5140');
+    tg.setBackgroundColor('#1A5140');
+  } catch (e) {}
 }
 
-# Mini App manzili
-WEBAPP_URL = "https://pulatovumid102-tech.github.io/Sirly-assistant/"
+function vibrate(style) {
+  try { if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || 'light'); } catch (e) {}
+}
+function showAlert(msg, callback) {
+  try { if (tg && tg.showAlert) { tg.showAlert(msg, callback); return; } } catch (e) {}
+  alert(msg);
+  if (callback) callback();
+}
+function confirmAction(msg, onYes) {
+  try {
+    if (tg && tg.showConfirm) { tg.showConfirm(msg, function (ok) { if (ok) onYes(); }); return; }
+  } catch (e) {}
+  if (window.confirm(msg)) onYes();
+}
 
+// ===== Foydalanuvchi =====
+var ME = (function () {
+  try {
+    var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (u) return { id: u.id, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || ('Foydalanuvchi ' + u.id), photoUrl: u.photo_url || null, username: u.username || null };
+  } catch (e) {}
+  return { id: 0, name: 'Mehmon', photoUrl: null, username: null };
+})();
 
-# ===== Buyruqlar =====
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Salom! \"Bir bet\" ilovasiga xush kelibsiz 📖\n\n"
-        "Ilovani ochish uchun Menu tugmasini bosing."
-    )
+var iAmBlocked = false;
+(function () {
+  sbGet('blocked_users?select=user_id&user_id=eq.' + ME.id).then(function (rows) {
+    iAmBlocked = rows.length > 0;
+  }).catch(function () {});
+})();
 
+// Foydalanuvchini darhol saqlash (hamyon yaratish orqali)
+(function () {
+  if (ME.id) {
+    getOrCreateWallet(ME.id, ME.name, ME.username).catch(function () {});
+  }
+})();
 
-# ===== Kontakt so'rovlarini tekshirish (fon vazifasi) =====
-async def check_contact_requests(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(
-                f"{SB_URL}/rest/v1/contact_requests",
-                headers=SB_HEADERS,
-                params={"status": "eq.pending", "select": "*"},
-            )
-            rows = r.json()
-            for row in rows:
-                try:
-                    kb = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("✅ Ha", callback_data=f"cr_yes_{row['id']}"),
-                        InlineKeyboardButton("❌ Yo'q", callback_data=f"cr_no_{row['id']}"),
-                    ]])
-                    await context.bot.send_message(
-                        chat_id=row["target_id"],
-                        text=(
-                            f"👤 {row['requester_name']} siz bilan bog'lanishni so'rayapti.\n\n"
-                            "Profilingizni unga ulashishga roziman?"
-                        ),
-                        reply_markup=kb,
-                    )
-                    await client.patch(
-                        f"{SB_URL}/rest/v1/contact_requests",
-                        headers=SB_HEADERS,
-                        params={"id": f"eq.{row['id']}"},
-                        json={"status": "sent"},
-                    )
-                except Exception as e:
-                    logger.error(f"Kontakt so'rovi yuborilmadi (id={row.get('id')}): {e}")
-                    await client.patch(
-                        f"{SB_URL}/rest/v1/contact_requests",
-                        headers=SB_HEADERS,
-                        params={"id": f"eq.{row['id']}"},
-                        json={"status": "failed"},
-                    )
-    except Exception as e:
-        logger.error(f"check_contact_requests xato: {e}")
+// ===== Yordamchi: sana formatlash =====
+var UZ_MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+function formatDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  return d.getDate() + '-' + UZ_MONTHS[d.getMonth()] + ', ' + d.getFullYear();
+}
+function formatDateTime(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  var hh = String(d.getHours()).padStart(2, '0');
+  var mi = String(d.getMinutes()).padStart(2, '0');
+  return formatDate(iso) + ' ' + hh + ':' + mi;
+}
 
+// ===== Supabase yordamchi funksiyalar =====
+async function sbGet(path) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, { headers: SB_H });
+  if (!res.ok) throw new Error('SB GET xato: ' + res.status);
+  return res.json();
+}
+async function sbPost(path, body, prefer) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'POST',
+    headers: Object.assign({}, SB_H, { Prefer: prefer || 'return=representation' }),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('SB POST xato: ' + res.status + ' ' + (await res.text()));
+  var txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+async function sbPatch(path, body) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: 'PATCH',
+    headers: Object.assign({}, SB_H, { Prefer: 'return=representation' }),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('SB PATCH xato: ' + res.status + ' ' + (await res.text()));
+  var txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+async function sbDelete(path) {
+  var res = await fetch(SB_URL + '/rest/v1/' + path, { method: 'DELETE', headers: SB_H });
+  if (!res.ok) throw new Error('SB DELETE xato: ' + res.status);
+}
+async function sbUploadFile(bucket, path, file) {
+  var res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + path, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!res.ok) throw new Error('Yuklash xatosi: ' + res.status);
+  return SB_URL + '/storage/v1/object/public/' + bucket + '/' + path;
+}
 
-async def contact_response_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    parts = query.data.split("_")
-    if len(parts) != 3:
-        return
-    _, action, req_id = parts
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(
-            f"{SB_URL}/rest/v1/contact_requests",
-            headers=SB_HEADERS,
-            params={"id": f"eq.{req_id}", "select": "*"},
-        )
-        rows = r.json()
-        if not rows:
-            return
-        row = rows[0]
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if action == "yes":
-            await client.patch(
-                f"{SB_URL}/rest/v1/contact_requests",
-                headers=SB_HEADERS,
-                params={"id": f"eq.{req_id}"},
-                json={"status": "agreed", "responded_at": now_iso},
-            )
-            username = query.from_user.username
-            contact_line = f"@{username}" if username else f"tg://user?id={row['target_id']}"
-            try:
-                await query.edit_message_text("✅ Rozilik berdingiz. Profilingiz ulashildi.")
-            except Exception:
-                pass
-            try:
-                await context.bot.send_message(
-                    chat_id=row["requester_id"],
-                    text=f"🎉 {row['target_name']} so'rovingizga rozi bo'ldi!\n\nBog'lanish: {contact_line}",
-                )
-            except Exception as e:
-                logger.error(f"Requesterga xabar yuborilmadi: {e}")
-        else:
-            await client.patch(
-                f"{SB_URL}/rest/v1/contact_requests",
-                headers=SB_HEADERS,
-                params={"id": f"eq.{req_id}"},
-                json={"status": "declined", "responded_at": now_iso},
-            )
-            try:
-                await query.edit_message_text("Rad etdingiz.")
-            except Exception:
-                pass
+// ===== Hamyon (qovuncha/proteincha) =====
+async function getOrCreateWallet(userId, userName, username) {
+  var rows = await sbGet('wallets?select=*&user_id=eq.' + userId);
+  if (rows[0]) return rows[0];
+  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '', username: username || null, qovun_balance: 0, proteincha_balance: 0 }, 'resolution=merge-duplicates,return=representation');
+  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 0, proteincha_balance: 0 };
+}
+async function adjustWallet(userId, qovunDelta, proteinchaDelta) {
+  var w = await getOrCreateWallet(userId);
+  var newQovun = (w.qovun_balance || 0) + (qovunDelta || 0);
+  var newProteincha = (w.proteincha_balance || 0) + (proteinchaDelta || 0);
+  await sbPost('wallets?on_conflict=user_id', { user_id: userId, qovun_balance: newQovun, proteincha_balance: newProteincha }, 'resolution=merge-duplicates,return=representation');
+  return { qovun_balance: newQovun, proteincha_balance: newProteincha };
+}
+async function addToTreasury(qovunDelta) {
+  var rows = await sbGet('treasury?select=*&id=eq.1');
+  var current = (rows[0] && rows[0].qovun_balance) || 0;
+  await sbPatch('treasury?id=eq.1', { qovun_balance: current + qovunDelta });
+}
+function formatSom(n) {
+  n = Math.round(n || 0);
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + " so'm";
+}
+function furaLabel(qovun) {
+  var fura = Math.floor((qovun || 0) / FURA_SIZE);
+  var rest = (qovun || 0) % FURA_SIZE;
+  return fura + ' fura qovuncha' + (rest ? ' (+' + rest + ')' : '') + ' — ' + (qovun || 0) + ' ta';
+}
+async function joinCohortFlow(book, marker, progress) {
+  var isCreator = String(book.created_by_id) === String(ME.id);
+  if (!isCreator) {
+    var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
+    if ((wallet.qovun_balance || 0) < JOIN_COST_QOVUN) {
+      showAlert("Qovunchangiz yetarli emas. Challenjga qo'shilish uchun " + JOIN_COST_QOVUN + " ta qovuncha kerak.");
+      return false;
+    }
+  }
+  var nowIso = new Date().toISOString();
+  var inserted = await sbPost('progress?on_conflict=book_id,user_id', {
+    book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0, updated_at: nowIso, started_at: nowIso, cohort_start_date: marker,
+  }, 'resolution=merge-duplicates,return=representation');
+  if (inserted && inserted[0]) {
+    progress.push(inserted[0]);
+    progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+  }
+  if (!isCreator) {
+    await adjustWallet(ME.id, -JOIN_COST_QOVUN, 0);
+    await adjustWallet(book.created_by_id, JOIN_COST_QOVUN / 2, 0);
+    await addToTreasury(JOIN_COST_QOVUN / 2);
+  }
+  try {
+    await sbPost('join_notifications', { book_id: book.id, creator_id: book.created_by_id, cohort_start_date: marker });
+  } catch (e) { console.error(e); }
+  return true;
+}
 
+// ===== Kogort (guruh) sikli hisoblash =====
+function monthCohortMarkers(year, month) {
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var days = [5, 10, 15, 20, 25, Math.min(30, daysInMonth)];
+  return days.map(function (d) {
+    return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  });
+}
+function nearbyCohortMarkers(todayStr) {
+  var today = new Date(todayStr + 'T00:00:00');
+  var set = {};
+  for (var offset = -2; offset <= 1; offset++) {
+    var d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    monthCohortMarkers(d.getFullYear(), d.getMonth()).forEach(function (m) { set[m] = true; });
+  }
+  return Object.keys(set).sort();
+}
+function cohortDiffDays(markerStr, todayStr) {
+  var marker = new Date(markerStr + 'T00:00:00');
+  var today = new Date(todayStr + 'T00:00:00');
+  return Math.round((today - marker) / 86400000);
+}
+function bookReadingDays(book) {
+  var pages = book && book.total_pages;
+  if (!pages || pages <= 0) return COHORT_READING_DAYS;
+  return Math.max(1, Math.ceil(pages / COHORT_SUGGESTED_DAILY_PAGES));
+}
+function cohortPhase(markerStr, todayStr, readingDays) {
+  readingDays = readingDays || COHORT_READING_DAYS;
+  var diff = cohortDiffDays(markerStr, todayStr);
+  if (diff < -COHORT_SIGNUP_DAYS) return null;
+  if (diff < 0) return 'signup';
+  if (diff < readingDays) return 'reading';
+  if (diff < readingDays + COHORT_CLOSING_DAYS) return 'closing';
+  return 'ended';
+}
+function currentSignupCohortMarker(todayStr) {
+  var markers = nearbyCohortMarkers(todayStr);
+  for (var i = 0; i < markers.length; i++) {
+    if (cohortPhase(markers[i], todayStr) === 'signup') return markers[i];
+  }
+  return null;
+}
+function addDaysToDateStr(markerStr, days) {
+  var d = new Date(markerStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return formatDate(localDateStr(d));
+}
+function cohortPhaseLabel(phase, diff, markerStr, readingDays) {
+  readingDays = readingDays || COHORT_READING_DAYS;
+  if (phase === null || phase === undefined) return "Hali ochilmagan — start sanasi " + formatDate(markerStr);
+  if (phase === 'signup') return "Guruh shakillanmoqda — o'qish " + formatDate(markerStr) + " da boshlanadi";
+  if (phase === 'reading') return (diff + 1) + '-kun / ' + readingDays + ' kunlik challenge';
+  if (phase === 'closing') return "Challenge tugadi — guruh yana " + (readingDays + COHORT_CLOSING_DAYS - diff) + " kun ko'rinadi";
+  return 'Guruh yopilgan';
+}
 
-# ===== Kogort (guruh) sikli hisoblash =====
-COHORT_SIGNUP_DAYS = 5
-COHORT_READING_DAYS = 20
-COHORT_CLOSING_DAYS = 5
+// ===== Kunlik odat (streak) =====
+function localDateStr(d) {
+  d = d || new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+function cohortTodayStr(d) {
+  d = d || new Date();
+  return localDateStr(new Date(d.getTime() - 4 * 60 * 60 * 1000));
+}
 
+async function recordReadingActivity() {
+  var today = localDateStr();
+  try {
+    var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
+    var row = rows[0];
+    var current = 1, longest = 1;
+    if (row) {
+      if (row.last_active_date === today) {
+        current = row.current_streak;
+        longest = row.longest_streak;
+      } else {
+        var yesterday = localDateStr(new Date(Date.now() - 86400000));
+        current = (row.last_active_date === yesterday) ? row.current_streak + 1 : 1;
+        longest = Math.max(row.longest_streak, current);
+      }
+    }
+    await sbPost('streaks?on_conflict=user_id', {
+      user_id: ME.id, current_streak: current, longest_streak: longest, last_active_date: today,
+    }, 'resolution=merge-duplicates,return=representation');
+  } catch (e) { console.error(e); }
+}
 
-COHORT_SUGGESTED_DAILY_PAGES = 20
+// ===== Kitobni tugatganlik (medal) =====
+async function tryRecordFinish(book) {
+  try {
+    var existing = await sbGet('finishers?select=id&book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
+    if (existing.length) return null;
+    var allFinishers = await sbGet('finishers?select=user_id&book_id=eq.' + book.id);
+    var medal = allFinishers.length === 0 ? 1 : allFinishers.length === 1 ? 2 : 0;
+    await sbPost('finishers', { book_id: book.id, book_title: book.title, user_id: ME.id, user_name: ME.name, medal: medal });
+    if (medal === 1) return "🥇 Tabriklaymiz! Bu kitobni BIRINCHI bo'lib tugatdingiz!";
+    if (medal === 2) return "🥈 Tabriklaymiz! Bu kitobni IKKINCHI bo'lib tugatdingiz!";
+    return "🎉 Kitobni tugatdingiz!";
+  } catch (e) { console.error(e); return null; }
+}
 
+// ===== Holat =====
+var state = { view: 'modeSelect', tab: 'top', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'dashboard' };
+var replyTarget = null;
+var editTarget = null;
+var expandedReplies = {};
+var isAdminMode = false;
+var _bdCache = null;
+var noteEditTarget = null;
+var _cohortCountdownInterval = null;
+var selectedCohortMarker = null;
+var _adminUsersCache = [];
+var _adminTxHistoryCache = [];
+var _adminWdHistoryCache = [];
+function txCurrencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
+var _adminBlockedSet = {};
+var _adminBooksCache = [];
+var app = document.getElementById('app');
+var _backHandler = null;
 
-def book_reading_days(total_pages):
-    if not total_pages or total_pages <= 0:
-        return COHORT_READING_DAYS
-    return max(1, -(-total_pages // COHORT_SUGGESTED_DAILY_PAGES))
+function setBackButton(show, handler) {
+  if (!tg || !tg.BackButton) return;
+  try {
+    if (show) {
+      if (_backHandler) { try { tg.BackButton.offClick(_backHandler); } catch (e2) {} }
+      _backHandler = handler;
+      tg.BackButton.show();
+      tg.BackButton.onClick(_backHandler);
+    } else {
+      if (_backHandler) { try { tg.BackButton.offClick(_backHandler); } catch (e2) {} _backHandler = null; }
+      tg.BackButton.hide();
+    }
+  } catch (e) {}
+}
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
 
-def month_cohort_markers(year: int, month: int):
-    days_in_month = calendar.monthrange(year, month)[1]
-    days = [5, 10, 15, 20, 25, min(30, days_in_month)]
-    return [dt_date(year, month, d) for d in days]
+function avatarHtml(photoUrl, size) {
+  size = size || 72;
+  if (photoUrl) {
+    return '<img src="' + photoUrl + '" class="avatar-img" style="width:' + size + 'px;height:' + size + 'px" />';
+  }
+  return '<div class="avatar-placeholder" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.45) + 'px">👤</div>';
+}
 
+// ===== Router =====
+function render() {
+  if (state.view === 'modeSelect') renderModeSelect();
+  else if (state.view === 'adminLogin') renderAdminLogin();
+  else if (state.view === 'home') renderHome();
+  else if (state.view === 'addBook') renderAddBook();
+  else if (state.view === 'bookDetail') renderBookDetail();
+  else if (state.view === 'userBooks') renderUserBooks();
+  else if (state.view === 'profile') renderMyProfile();
+  else if (state.view === 'wallet') renderWallet();
+  else if (state.view === 'admin') renderAdmin();
+  else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
+}
 
-def nearby_cohort_markers(today: dt_date):
-    markers = set()
-    for offset in range(-2, 2):
-        y = today.year
-        m = today.month + offset
-        while m < 1:
-            m += 12
-            y -= 1
-        while m > 12:
-            m -= 12
-            y += 1
-        markers.update(month_cohort_markers(y, m))
-    return sorted(markers)
+function currentSection() {
+  if (state.view === 'sport') return 'sport';
+  if (state.view === 'profile' || state.view === 'wallet') return 'profile';
+  return 'home';
+}
 
+function tabBtn(view, icon, label) {
+  var active = currentSection() === view ? ' active' : '';
+  return '<button class="tab' + active + '" data-go="' + view + '"><span class="tab-icon">' + icon + '</span><span class="tab-label">' + label + '</span></button>';
+}
 
-def cohort_phase(marker: dt_date, today: dt_date, reading_days: int = None):
-    reading_days = reading_days or COHORT_READING_DAYS
-    diff = (today - marker).days
-    if diff < -COHORT_SIGNUP_DAYS:
-        return None
-    if diff < 0:
-        return "signup"
-    if diff < reading_days:
-        return "reading"
-    if diff < reading_days + COHORT_CLOSING_DAYS:
-        return "closing"
-    return "ended"
+function renderShell(innerHtml, opts) {
+  opts = opts || {};
+  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
+  app.innerHTML =
+    '<div class="screen">' + innerHtml + '</div>' +
+    (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
+    '<nav class="tabbar">' + tabs + '</nav>';
+}
 
+// ===== Rejim tanlash va admin kirish =====
+function renderModeSelect() {
+  setBackButton(false);
+  app.innerHTML =
+    '<div class="screen" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh;gap:14px">' +
+    '<div style="text-align:center;margin-bottom:24px"><div style="font-size:46px;margin-bottom:8px">📚</div><div style="font-size:21px;font-weight:700">Bir bet</div></div>' +
+    '<button class="btn-primary full" data-go="home" style="padding:18px 16px;font-size:15px">🌱 Shaxsiy rivojlanish</button>' +
+    '<button class="btn-primary full" data-go="adminLogin" style="padding:18px 16px;font-size:15px;background:var(--surface);color:var(--text);box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light)">🔐 Admin rejimi</button>' +
+    '</div>';
+}
 
-def parse_date_str(s: str) -> dt_date:
-    return dt_date.fromisoformat(s)
+function renderAdminLogin() {
+  setBackButton(true, function () { state.view = 'modeSelect'; render(); });
+  app.innerHTML =
+    '<div class="screen">' +
+    '<div class="header"><button class="back" data-go="modeSelect">←</button><div class="h-title">Admin kirish</div></div>' +
+    '<div class="form">' +
+    '<input id="adminLoginInput" class="input" placeholder="Login" autocomplete="off" />' +
+    '<input id="adminPassInput" class="input" type="password" placeholder="Parol" autocomplete="off" />' +
+    '<button id="adminLoginBtn" class="btn-primary full">Kirish</button>' +
+    '</div>' +
+    '</div>';
+  document.getElementById('adminLoginBtn').addEventListener('click', function () {
+    var login = document.getElementById('adminLoginInput').value.trim();
+    var pass = document.getElementById('adminPassInput').value.trim();
+    if (login === 'testadmin' && pass === 'testadmin') {
+      isAdminMode = true;
+      state.adminTab = 'dashboard';
+      state.view = 'admin';
+      render();
+    } else {
+      showAlert('Login yoki parol xato.');
+    }
+  });
+}
 
+// ===== Bosh sahifa =====
+async function renderHome() {
+  setBackButton(false);
+  var isTop = state.tab === 'top';
+  var bodyHtml = isTop
+    ? '<div id="topLists"><div class="loading">Yuklanmoqda...</div></div>'
+    : '<input id="bookListSearch" class="input" placeholder="Kitob yoki muallif bo\'yicha qidirish..." style="margin-bottom:14px" />' +
+      '<div id="bookList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>';
+  renderShell(
+    '<div class="header"><div class="h-title">Kitoblar</div></div>' +
+    '<div id="streakBadge"></div>' +
+    '<div class="segment">' +
+    '<button class="seg-btn' + (state.tab === 'top' ? ' active' : '') + '" data-tab="top">🏆 TOP</button>' +
+    '<button class="seg-btn' + (state.tab === 'mine' ? ' active' : '') + '" data-tab="mine">Mening kitoblarim</button>' +
+    '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
+    '</div>' +
+    bodyHtml,
+    { fab: !isTop }
+  );
+  if (state.tab === 'mine') loadStreakBadge();
+  else document.getElementById('streakBadge').innerHTML = '';
+  if (isTop) {
+    await loadTopLists();
+  } else {
+    document.getElementById('bookListSearch').addEventListener('input', renderFilteredList);
+    await loadAndRenderBookList();
+  }
+}
 
-async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            books_r = await client.get(
-                f"{SB_URL}/rest/v1/books",
-                headers=SB_HEADERS,
-                params={"select": "id,title,total_pages"},
-            )
-            books = {b["id"]: b for b in books_r.json()}
-            today = datetime.now(timezone.utc).date()
+async function loadTopLists() {
+  var el = document.getElementById('topLists');
+  try {
+    var results = await Promise.all([
+      sbGet('finishers?select=user_id,user_name'),
+      sbGet('progress?select=book_id,user_id,user_name,pages_read'),
+      sbGet('books?select=*'),
+    ]);
+    var finishers = results[0];
+    var progressRows = results[1];
+    var books = results[2];
 
-            prog_r = await client.get(
-                f"{SB_URL}/rest/v1/progress",
-                headers=SB_HEADERS,
-                params={
-                    "select": "book_id,user_id,pages_read,cohort_start_date",
-                    "cohort_start_date": "not.is.null",
-                    "order": "pages_read.desc",
-                },
-            )
-            all_progress = prog_r.json()
+    var usingPagesFallback = finishers.length === 0;
+    var topReaders;
+    if (!usingPagesFallback) {
+      var readerCounts = {}, readerNames = {};
+      finishers.forEach(function (f) {
+        readerCounts[f.user_id] = (readerCounts[f.user_id] || 0) + 1;
+        readerNames[f.user_id] = f.user_name;
+      });
+      topReaders = Object.keys(readerCounts).map(function (uid) {
+        return { id: parseInt(uid, 10), name: readerNames[uid], count: readerCounts[uid], unit: ' ta kitob' };
+      }).sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+    } else {
+      var pageSums = {}, pageNames = {};
+      progressRows.forEach(function (p) {
+        pageSums[p.user_id] = (pageSums[p.user_id] || 0) + (p.pages_read || 0);
+        pageNames[p.user_id] = p.user_name;
+      });
+      topReaders = Object.keys(pageSums).map(function (uid) {
+        return { id: parseInt(uid, 10), name: pageNames[uid], count: pageSums[uid], unit: ' bet' };
+      }).filter(function (r) { return r.count > 0; })
+        .sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+    }
 
-            groups = {}
-            for p in all_progress:
-                key = (p["book_id"], p["cohort_start_date"])
-                groups.setdefault(key, []).append(p)
+    var bookCounts = {};
+    progressRows.forEach(function (p) { bookCounts[p.book_id] = (bookCounts[p.book_id] || 0) + 1; });
+    var topBooks = books.map(function (b) {
+      return { book: b, count: bookCounts[b.id] || 0 };
+    }).filter(function (x) { return x.count > 0; })
+      .sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
 
-            for (book_id, cohort_str), members in groups.items():
-                marker = parse_date_str(cohort_str)
-                book = books.get(book_id)
-                if not book:
-                    continue
-                reading_days = book_reading_days(book.get("total_pages"))
-                phase = cohort_phase(marker, today, reading_days)
-                if phase not in ("reading", "closing"):
-                    continue
+    var medalMark = function (i) { return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1); };
 
-                tracker_r = await client.get(
-                    f"{SB_URL}/rest/v1/rank_tracker",
-                    headers=SB_HEADERS,
-                    params={
-                        "book_id": f"eq.{book_id}",
-                        "cohort_start_date": f"eq.{cohort_str}",
-                        "select": "user_id,last_rank",
-                    },
-                )
-                tracker_map = {row["user_id"]: row["last_rank"] for row in tracker_r.json()}
+    var readersHtml = topReaders.length ? topReaders.map(function (r, i) {
+      return '<div class="reader-row' + (r.id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + r.id + '" data-username="' + escapeHtml(r.name) + '">' +
+        '<div class="reader-rank">' + medalMark(i) + '</div>' +
+        '<div class="reader-info"><div class="reader-name">' + escapeHtml(r.name) + '</div></div>' +
+        '<div class="reader-pages">' + r.count + r.unit + '</div>' +
+        '</div>';
+    }).join('') : '<div class="empty">Hali hech kim kitob o\'qishni boshlamagan.</div>';
 
-                for idx, p in enumerate(members):
-                    current_rank = idx + 1
-                    uid = p["user_id"]
-                    prev_rank = tracker_map.get(uid)
-                    if prev_rank is not None and current_rank > prev_rank:
-                        try:
-                            await context.bot.send_message(
-                                chat_id=uid,
-                                text=f"📉 \"{book['title']}\" guruhida darajangiz pastladi: endi {current_rank}-o'rindasiz.",
-                            )
-                        except Exception as e:
-                            logger.error(f"Daraja xabari yuborilmadi (user_id={uid}): {e}")
-                    try:
-                        await client.post(
-                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=book_id,user_id,cohort_start_date",
-                            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
-                            json={
-                                "book_id": book_id,
-                                "user_id": uid,
-                                "cohort_start_date": cohort_str,
-                                "last_rank": current_rank,
-                            },
-                        )
-                    except Exception as e:
-                        logger.error(f"rank_tracker yangilanmadi (book_id={book_id}, user_id={uid}): {e}")
-    except Exception as e:
-        logger.error(f"check_rank_drops xato: {e}")
+    var booksHtml = topBooks.length ? topBooks.map(function (x, i) {
+      var b = x.book;
+      var thumb = b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>';
+      return '<div class="card book-card" data-go="bookDetail" data-id="' + b.id + '">' +
+        '<div class="book-card-row">' + thumb +
+        '<div class="book-card-info"><div class="card-title">' + medalMark(i) + ' ' + escapeHtml(b.title) + '</div>' +
+        (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
+        '<div class="card-meta">👥 ' + x.count + ' kishi o\'qiyapti' + (b.total_pages ? ' · ' + b.total_pages + ' bet' : '') + '</div>' +
+        '</div></div></div>';
+    }).join('') : '<div class="empty">Hozircha hech kim kitob o\'qimayapti.</div>';
 
+    el.innerHTML =
+      '<div class="h-title" style="font-size:16px;margin-bottom:4px">🏅 Top 5 kitobxon</div>' +
+      (usingPagesFallback ? '<div class="hint" style="margin-bottom:10px">Hali hech kim kitob tugatmagan — hozircha umumiy o\'qilgan betlar bo\'yicha.</div>' : '<div style="margin-bottom:10px"></div>') +
+      '<div class="readers" style="margin-bottom:24px">' + readersHtml + '</div>' +
+      '<div class="h-title" style="font-size:16px;margin-bottom:10px">📚 Top 5 kitob</div>' +
+      '<div class="book-list">' + booksHtml + '</div>';
+  } catch (e) {
+    el.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi.</div>';
+    console.error(e);
+  }
+}
 
-async def get_all_user_ids(client):
-    user_ids = set()
-    for table in ("progress", "comments", "finishers"):
-        r = await client.get(
-            f"{SB_URL}/rest/v1/{table}",
-            headers=SB_HEADERS,
-            params={"select": "user_id"},
-        )
-        for row in r.json():
-            uid = row.get("user_id")
-            if uid:
-                user_ids.add(uid)
-    return user_ids
+var DARAJA_TITLES = [
+  "Molodets",
+  "VAOO",
+  "Aqltoy",
+  "Miyyasi ikkita",
+  "Qoyil",
+  "O'zga sayyoralik",
+  "Bu ketishingizda sizga kitob yetqazib bo'lmay qoladi",
+  "Vahshiy",
+  "O'zingizni bosing",
+  "Kamroq o'qing, miyangiz portlab ketadi",
+  "Faylasuf",
+  "Sizniyam ona tuqqanmi",
+  "Marslik",
+  "Boshingiz 400 kg bo'lib ketdi",
+  "Ko'p o'qisham zarar",
+  "Buncha o'qib nimaga tayyorlanyapsiz bilmadim-u, lekin tayyorsiz",
+  "Boshingizda qasdingiz bormi",
+];
+function darajaTitle(n) {
+  var idx = Math.min(n, DARAJA_TITLES.length) - 1;
+  return DARAJA_TITLES[idx];
+}
 
+async function loadStreakBadge() {
+  var el = document.getElementById('streakBadge');
+  try {
+    var rows = await sbGet('streaks?select=*&user_id=eq.' + ME.id);
+    var s = rows[0];
+    var today = localDateStr();
+    var yesterday = localDateStr(new Date(Date.now() - 86400000));
+    var n = (s && (s.last_active_date === today || s.last_active_date === yesterday)) ? s.current_streak : 0;
+    if (n <= 0) { el.innerHTML = ''; return; }
+    var cycleIndex = Math.floor((n - 1) / 3);
+    var lit = ((n - 1) % 3) + 1;
+    var daysRow = '';
+    for (var i = 1; i <= 3; i++) {
+      var dayLabel = cycleIndex * 3 + i;
+      daysRow += '<div class="streak-day"><div class="streak-day-icon' + (i <= lit ? ' lit' : '') + '">🔥</div><div class="streak-day-num">' + dayLabel + '</div></div>';
+    }
+    el.innerHTML = '<div class="streak-badge">' +
+      '<div class="streak-top-row"><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div>' +
+      '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div></div>' +
+      '<div class="streak-days-row">' + daysRow + '</div>' +
+      '</div>';
+  } catch (e) { el.innerHTML = ''; console.error(e); }
+}
 
-async def send_daily_motivation(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            user_ids = await get_all_user_ids(client)
-            text = (
-                "Bugun vaqt topib 1 bet bo'lsa ham kitob o'qing, shoshmasdan tushunib o'qing "
-                "va o'qiganingizni boshqaga tushuntirib bera oling.\n\n"
-                "O'zingizdan faxrlaning, siz kechagidan kuchliroq, aqlliroq siz."
-            )
-            for uid in user_ids:
-                try:
-                    await context.bot.send_message(chat_id=uid, text=text)
-                except Exception as e:
-                    logger.error(f"Motivatsiya xabari yuborilmadi (user_id={uid}): {e}")
-    except Exception as e:
-        logger.error(f"send_daily_motivation xato: {e}")
+async function loadAndRenderBookList() {
+  var listEl = document.getElementById('bookList');
+  try {
+    if (state.tab === 'mine') {
+      var rows = await sbGet('progress?select=*,books(*)&user_id=eq.' + ME.id + '&order=updated_at.desc');
+      state.listData = rows.map(function (r) {
+        var b = r.books;
+        var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
+        return { book: b, pct: pct, pagesRead: r.pages_read, readerCount: null };
+      });
+    } else {
+      var bookResults = await Promise.all([
+        sbGet('books?select=*&order=title.asc'),
+        sbGet('progress?select=book_id'),
+      ]);
+      var books = bookResults[0];
+      var progress = bookResults[1];
+      var counts = {};
+      progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
+      state.listData = books.map(function (b) {
+        return { book: b, pct: null, pagesRead: null, readerCount: counts[b.id] || 0 };
+      });
+    }
+    renderFilteredList();
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi. Internetni tekshiring.</div>';
+    console.error(e);
+  }
+}
 
+function renderFilteredList() {
+  var listEl = document.getElementById('bookList');
+  var searchEl = document.getElementById('bookListSearch');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var items = state.listData || [];
+  if (q) {
+    items = items.filter(function (it) {
+      var t = (it.book.title || '').toLowerCase();
+      var a = (it.book.author || '').toLowerCase();
+      return t.indexOf(q) !== -1 || a.indexOf(q) !== -1;
+    });
+  }
+  if (!items.length) {
+    if (!(state.listData || []).length) {
+      listEl.innerHTML = state.tab === 'mine'
+        ? '<div class="empty">Hali kitob boshlamadingiz.<br>Pastdagi + tugmasi bilan qo\'shing.</div>'
+        : '<div class="empty">Hozircha kitob yo\'q.<br>Birinchi bo\'lib siz qo\'shing!</div>';
+    } else {
+      listEl.innerHTML = '<div class="empty">Hech narsa topilmadi.</div>';
+    }
+    return;
+  }
+  listEl.innerHTML = items.map(function (it) {
+    return bookCard(it.book, it.pct, it.pagesRead, it.readerCount);
+  }).join('');
+}
 
-async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(
-                f"{SB_URL}/rest/v1/join_notifications",
-                headers=SB_HEADERS,
-                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
-            )
-            rows = r.json()
-            for row in rows:
-                try:
-                    book_r = await client.get(
-                        f"{SB_URL}/rest/v1/books",
-                        headers=SB_HEADERS,
-                        params={"id": f"eq.{row['book_id']}", "select": "title"},
-                    )
-                    book_rows = book_r.json()
-                    title = book_rows[0]["title"] if book_rows else "Kitob"
+function bookCard(b, pct, pagesRead, readerCount) {
+  var inner;
+  if (pct !== null) {
+    var metaText = b.total_pages ? (pagesRead + ' · ' + pct + '%') : (pagesRead + ' bet');
+    inner = '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="card-meta">' + metaText + '</div>';
+  } else {
+    inner = '<div class="card-meta">👥 ' + (readerCount || 0) + ' kishi o\'qiyapti' + (b.total_pages ? ' · ' + b.total_pages + ' bet' : '') + '</div>';
+  }
+  var thumb = b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>';
+  return '<div class="card book-card" data-go="bookDetail" data-id="' + b.id + '">' +
+    '<div class="book-card-row">' + thumb +
+    '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
+    (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
+    inner + '</div></div>' +
+    '</div>';
+}
 
-                    count_r = await client.get(
-                        f"{SB_URL}/rest/v1/progress",
-                        headers=SB_HEADERS,
-                        params={
-                            "book_id": f"eq.{row['book_id']}",
-                            "cohort_start_date": f"eq.{row['cohort_start_date']}",
-                            "select": "user_id",
-                        },
-                    )
-                    total = len(count_r.json())
+// ===== Profil (o'zim va boshqalar uchun umumiy) =====
+function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead) {
+  var medalCount = medals.length;
+  var litSlots = Math.min(medalCount, 5);
+  var medalSlotsHtml = '<div class="medal-slots-row">';
+  for (var i = 1; i <= 5; i++) {
+    medalSlotsHtml += '<div class="medal-slot-icon' + (i <= litSlots ? ' lit' : '') + '">🏅</div>';
+  }
+  medalSlotsHtml += '</div><div class="medal-count-label">' + medalCount + ' medal</div>';
+  var booksHtml = books.length
+    ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
+    : '<div class="empty">Hali kitob yo\'q.</div>';
+  return '<div class="profile-stats">' +
+    '<div class="profile-stat-box"><div class="profile-stat-num">' + totalPagesRead + '</div><div class="profile-stat-label">umumiy o\'qilgan bet</div></div>' +
+    '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
+    '</div>' +
+    (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
+    (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
+    '<div class="section-label">Medallar</div>' + medalSlotsHtml +
+    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml;
+}
 
-                    text = (
-                        f"📈 {row['cohort_start_date']}da boshlanadigan \"{title}\" o'qish "
-                        f"challenjiga yana 1 kishi qo'shildi, jami {total} kishi."
-                    )
-                    await context.bot.send_message(chat_id=row["creator_id"], text=text)
-                except Exception as e:
-                    logger.error(f"Qo'shilish xabari yuborilmadi (id={row.get('id')}): {e}")
-                finally:
-                    try:
-                        await client.patch(
-                            f"{SB_URL}/rest/v1/join_notifications",
-                            headers=SB_HEADERS,
-                            params={"id": f"eq.{row['id']}"},
-                            json={"sent": True},
-                        )
-                    except Exception as e:
-                        logger.error(f"join_notifications belgilanmadi (id={row.get('id')}): {e}")
-    except Exception as e:
-        logger.error(f"check_join_notifications xato: {e}")
+async function loadProfileInto(elId, userId, userName, isOwn) {
+  var el = document.getElementById(elId);
+  try {
+    var profileResults = await Promise.all([
+      sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
+      sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
+    ]);
+    var finishers = profileResults[0];
+    var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
+    var progRows = profileResults[1];
+    var totalPagesRead = 0;
+    var books = progRows.map(function (r) {
+      var b = r.books;
+      totalPagesRead += r.pages_read || 0;
+      var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
+      return { book: b, pct: pct, pagesRead: r.pages_read };
+    });
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, totalPagesRead);
+    if (isOwn) {
+      document.getElementById('goWalletBtn').addEventListener('click', function () {
+        state.view = 'wallet';
+        render();
+      });
+    }
+    if (!isOwn) {
+      document.getElementById('contactBtn').addEventListener('click', async function () {
+        var btn = this;
+        if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+        btn.disabled = true;
+        try {
+          await sbPost('contact_requests', { requester_id: ME.id, requester_name: ME.name, target_id: userId, target_name: userName });
+          vibrate('light');
+          showAlert("So'rov yuborildi. " + userName + " rozi bo'lsa, bot orqali xabar olasiz.");
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); btn.disabled = false; }
+      });
+    }
+  } catch (e) {
+    el.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi.</div>';
+    console.error(e);
+  }
+}
 
+async function renderMyProfile() {
+  setBackButton(false);
+  renderShell(
+    '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div></div>' +
+    '<div id="profileBody"><div class="loading">Yuklanmoqda...</div></div>'
+  );
+  await loadProfileInto('profileBody', ME.id, ME.name, true);
+}
 
-async def check_payment_notifications(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            pr = await client.get(
-                f"{SB_URL}/rest/v1/qovun_purchase_requests",
-                headers=SB_HEADERS,
-                params={"status": "neq.pending", "notified": "eq.false", "select": "*"},
-            )
-            for row in pr.json():
-                try:
-                    if row["status"] == "approved":
-                        text = f"✅ {row['qovun_amount']} ta qovun sotib olish so'rovingiz tasdiqlandi va hisobingizga qo'shildi."
-                    else:
-                        reason = row.get("reject_reason") or "sabab ko'rsatilmagan"
-                        text = f"❌ {row['qovun_amount']} ta qovun sotib olish so'rovingiz rad etildi. Sabab: {reason}"
-                    await context.bot.send_message(chat_id=row["user_id"], text=text)
-                except Exception as e:
-                    logger.error(f"To'lov xabari yuborilmadi (id={row.get('id')}): {e}")
-                finally:
-                    try:
-                        await client.patch(
-                            f"{SB_URL}/rest/v1/qovun_purchase_requests",
-                            headers=SB_HEADERS,
-                            params={"id": f"eq.{row['id']}"},
-                            json={"notified": True},
-                        )
-                    except Exception as e:
-                        logger.error(f"notified belgilanmadi (purchase id={row.get('id')}): {e}")
+// ===== Hamyon sahifasi =====
+async function renderWallet() {
+  setBackButton(true, function () { state.view = 'profile'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="profile">←</button><div class="h-title">🏦 Hamyon</div></div>' +
+    '<div id="walletBody"><div class="loading">Yuklanmoqda...</div></div>',
+    { fab: false }
+  );
+  await loadWalletBody();
+}
 
-            wr = await client.get(
-                f"{SB_URL}/rest/v1/withdrawal_requests",
-                headers=SB_HEADERS,
-                params={"status": "neq.pending", "notified": "eq.false", "select": "*"},
-            )
-            for row in wr.json():
-                try:
-                    if row["status"] == "paid":
-                        text = (
-                            f"✅ {row['amount']} ta {row['currency']} ({row['money_amount']} so'm) "
-                            f"pulga aylantirish so'rovingiz to'landi."
-                        )
-                    else:
-                        reason = row.get("reject_reason") or "sabab ko'rsatilmagan"
-                        text = f"❌ Pulga aylantirish so'rovingiz rad etildi. Sabab: {reason}"
-                    await context.bot.send_message(chat_id=row["user_id"], text=text)
-                except Exception as e:
-                    logger.error(f"Pul chiqarish xabari yuborilmadi (id={row.get('id')}): {e}")
-                finally:
-                    try:
-                        await client.patch(
-                            f"{SB_URL}/rest/v1/withdrawal_requests",
-                            headers=SB_HEADERS,
-                            params={"id": f"eq.{row['id']}"},
-                            json={"notified": True},
-                        )
-                    except Exception as e:
-                        logger.error(f"notified belgilanmadi (withdrawal id={row.get('id')}): {e}")
-    except Exception as e:
-        logger.error(f"check_payment_notifications xato: {e}")
+async function loadWalletBody() {
+  var el = document.getElementById('walletBody');
+  try {
+    var results = await Promise.all([
+      getOrCreateWallet(ME.id, ME.name, ME.username),
+      sbGet('qovun_purchase_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
+      sbGet('withdrawal_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
+    ]);
+    var wallet = results[0];
+    var purchases = results[1].map(function (r) { r._type = 'purchase'; return r; });
+    var withdrawals = results[2].map(function (r) { r._type = 'withdrawal'; return r; });
+    var history = purchases.concat(withdrawals).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
 
+    var historyHtml = history.length ? history.map(function (r) {
+      var statusEmoji = r.status === 'pending' ? '⏳' : (r.status === 'approved' || r.status === 'paid') ? '✅' : '❌';
+      var statusText = r.status === 'pending' ? 'Kutilmoqda' : r.status === 'approved' ? 'Tasdiqlandi' : r.status === 'paid' ? "To'landi" : ('Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
+      var currencyLabel = r.currency === 'proteincha' ? 'proteincha' : 'qovuncha';
+      var line = r._type === 'purchase'
+        ? (currencyLabel.charAt(0).toUpperCase() + currencyLabel.slice(1)) + ' sotib olish: ' + r.qovun_amount + ' ta'
+        : "Pulga aylantirish: " + r.amount + ' ta ' + currencyLabel + ' → ' + r.money_amount + " so'm";
+      return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + line + '</div>' +
+        '<div class="reader-note">' + statusEmoji + ' ' + statusText + '</div>' +
+        '<div class="reader-note">' + formatDate(r.created_at) + '</div></div></div>';
+    }).join('') : '<div class="empty">Tarix yo\'q.</div>';
 
-# ===== Asosiy =====
-# ===== Ilova faylini (index.html) servisga chiqarish =====
-def run_web_server():
-    port = int(os.environ.get("PORT", 8000))
-    logger.info(f"Veb-server {port}-portda ishga tushirilmoqda...")
-    try:
-        handler = http.server.SimpleHTTPRequestHandler
-        http.server.ThreadingHTTPServer.allow_reuse_address = True
-        httpd = http.server.ThreadingHTTPServer(("0.0.0.0", port), handler)
-        logger.info(f"Veb-server {port}-portda muvaffaqiyatli ishga tushdi (index.html shu yerdan ko'rinadi).")
-        httpd.serve_forever()
-    except Exception:
-        logger.exception("Veb-server ishga tushmadi (xatolik yuqorida):")
+    el.innerHTML =
+      '<div class="profile-stats">' +
+      '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:14px">' + furaLabel(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
+      '<div class="profile-stat-box"><div class="profile-stat-num">' + (wallet.proteincha_balance || 0) + '</div><div class="profile-stat-label">proteincha</div></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px">' +
+      '<button id="buyBtn" class="btn-small" style="flex:1">💰 Sotib olish</button>' +
+      '<button id="withdrawBtn" class="btn-small" style="flex:1">💸 Pulga aylantirish</button>' +
+      '</div>' +
+      '<div id="buyForm" style="display:none;margin-top:10px"></div>' +
+      '<div id="withdrawForm" style="display:none;margin-top:10px"></div>' +
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' + historyHtml;
 
+    var buyBtn = document.getElementById('buyBtn');
+    var buyForm = document.getElementById('buyForm');
+    var withdrawFormEl = document.getElementById('withdrawForm');
+    buyBtn.addEventListener('click', function () {
+      var showing = buyForm.style.display !== 'none';
+      buyForm.style.display = showing ? 'none' : 'block';
+      withdrawFormEl.style.display = 'none';
+      if (!showing) {
+        buyForm.innerHTML =
+          '<select id="buyCurrency" class="input">' +
+          '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
+          '</select>' +
+          '<input id="buyAmount" class="input" type="number" min="1" placeholder="Nechta sotib olmoqchisiz?" style="margin-top:8px" />' +
+          '<div id="buyAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
+          '<div class="hint" style="margin-top:8px">To\'lov uchun karta:<br><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><b id="paymentCardText">' + PAYMENT_CARD + '</b><button type="button" id="copyCardBtn" class="btn-small" style="flex-shrink:0">📋 Nusxalash</button></div><div style="margin-top:6px">To\'lov qilib, kvitansiya rasmini yuklang. Kvitansiyada SANA, SOAT va SUMMA aniq ko\'rinib turishi shart.</div></div>' +
+          '<label class="file-btn" for="buyReceiptInput" style="margin-top:8px">🧾 Kvitansiya yuklash</label>' +
+          '<input type="file" id="buyReceiptInput" accept="image/*" style="display:none" />' +
+          '<div id="buyReceiptPreview"></div>' +
+          '<button id="submitBuyBtn" class="btn-primary full" style="margin-top:8px">Yuborish</button>';
+        var updateBuySom = function () {
+          var amt = parseInt(document.getElementById('buyAmount').value, 10) || 0;
+          var cur = document.getElementById('buyCurrency').value;
+          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
+          document.getElementById('buyAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
+        };
+        document.getElementById('buyAmount').addEventListener('input', updateBuySom);
+        document.getElementById('buyCurrency').addEventListener('change', updateBuySom);
+        document.getElementById('copyCardBtn').addEventListener('click', function () {
+          var text = PAYMENT_CARD;
+          var btnEl = this;
+          function done() { vibrate('light'); var old = btnEl.textContent; btnEl.textContent = '✅ Nusxalandi'; setTimeout(function () { btnEl.textContent = old; }, 1500); }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function () { showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text); });
+          } else { showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text); }
+        });
+        document.getElementById('buyReceiptInput').addEventListener('change', function () {
+          var f = this.files[0];
+          var prevEl = document.getElementById('buyReceiptPreview');
+          if (!f) { prevEl.innerHTML = ''; return; }
+          prevEl.innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />';
+        });
+        document.getElementById('submitBuyBtn').addEventListener('click', async function () {
+          var currency = document.getElementById('buyCurrency').value;
+          var amt = parseInt(document.getElementById('buyAmount').value, 10);
+          if (!amt || amt <= 0) { showAlert("Miqdorni to'g'ri kiriting."); return; }
+          var receiptFile = document.getElementById('buyReceiptInput').files[0];
+          if (!receiptFile) { showAlert('Kvitansiya rasmini yuklang.'); return; }
+          var sBtn = this; sBtn.disabled = true; sBtn.textContent = 'Yuborilmoqda...';
+          try {
+            var ext = (receiptFile.name.split('.').pop() || 'jpg').toLowerCase();
+            var receiptUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'receipts/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, receiptFile);
+            await sbPost('qovun_purchase_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, qovun_amount: amt, currency: currency, receipt_url: receiptUrl });
+            vibrate('light');
+            showAlert("So'rovingiz yuborildi. Admin tekshirib tasdiqlagach, hisobingizga qo'shiladi.");
+            renderWallet();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; sBtn.textContent = 'Yuborish'; }
+        });
+      }
+    });
 
-def main():
-    threading.Thread(target=run_web_server, daemon=True).start()
+    var withdrawBtn = document.getElementById('withdrawBtn');
+    withdrawBtn.addEventListener('click', function () {
+      var showing = withdrawFormEl.style.display !== 'none';
+      withdrawFormEl.style.display = showing ? 'none' : 'block';
+      buyForm.style.display = 'none';
+      if (!showing) {
+        withdrawFormEl.innerHTML =
+          '<div class="hint">Kurs: 1 qovuncha = ' + QOVUN_PER_SOM + " so'm, 1 proteincha = " + PROTEINCHA_PER_SOM + " so'm</div>" +
+          '<select id="withdrawCurrency" class="input" style="margin-top:8px">' +
+          '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
+          '</select>' +
+          '<input id="withdrawAmount" class="input" type="number" min="1" placeholder="Miqdor" />' +
+          '<div id="withdrawAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
+          '<input id="withdrawCardHolder" class="input" placeholder="Karta egasining F.I.Sh" />' +
+          '<input id="withdrawCard" class="input" placeholder="Karta raqamingiz" />' +
+          '<button id="submitWithdrawBtn" class="btn-primary full" style="margin-top:8px">So\'rov yuborish</button>';
+        var updateWithdrawSom = function () {
+          var amt = parseInt(document.getElementById('withdrawAmount').value, 10) || 0;
+          var cur = document.getElementById('withdrawCurrency').value;
+          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
+          document.getElementById('withdrawAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
+        };
+        document.getElementById('withdrawAmount').addEventListener('input', updateWithdrawSom);
+        document.getElementById('withdrawCurrency').addEventListener('change', updateWithdrawSom);
+        document.getElementById('submitWithdrawBtn').addEventListener('click', async function () {
+          var currency = document.getElementById('withdrawCurrency').value;
+          var amt = parseInt(document.getElementById('withdrawAmount').value, 10);
+          var holder = document.getElementById('withdrawCardHolder').value.trim();
+          var card = document.getElementById('withdrawCard').value.trim();
+          if (!amt || amt <= 0) { showAlert("Miqdorni to'g'ri kiriting."); return; }
+          if (!holder) { showAlert('Karta egasining ismini kiriting.'); return; }
+          if (!card) { showAlert('Karta raqamingizni kiriting.'); return; }
+          var bal = currency === 'qovun' ? wallet.qovun_balance : wallet.proteincha_balance;
+          if (amt > bal) { showAlert('Balansingizda yetarli mablag\' yo\'q.'); return; }
+          var moneyAmount = currency === 'qovun' ? amt * QOVUN_PER_SOM : amt * PROTEINCHA_PER_SOM;
+          var sBtn = this; sBtn.disabled = true; sBtn.textContent = 'Yuborilmoqda...';
+          try {
+            await sbPost('withdrawal_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, currency: currency, amount: amt, money_amount: moneyAmount, card_number: card, card_holder_name: holder });
+            vibrate('light');
+            showAlert("So'rovingiz yuborildi. Admin to'lab, tasdiqlagach mablag' hisobingizdan yechiladi.");
+            renderWallet();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; sBtn.textContent = "So'rov yuborish"; }
+        });
+      }
+    });
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
 
-    application = Application.builder().token(TOKEN).build()
+async function renderUserBooks() {
+  setBackButton(true, function () { state.view = 'bookDetail'; state.detailTab = 'readers'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="bookDetail" data-id="' + state.bookId + '">←</button></div>' +
+    '<div class="profile-header">' + avatarHtml(null, 76) + '<div class="profile-header-name">' + escapeHtml(state.viewUserName) + '</div></div>' +
+    '<div id="profileBody"><div class="loading">Yuklanmoqda...</div></div>'
+  );
+  await loadProfileInto('profileBody', state.viewUserId, state.viewUserName, false);
+}
 
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CallbackQueryHandler(contact_response_callback, pattern=r"^cr_(yes|no)_\d+$"))
+// ===== Admin panel =====
+async function renderAdmin() {
+  setBackButton(true, function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
+  app.innerHTML =
+    '<div class="screen">' +
+    '<div class="header"><div class="h-title">Admin</div><button class="back" id="adminExitBtn" style="margin-left:auto">✕</button></div>' +
+    '<div class="segment" style="flex-wrap:wrap">' +
+    '<button class="seg-btn' + (state.adminTab === 'dashboard' ? ' active' : '') + '" data-admintab="dashboard">Dashboard</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish</button>' +
+    '</div>' +
+    '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
+    '</div>';
+  document.getElementById('adminExitBtn').addEventListener('click', function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
+  document.querySelectorAll('[data-admintab]').forEach(function (b) {
+    b.addEventListener('click', function () { state.adminTab = b.dataset.admintab; renderAdmin(); });
+  });
+  if (state.adminTab === 'books') await loadAdminBooks();
+  else if (state.adminTab === 'transactions') await loadAdminTransactions();
+  else if (state.adminTab === 'withdrawals') await loadAdminWithdrawals();
+  else if (state.adminTab === 'dashboard') await loadAdminDashboard();
+  else await loadAdminUsers();
+}
 
-    if application.job_queue:
-        application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
-        application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
-        application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
-        application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
-        application.job_queue.run_daily(
-            send_daily_motivation,
-            time=dt_time(5, 0, 0, tzinfo=timezone.utc),
-        )
-    else:
-        logger.warning(
-            "job_queue mavjud emas. Terminalda quyidagini ishga tushiring: "
-            'pip install "python-telegram-bot[job-queue]"'
-        )
+async function loadAllUsersMerged() {
+  var map = {};
+  function consider(id, name, date) {
+    if (id == null) return;
+    if (!map[id]) map[id] = { id: id, name: name || ('Foydalanuvchi ' + id), firstSeen: date };
+    else {
+      if (name) map[id].name = name;
+      if (date && new Date(date) < new Date(map[id].firstSeen)) map[id].firstSeen = date;
+    }
+  }
+  var results = await Promise.all([
+    sbGet('progress?select=user_id,user_name,started_at'),
+    sbGet('comments?select=user_id,user_name,created_at'),
+    sbGet('books?select=created_by_id,created_by_name,created_at'),
+    sbGet('wallets?select=user_id,user_name,created_at'),
+  ]);
+  results[0].forEach(function (p) { consider(p.user_id, p.user_name, p.started_at); });
+  results[1].forEach(function (c) { consider(c.user_id, c.user_name, c.created_at); });
+  results[2].forEach(function (b) { consider(b.created_by_id, b.created_by_name, b.created_at); });
+  results[3].forEach(function (w) { consider(w.user_id, w.user_name, w.created_at); });
+  return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return new Date(b.firstSeen) - new Date(a.firstSeen); });
+}
 
-    logger.info("Bot ishga tushdi.")
-    application.run_polling(drop_pending_updates=True)
+async function loadAdminUsers() {
+  var el = document.getElementById('adminBody');
+  try {
+    var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id')]);
+    _adminUsersCache = usersAndBlocked[0];
+    var blockedRows = usersAndBlocked[1];
+    _adminBlockedSet = {};
+    blockedRows.forEach(function (b) { _adminBlockedSet[b.user_id] = true; });
+    el.innerHTML = '<input id="adminUserSearch" class="input" placeholder="Foydalanuvchi qidirish (ism yoki ID)..." style="margin-bottom:10px" />' +
+      '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminUserDateFrom" class="input" type="date" style="flex:1" /><input id="adminUserDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminUsersList"></div>';
+    document.getElementById('adminUserSearch').addEventListener('input', renderAdminUsersList);
+    document.getElementById('adminUserDateFrom').addEventListener('change', renderAdminUsersList);
+    document.getElementById('adminUserDateTo').addEventListener('change', renderAdminUsersList);
+    renderAdminUsersList();
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
 
+function renderAdminUsersList() {
+  var listEl = document.getElementById('adminUsersList');
+  var searchEl = document.getElementById('adminUserSearch');
+  var fromEl = document.getElementById('adminUserDateFrom');
+  var toEl = document.getElementById('adminUserDateTo');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var fromVal = fromEl ? fromEl.value : '';
+  var toVal = toEl ? toEl.value : '';
+  var users = _adminUsersCache;
+  if (q) {
+    users = users.filter(function (u) {
+      return (u.name || '').toLowerCase().indexOf(q) !== -1 || String(u.id).indexOf(q) !== -1;
+    });
+  }
+  if (fromVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) >= fromVal; });
+  if (toVal) users = users.filter(function (u) { return u.firstSeen && u.firstSeen.slice(0, 10) <= toVal; });
+  listEl.innerHTML = users.length ? users.map(function (u) {
+    var isBlocked = !!_adminBlockedSet[u.id];
+    return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.name) + '</div>' +
+      '<div class="reader-note">ID: ' + u.id + ' · 📅 ' + formatDateTime(u.firstSeen) + '</div></div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+      '<button class="btn-small' + (isBlocked ? ' danger' : '') + '" data-block-id="' + u.id + '" data-blocked="' + (isBlocked ? '1' : '0') + '">' + (isBlocked ? "Blokdan chiqar" : "Blokla") + '</button>' +
+      '<button class="btn-small" data-add-qovun="' + u.id + '" data-name="' + escapeHtml(u.name) + '">💰 Qovuncha qo\'shish</button>' +
+      '</div></div>';
+  }).join('') : '<div class="empty">Foydalanuvchi topilmadi.</div>';
+  document.querySelectorAll('[data-add-qovun]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = parseInt(btn.dataset.addQovun, 10);
+      var raw = window.prompt(btn.dataset.name + " uchun nechta qovuncha qo'shamiz? (ayirish uchun manfiy son kiriting)");
+      if (raw === null) return;
+      var amt = parseInt(raw, 10);
+      if (isNaN(amt)) { showAlert("Noto'g'ri son."); return; }
+      try {
+        await adjustWallet(id, amt, 0);
+        vibrate('light');
+        showAlert('Bajarildi.');
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+    });
+  });
+  document.querySelectorAll('[data-block-id]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = parseInt(btn.dataset.blockId, 10);
+      var wasBlocked = btn.dataset.blocked === '1';
+      try {
+        if (wasBlocked) { await sbDelete('blocked_users?user_id=eq.' + id); delete _adminBlockedSet[id]; }
+        else { await sbPost('blocked_users?on_conflict=user_id', { user_id: id }, 'resolution=merge-duplicates,return=representation'); _adminBlockedSet[id] = true; }
+        vibrate('light');
+        renderAdminUsersList();
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+    });
+  });
+}
 
-if __name__ == "__main__":
-    main()
+async function loadAdminDashboard() {
+  var el = document.getElementById('adminBody');
+  el.innerHTML =
+    '<div class="segment" style="margin-bottom:14px">' +
+    '<button class="seg-btn active" data-period="today">Bugun</button>' +
+    '<button class="seg-btn" data-period="week">Hafta</button>' +
+    '<button class="seg-btn" data-period="month">Oy</button>' +
+    '</div>' +
+    '<div id="dashboardBody"><div class="loading">Yuklanmoqda...</div></div>';
+  document.querySelectorAll('[data-period]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('[data-period]').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      renderDashboardBody(btn.dataset.period);
+    });
+  });
+  renderDashboardBody('today');
+}
+
+async function renderDashboardBody(period) {
+  var bodyEl = document.getElementById('dashboardBody');
+  bodyEl.innerHTML = '<div class="loading">Yuklanmoqda...</div>';
+  try {
+    var since = new Date();
+    if (period === 'today') since.setHours(0, 0, 0, 0);
+    else if (period === 'week') since.setDate(since.getDate() - 7);
+    else since.setMonth(since.getMonth() - 1);
+    var sinceIso = since.toISOString();
+
+    var results = await Promise.all([
+      sbGet('books?select=id,title,created_by_name&created_at=gte.' + sinceIso),
+      sbGet('progress?select=user_id,user_name,started_at&started_at=gte.' + sinceIso + '&order=started_at.desc'),
+      sbGet('treasury?select=*&id=eq.1'),
+    ]);
+    var newBooks = results[0];
+    var newJoinsRaw = results[1];
+    var treasury = results[2][0] || { qovun_balance: 0 };
+    var seenUsers = {};
+    var newUsers = [];
+    newJoinsRaw.forEach(function (p) {
+      if (!seenUsers[p.user_id]) { seenUsers[p.user_id] = true; newUsers.push(p); }
+    });
+
+    bodyEl.innerHTML =
+      '<div class="profile-stats">' +
+      '<div class="profile-stat-box"><div class="profile-stat-num">' + newBooks.length + '</div><div class="profile-stat-label">yangi challenj</div></div>' +
+      '<div class="profile-stat-box"><div class="profile-stat-num">' + newUsers.length + '</div><div class="profile-stat-label">yangi qatnashuvchi</div></div>' +
+      '</div>' +
+      '<div class="profile-stats" style="margin-top:8px">' +
+      '<div class="profile-stat-box"><div class="profile-stat-num">' + furaLabel(treasury.qovun_balance) + '</div><div class="profile-stat-label">ilova xazinasi</div></div>' +
+      '</div>' +
+      '<div class="section-label" style="margin-top:18px">Yangi challenjlar</div>' +
+      (newBooks.length ? newBooks.map(function (b) {
+        return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(b.title) + '</div><div class="reader-note">Yaratuvchi: ' + escapeHtml(b.created_by_name || '') + '</div></div></div>';
+      }).join('') : '<div class="empty">Yo\'q.</div>') +
+      '<div class="section-label" style="margin-top:18px">Yangi qatnashuvchilar</div>' +
+      (newUsers.length ? newUsers.map(function (u) {
+        return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(u.user_name) + '</div><div class="reader-note">' + formatDate(u.started_at) + '</div></div></div>';
+      }).join('') : '<div class="empty">Yo\'q.</div>');
+  } catch (e) { bodyEl.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+async function loadAdminTransactions() {
+  var el = document.getElementById('adminBody');
+  try {
+    var results = await Promise.all([
+      sbGet('qovun_purchase_requests?select=*&status=eq.pending&order=created_at.desc'),
+      sbGet('qovun_purchase_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=200'),
+    ]);
+    var pending = results[0];
+    _adminTxHistoryCache = results[1];
+    var pendingHtml = pending.length ? pending.map(function (r) {
+      return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
+        '<div class="admin-row-info" style="margin-bottom:8px"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+        '<div class="reader-note">' + r.qovun_amount + ' ta ' + txCurrencyLabel(r) + ' uchun to\'lov bo\'ldi — tekshirib tasdiqlang</div>' +
+        '<div class="reader-note">' + formatDateTime(r.created_at) + '</div></div>' +
+        '<img src="' + r.receipt_url + '" class="note-photo-img" style="max-width:100%" />' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn-small" data-approve-purchase="' + r.id + '" data-amount="' + r.qovun_amount + '" data-uid="' + r.user_id + '" data-currency="' + r.currency + '">Tasdiqlash</button>' +
+        '<button class="btn-small danger" data-reject-purchase="' + r.id + '">Rad etish</button>' +
+        '</div></div>';
+    }).join('') : '<div class="empty">Hozircha kutilayotgan tranzaksiya yo\'q.</div>';
+    el.innerHTML =
+      '<div class="section-label">Kutilayotgan</div>' + pendingHtml +
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="adminTxDateFrom" class="input" type="date" style="flex:1" /><input id="adminTxDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminTxHistoryList"></div>';
+    document.getElementById('adminTxDateFrom').addEventListener('change', renderAdminTxHistory);
+    document.getElementById('adminTxDateTo').addEventListener('change', renderAdminTxHistory);
+    renderAdminTxHistory();
+    document.querySelectorAll('[data-approve-purchase]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        confirmAction("To'lovni tasdiqlaysizmi?", async function () {
+          try {
+            var id = btn.dataset.approvePurchase;
+            var amt = parseInt(btn.dataset.amount, 10);
+            var uid = parseInt(btn.dataset.uid, 10);
+            var currency = btn.dataset.currency;
+            if (currency === 'proteincha') await adjustWallet(uid, 0, amt);
+            else await adjustWallet(uid, amt, 0);
+            await sbPatch('qovun_purchase_requests?id=eq.' + id, { status: 'approved', resolved_at: new Date().toISOString() });
+            vibrate('light');
+            loadAdminTransactions();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    });
+    document.querySelectorAll('[data-reject-purchase]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var reason = window.prompt("Rad etish sababi:") || '';
+        var id = btn.dataset.rejectPurchase;
+        sbPatch('qovun_purchase_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason, resolved_at: new Date().toISOString() })
+          .then(function () { vibrate('light'); loadAdminTransactions(); })
+          .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+      });
+    });
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+function renderAdminTxHistory() {
+  var listEl = document.getElementById('adminTxHistoryList');
+  var fromVal = document.getElementById('adminTxDateFrom').value;
+  var toVal = document.getElementById('adminTxDateTo').value;
+  var history = _adminTxHistoryCache;
+  if (fromVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) >= fromVal; });
+  if (toVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) <= toVal; });
+  listEl.innerHTML = history.length ? history.map(function (r) {
+    var statusLabel = r.status === 'approved' ? '✅ Tasdiqlandi' : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
+    return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+      '<div class="reader-note">' + r.qovun_amount + ' ta ' + txCurrencyLabel(r) + ' · ' + statusLabel + '</div>' +
+      '<div class="reader-note">' + formatDateTime(r.resolved_at || r.created_at) + '</div></div></div>';
+  }).join('') : '<div class="empty">Tarix yo\'q.</div>';
+}
+
+async function loadAdminWithdrawals() {
+  var el = document.getElementById('adminBody');
+  try {
+    var results = await Promise.all([
+      sbGet('withdrawal_requests?select=*&status=eq.pending&order=created_at.desc'),
+      sbGet('withdrawal_requests?select=*&status=neq.pending&order=resolved_at.desc&limit=200'),
+    ]);
+    var rows = results[0];
+    _adminWdHistoryCache = results[1];
+    var pendingHtml = rows.length ? rows.map(function (r) {
+      return '<div class="admin-row" style="flex-direction:column;align-items:stretch">' +
+        '<div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+        '<div class="reader-note">' + r.amount + ' ta ' + txCurrencyLabel(r) + ' → ' + r.money_amount + " so'm</div>" +
+        '<div class="reader-note">Karta egasi: ' + escapeHtml(r.card_holder_name || '—') + '</div>' +
+        '<div class="reader-note">Karta: ' + escapeHtml(r.card_number) + '</div>' +
+        '<div class="reader-note">' + formatDateTime(r.created_at) + '</div></div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn-small" data-approve-withdrawal="' + r.id + '" data-currency="' + r.currency + '" data-amount="' + r.amount + '" data-uid="' + r.user_id + '">To\'landi</button>' +
+        '<button class="btn-small danger" data-reject-withdrawal="' + r.id + '">Rad etish</button>' +
+        '</div></div>';
+    }).join('') : '<div class="empty">Hozircha so\'rov yo\'q.</div>';
+    el.innerHTML =
+      '<div class="section-label">Kutilayotgan</div>' + pendingHtml +
+      '<div class="section-label" style="margin-top:20px">Tarix</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="adminWdDateFrom" class="input" type="date" style="flex:1" /><input id="adminWdDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminWdHistoryList"></div>';
+    document.getElementById('adminWdDateFrom').addEventListener('change', renderAdminWdHistory);
+    document.getElementById('adminWdDateTo').addEventListener('change', renderAdminWdHistory);
+    renderAdminWdHistory();
+    document.querySelectorAll('[data-approve-withdrawal]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        confirmAction("To'lov qildingizmi? Tasdiqlasangiz balansdan yechiladi.", async function () {
+          try {
+            var id = btn.dataset.approveWithdrawal;
+            var currency = btn.dataset.currency;
+            var amt = parseInt(btn.dataset.amount, 10);
+            var uid = parseInt(btn.dataset.uid, 10);
+            if (currency === 'qovun') await adjustWallet(uid, -amt, 0);
+            else await adjustWallet(uid, 0, -amt);
+            await sbPatch('withdrawal_requests?id=eq.' + id, { status: 'paid', resolved_at: new Date().toISOString() });
+            vibrate('light');
+            loadAdminWithdrawals();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    });
+    document.querySelectorAll('[data-reject-withdrawal]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var reason = window.prompt("Rad etish sababi:") || '';
+        var id = btn.dataset.rejectWithdrawal;
+        sbPatch('withdrawal_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason, resolved_at: new Date().toISOString() })
+          .then(function () { vibrate('light'); loadAdminWithdrawals(); })
+          .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+      });
+    });
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+function renderAdminWdHistory() {
+  var listEl = document.getElementById('adminWdHistoryList');
+  var fromVal = document.getElementById('adminWdDateFrom').value;
+  var toVal = document.getElementById('adminWdDateTo').value;
+  var history = _adminWdHistoryCache;
+  if (fromVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) >= fromVal; });
+  if (toVal) history = history.filter(function (r) { return (r.resolved_at || r.created_at).slice(0, 10) <= toVal; });
+  listEl.innerHTML = history.length ? history.map(function (r) {
+    var statusLabel = r.status === 'paid' ? "✅ To'landi" : ('❌ Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
+    return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + escapeHtml(r.user_name) + (r.username ? ' (@' + escapeHtml(r.username) + ')' : '') + '</div>' +
+      '<div class="reader-note">' + r.amount + ' ta ' + txCurrencyLabel(r) + ' → ' + r.money_amount + " so'm · " + statusLabel + '</div>' +
+      '<div class="reader-note">' + formatDateTime(r.resolved_at || r.created_at) + '</div></div></div>';
+  }).join('') : '<div class="empty">Tarix yo\'q.</div>';
+}
+
+async function loadAdminBooks() {
+  var el = document.getElementById('adminBody');
+  try {
+    _adminBooksCache = await sbGet('books?select=*&order=title.asc');
+    el.innerHTML = '<input id="adminBookSearch" class="input" placeholder="Kitob nomi yoki muallif bo\'yicha qidirish..." style="margin-bottom:10px" />' +
+      '<div class="hint" style="margin-bottom:6px">Qo\'shilgan sana oralig\'i</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="adminBookDateFrom" class="input" type="date" style="flex:1" /><input id="adminBookDateTo" class="input" type="date" style="flex:1" /></div>' +
+      '<div id="adminBooksList"></div>';
+    document.getElementById('adminBookSearch').addEventListener('input', renderAdminBooksList);
+    document.getElementById('adminBookDateFrom').addEventListener('change', renderAdminBooksList);
+    document.getElementById('adminBookDateTo').addEventListener('change', renderAdminBooksList);
+    renderAdminBooksList();
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+function renderAdminBooksList() {
+  var listEl = document.getElementById('adminBooksList');
+  var searchEl = document.getElementById('adminBookSearch');
+  var fromEl = document.getElementById('adminBookDateFrom');
+  var toEl = document.getElementById('adminBookDateTo');
+  var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  var fromVal = fromEl ? fromEl.value : '';
+  var toVal = toEl ? toEl.value : '';
+  var books = _adminBooksCache;
+  if (q) {
+    books = books.filter(function (b) {
+      return (b.title || '').toLowerCase().indexOf(q) !== -1 || (b.author || '').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  if (fromVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) >= fromVal; });
+  if (toVal) books = books.filter(function (b) { return b.created_at && b.created_at.slice(0, 10) <= toVal; });
+  listEl.innerHTML = books.length ? books.map(function (b) {
+    return '<div class="card" style="margin-bottom:10px" data-go="bookDetail" data-id="' + b.id + '"><div class="book-card-row">' +
+      (b.cover_url ? '<img src="' + b.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">📖</div>') +
+      '<div class="book-card-info"><div class="card-title">' + escapeHtml(b.title) + '</div>' +
+      (b.author ? '<div class="card-author">' + escapeHtml(b.author) + '</div>' : '') +
+      '<div class="reader-note">👤 ' + escapeHtml(b.created_by_name || 'Noma\'lum') + '</div>' +
+      '<div class="reader-note">📅 ' + formatDateTime(b.created_at) + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px">' +
+      '<button class="btn-small" data-edit-book="' + b.id + '">Tahrirlash</button>' +
+      '<button class="btn-small danger" data-delete-book="' + b.id + '">O\'chirish</button>' +
+      '</div></div></div></div>';
+  }).join('') : '<div class="empty">Kitob topilmadi.</div>';
+
+  document.querySelectorAll('[data-delete-book]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var id = btn.dataset.deleteBook;
+      confirmAction("Kitobni butunlay o'chirish? Bu amalni qaytarib bo'lmaydi.", async function () {
+        try {
+          await sbDelete('books?id=eq.' + id);
+          _adminBooksCache = _adminBooksCache.filter(function (b) { return String(b.id) !== id; });
+          vibrate('medium');
+          renderAdminBooksList();
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
+    });
+  });
+  document.querySelectorAll('[data-edit-book]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var book = _adminBooksCache.find(function (b) { return String(b.id) === btn.dataset.editBook; });
+      openEditBookForm(book);
+    });
+  });
+}
+
+function openEditBookForm(book) {
+  var el = document.getElementById('adminBody');
+  el.innerHTML =
+    '<button class="remove-link" id="adminBackToList">← Ro\'yxatga qaytish</button>' +
+    '<div class="form">' +
+    '<input id="editTitle" class="input" placeholder="Nomi" value="' + escapeHtml(book.title) + '" />' +
+    '<input id="editAuthor" class="input" placeholder="Muallif" value="' + escapeHtml(book.author || '') + '" />' +
+    '<input id="editTotalPages" class="input" type="number" min="1" placeholder="Jami bet" value="' + (book.total_pages || '') + '" />' +
+    (book.cover_url ? '<img src="' + book.cover_url + '" class="cover-preview-img" />' : '') +
+    '<label class="file-btn" for="editCoverInput">🖼️ Rasmni almashtirish</label>' +
+    '<input type="file" id="editCoverInput" accept="image/*" style="display:none" />' +
+    '<input id="editPurchaseLink" class="input" placeholder="Sotib olish linki" value="' + escapeHtml(book.purchase_link || '') + '" />' +
+    '<button id="saveEditBookBtn" class="btn-primary full">Saqlash</button>' +
+    '</div>';
+  document.getElementById('adminBackToList').addEventListener('click', loadAdminBooks);
+  document.getElementById('saveEditBookBtn').addEventListener('click', async function () {
+    var btn = this; btn.disabled = true; btn.textContent = 'Saqlanmoqda...';
+    try {
+      var coverFile = document.getElementById('editCoverInput').files[0];
+      var tpVal = document.getElementById('editTotalPages').value.trim();
+      var patch = {
+        title: document.getElementById('editTitle').value.trim(),
+        author: document.getElementById('editAuthor').value.trim() || null,
+        total_pages: tpVal ? parseInt(tpVal, 10) : null,
+        purchase_link: document.getElementById('editPurchaseLink').value.trim() || null,
+      };
+      if (coverFile) {
+        var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+        patch.cover_url = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
+      }
+      await sbPatch('books?id=eq.' + book.id, patch);
+      vibrate('medium');
+      showAlert('Saqlandi.');
+      loadAdminBooks();
+    } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); btn.disabled = false; btn.textContent = 'Saqlash'; }
+  });
+}
+
+// ===== Kitob qo'shish =====
+function renderAddBook() {
+  setBackButton(true, function () { state.view = 'home'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="home">←</button><div class="h-title">Kitob qo\'shish</div></div>' +
+    '<div class="form">' +
+    '<input id="bookSearch" class="input" placeholder="Kitob nomini yozing..." />' +
+    '<div id="searchResults"></div>' +
+    '<div id="newBookForm" style="display:none">' +
+    '<div class="hint">Bu kitob topilmadi — yangi sifatida qo\'shamiz. Siz birinchi o\'quvchi bo\'lasiz 🎉</div>' +
+    '<input id="bookAuthor" class="input" placeholder="Muallif nomi" />' +
+    '<input id="totalPages" class="input" type="number" min="1" placeholder="Jami bet soni" />' +
+    '<label class="file-btn" for="coverInput">🖼️ Kitob rasmini tanlash (majburiy)</label>' +
+    '<input type="file" id="coverInput" accept="image/*" style="display:none" />' +
+    '<div id="coverPreview"></div>' +
+    '<button id="createBookBtn" class="btn-primary full">Kitobni qo\'shish</button>' +
+    '</div>' +
+    '</div>'
+  );
+
+  var searchEl = document.getElementById('bookSearch');
+  var resultsEl = document.getElementById('searchResults');
+  var newFormEl = document.getElementById('newBookForm');
+  var timer = null;
+
+  searchEl.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = searchEl.value.trim();
+    newFormEl.style.display = 'none';
+    if (!q) { resultsEl.innerHTML = ''; return; }
+    timer = setTimeout(async function () {
+      try {
+        var matches = await sbGet('books?select=*&title=ilike.*' + encodeURIComponent(q) + '*&limit=5');
+        if (matches.length) {
+          resultsEl.innerHTML = matches.map(function (b) {
+            return '<div class="card result-card" data-go="bookDetail" data-id="' + b.id + '">' + escapeHtml(b.title) +
+              (b.author ? ' <span style="color:var(--text-muted)">— ' + escapeHtml(b.author) + '</span>' : '') + '</div>';
+          }).join('');
+        } else {
+          resultsEl.innerHTML = '';
+          newFormEl.style.display = 'block';
+          newFormEl.dataset.title = q;
+        }
+      } catch (e) { console.error(e); }
+    }, 400);
+  });
+
+  document.getElementById('coverInput').addEventListener('change', function () {
+    var f = this.files[0];
+    var prevEl = document.getElementById('coverPreview');
+    if (!f) { prevEl.innerHTML = ''; return; }
+    if (f.size > 8 * 1024 * 1024) { showAlert('Rasm hajmi katta (8MB dan oshmasin).'); this.value = ''; prevEl.innerHTML = ''; return; }
+    prevEl.innerHTML = '<div style="position:relative;display:inline-block">' +
+      '<img src="' + URL.createObjectURL(f) + '" class="cover-preview-img" />' +
+      '<button type="button" id="removeCoverBtn" style="position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:14px;font-weight:700;line-height:1;cursor:pointer">✕</button>' +
+      '</div>';
+    document.getElementById('removeCoverBtn').addEventListener('click', function () {
+      document.getElementById('coverInput').value = '';
+      prevEl.innerHTML = '';
+    });
+  });
+
+  document.getElementById('createBookBtn').addEventListener('click', async function () {
+    if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+    var title = newFormEl.dataset.title || searchEl.value.trim();
+    if (!title) return;
+    var coverFile = document.getElementById('coverInput').files[0];
+    if (!coverFile) { showAlert("Kitob rasmini tanlang — rasmsiz kitob qo'shib bo'lmaydi."); return; }
+    var author = document.getElementById('bookAuthor').value.trim();
+    if (!author) { showAlert('Muallif nomini kiriting.'); return; }
+    var tpVal = document.getElementById('totalPages').value.trim();
+    var totalPages = tpVal ? parseInt(tpVal, 10) : null;
+    if (!totalPages || totalPages <= 0) { showAlert('Jami bet sonini kiriting.'); return; }
+    try {
+      var myBooks = await sbGet('books?select=id,title,total_pages&created_by_id=eq.' + ME.id);
+      if (myBooks.length) {
+        var today = cohortTodayStr();
+        for (var bi = 0; bi < myBooks.length; bi++) {
+          var mb = myBooks[bi];
+          var mbProgress = await sbGet('progress?select=cohort_start_date&book_id=eq.' + mb.id);
+          var mbReadingDays = bookReadingDays(mb);
+          var mbActive = mbProgress.some(function (p) {
+            if (!p.cohort_start_date) return false;
+            var ph = cohortPhase(p.cohort_start_date, today, mbReadingDays);
+            return ph && ph !== 'ended';
+          });
+          if (mbActive) {
+            showAlert('Sizning "' + mb.title + '" challenjingiz hali tugamagan. Yangi challenj yaratish uchun avvalgisi tugashini kuting.');
+            return;
+          }
+        }
+      }
+    } catch (e) { console.error(e); }
+    var btn = this;
+    confirmAction("Hammasini to'g'ri kiritdingizmi? Kitob hammaga ko'rinadi.", async function () {
+      btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+      try {
+        var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+        var coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
+        var created = await sbPost('books', {
+          title: title, author: author, total_pages: totalPages,
+          cover_url: coverUrl, created_by_id: ME.id, created_by_name: ME.name,
+        });
+        var book = created[0];
+        var marker = currentSignupCohortMarker(cohortTodayStr());
+        await sbPost('progress', { book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0, cohort_start_date: marker });
+        vibrate('medium');
+        replyTarget = null;
+        editTarget = null;
+        state.view = 'bookDetail'; state.bookId = book.id; state.detailTab = 'readers'; render();
+      } catch (e) {
+        console.error(e); showAlert('Rasm yuklashda yoki saqlashda xatolik. Qaytadan urinib ko\'ring.');
+        btn.disabled = false; btn.textContent = "Kitobni qo'shish";
+      }
+    });
+  });
+}
+
+// ===== Kitob sahifasi =====
+async function renderBookDetail() {
+  var backView = isAdminMode ? 'admin' : 'home';
+  setBackButton(true, function () { state.view = backView; render(); });
+  var sameBookCached = _bdCache && _bdCache.bookId === state.bookId;
+  var headerHtml = '<div class="header"><button class="back" data-go="' + backView + '">←</button><div class="h-title">Kitob</div></div>' +
+    '<div id="bookDetailBody">' + (sameBookCached ? '' : '<div class="loading">Yuklanmoqda...</div>') + '</div>';
+  if (isAdminMode) app.innerHTML = '<div class="screen">' + headerHtml + '</div>';
+  else renderShell(headerHtml);
+
+  if (sameBookCached) {
+    renderBookDetailBody();
+    return;
+  }
+
+  var body = document.getElementById('bookDetailBody');
+  try {
+    var today = cohortTodayStr();
+    var results = await Promise.all([
+      sbGet('books?select=*&id=eq.' + state.bookId),
+      sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
+      sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
+      sbGet('progress?select=book_id,cohort_start_date&user_id=eq.' + ME.id),
+      sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=200'),
+    ]);
+    var book = results[0][0];
+    var progress = results[1];
+    var comments = results[2];
+    var myAllProgress = results[3];
+    var allNotes = results[4];
+
+    var likeCounts = {}, myLiked = {};
+    if (comments.length) {
+      var likeRows = await sbGet('comment_likes?select=comment_id,user_id&comment_id=in.(' + comments.map(function (c) { return c.id; }).join(',') + ')');
+      likeRows.forEach(function (l) { likeCounts[l.comment_id] = (likeCounts[l.comment_id] || 0) + 1; if (l.user_id === ME.id) myLiked[l.comment_id] = true; });
+    }
+    _bdCache = {
+      bookId: state.bookId, today: today, book: book, progress: progress, comments: comments,
+      likeCounts: likeCounts, myLiked: myLiked, allNotes: allNotes, myAllProgress: myAllProgress,
+    };
+    renderBookDetailBody();
+  } catch (e) {
+    body.innerHTML = '<div class="empty">Xatolik: kitob topilmadi.</div>';
+    console.error(e);
+  }
+}
+
+function renderBookDetailBody() {
+  var body = document.getElementById('bookDetailBody');
+  var today = _bdCache.today;
+  var book = _bdCache.book;
+  var progress = _bdCache.progress;
+  var comments = _bdCache.comments;
+  var likeCounts = _bdCache.likeCounts;
+  var myLiked = _bdCache.myLiked;
+  var allNotes = _bdCache.allNotes;
+  var myAllProgress = _bdCache.myAllProgress;
+  try {
+    var mine = progress.find(function (p) { return p.user_id === ME.id; });
+    var myPages = mine ? mine.pages_read : 0;
+    var totalPages = book.total_pages;
+    var readingDays = bookReadingDays(book);
+    var myCohortMarker = mine ? mine.cohort_start_date : null;
+    var myCohortPhase = myCohortMarker ? cohortPhase(myCohortMarker, today, readingDays) : null;
+    var signupMarker = currentSignupCohortMarker(today);
+    var otherActive = myAllProgress.find(function (p) {
+      if (String(p.book_id) === String(book.id)) return false;
+      if (!p.cohort_start_date) return false;
+      var ph = cohortPhase(p.cohort_start_date, today);
+      return ph !== 'ended';
+    });
+    var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
+
+    var membersByMarker = {};
+    progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
+    var allMarkers = nearbyCohortMarkers(today);
+    var activeMarkers = [], endedMarkers = [];
+    allMarkers.forEach(function (m) {
+      var ph = cohortPhase(m, today, readingDays);
+      if (ph === null) return;
+      if (ph === 'ended') { if (membersByMarker[m]) endedMarkers.push(m); return; }
+      if (membersByMarker[m] || ph === 'signup') activeMarkers.push(m);
+    });
+    activeMarkers.sort();
+    endedMarkers.sort();
+
+    var viewMarker = selectedCohortMarker || myCohortMarker || signupMarker;
+
+    function schedRowHtml(m) {
+      var count = membersByMarker[m] || 0;
+      var isMine = m === myCohortMarker;
+      var isSelected = m === viewMarker;
+      return '<div class="cohort-sched-row' + (isSelected ? ' mine' : '') + '" data-view-cohort="' + m + '" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
+        '<div class="cohort-sched-date">Start sanasi: ' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : '') + '</div>' +
+        '<div class="cohort-sched-meta">' + count + ' kishi</div>' +
+        '</div>';
+    }
+    var scheduleHtml = '<div class="cohort-schedule">' + activeMarkers.map(schedRowHtml).join('') + '</div>' +
+      (endedMarkers.length
+        ? '<button id="archiveToggleBtn" class="btn-small" style="margin-top:10px">📦 Arxiv (' + endedMarkers.length + ')</button>' +
+          '<div id="archiveList" class="cohort-schedule" style="display:none;margin-top:8px">' + endedMarkers.map(schedRowHtml).join('') + '</div>'
+        : '');
+
+    var viewParticipants = viewMarker ? progress.filter(function (p) { return p.cohort_start_date === viewMarker; }) : [];
+    var viewMarkerPhase = viewMarker ? cohortPhase(viewMarker, today, readingDays) : null;
+    var canJoinViewMarker = !mine && !otherActive && viewMarker && viewMarkerPhase === 'signup';
+    var joinTopBtnHtml = canJoinViewMarker ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + viewMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish (' + formatDate(viewMarker) + ')</button>' : '';
+    var sectionTitle = viewMarker === myCohortMarker ? 'Sizning guruhingiz' : (formatDate(viewMarker || '') + ' guruhi');
+    var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + sectionTitle + '</div>' +
+      (!viewParticipants.length
+      ? '<div class="empty">Hozircha hech kim qo\'shilmagan.</div>'
+      : '<div class="readers">' + viewParticipants.map(function (p, i) {
+          var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
+          var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+          return '<div class="reader-row' + (p.user_id === ME.id ? ' me' : '') + '" data-go="userBooks" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
+            '<div class="reader-rank">' + rankMark + '</div>' +
+            '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+            '<div class="reader-note">📅 ' + formatDate(p.started_at) + ' ' + new Date(p.started_at).getHours().toString().padStart(2, '0') + ':' + new Date(p.started_at).getMinutes().toString().padStart(2, '0') + '</div></div>' +
+            '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
+            '</div>';
+        }).join('') + '</div>');
+
+    var purchaseLinkHtml = book.purchase_link ? '<a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" class="btn-primary full" style="display:block;text-align:center;text-decoration:none;margin-top:10px">🛒 Kitobni sotib olish</a>' : '';
+
+    var progressTabHtml;
+    if (otherActive) {
+      progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
+    } else if (!mine) {
+      progressTabHtml = '<div class="empty">Siz hali bu kitob guruhiga qo\'shilmagansiz. Qo\'shilish uchun "Qatnashuvchilar" tabiga o\'ting.</div>' + purchaseLinkHtml;
+    } else {
+      var cohortLocked = myCohortPhase === 'ended';
+      var cohortWaiting = myCohortPhase === 'signup' || myCohortPhase === null;
+      var disabledAttr = (cohortLocked || cohortWaiting) ? ' disabled' : '';
+      var readingStartMs = new Date(myCohortMarker + 'T00:00:00').getTime() + (4 * 3600000);
+      var phaseHintHtml = cohortLocked
+        ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>'
+        : (cohortWaiting ? '<div class="hint cohort-countdown" id="cohortCountdown" data-target="' + readingStartMs + '" style="margin-bottom:14px"></div>' : '');
+
+      progressTabHtml =
+        phaseHintHtml +
+        '<div class="form">' +
+        '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
+        '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
+        '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
+        '<label class="file-btn" for="noteCoverInput" style="' + ((cohortLocked || cohortWaiting) ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
+        '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
+        '<div id="noteCoverPreview"></div>' +
+        '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
+        '</div>' +
+        '<button id="removeFromListBtn" class="remove-link">Guruhdan chiqish</button>' +
+        purchaseLinkHtml +
+        '<div class="hint" style="margin-top:14px">Yozgan fikringizni "Izohlar" tabidan ko\'rishingiz mumkin.</div>';
+    }
+
+    var myCohortComments = myCohortMarker ? comments.filter(function (c) { return c.cohort_start_date === myCohortMarker; }) : [];
+    var myCohortNotes = myCohortMarker ? allNotes.filter(function (n) { return n.cohort_start_date === myCohortMarker; }) : [];
+    var unifiedItems = myCohortComments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
+      .concat(myCohortNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
+      .sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
+    var repliesByParent = {};
+    myCohortComments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
+
+    function commentRow(c, isReply) {
+      var liked = !!myLiked[c.id];
+      var count = likeCounts[c.id] || 0;
+      var replyCount = isReply ? 0 : (repliesByParent[c.id] || []).length;
+      var isMine = c.user_id === ME.id;
+      return '<div class="comment-block' + (isReply ? ' reply' : '') + '">' +
+        '<div class="comment-text"><span class="comment-name">' + escapeHtml(c.user_name) + ':</span> ' + escapeHtml(c.text) + (c.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
+        '<div class="comment-actions">' +
+        '<button class="comment-action-btn' + (liked ? ' liked' : '') + '" data-like-comment="' + c.id + '">' + (liked ? '❤️' : '🤍') + (count ? ' ' + count : '') + '</button>' +
+        (!isReply ? '<button class="comment-action-btn" data-reply-comment="' + c.id + '" data-reply-name="' + escapeHtml(c.user_name) + '">↩ Javob</button>' : '') +
+        (replyCount > 0 ? '<button class="comment-action-btn" data-toggle-replies="' + c.id + '">' + (expandedReplies[c.id] ? '▴ Javoblarni yashirish' : '▾ Javoblar (' + replyCount + ')') + '</button>' : '') +
+        (!isAdminMode && isMine && c.user_name !== 'Admin' ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
+        (isAdminMode ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
+        '</div></div>';
+    }
+
+    function noteRow(n) {
+      var isMine = n.user_id === ME.id;
+      var fromPage = (n.pages_from !== null && n.pages_from !== undefined) ? n.pages_from : 0;
+      var rangeLabel = fromPage + '-' + n.pages_read;
+      if (noteEditTarget && String(noteEditTarget) === String(n.id)) {
+        return '<div class="note-entry">' +
+          '<div class="note-meta"><span class="comment-name">' + escapeHtml(n.user_name) + '</span> · 📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:</div>' +
+          '<img src="' + n.photo_url + '" class="note-photo-img" id="noteEditPhotoPreview" />' +
+          '<label class="file-btn" for="noteEditPhotoInput">📷 Rasmni almashtirish</label>' +
+          '<input type="file" id="noteEditPhotoInput" accept="image/*" style="display:none" />' +
+          '<textarea class="input" id="noteEditInput" rows="3" maxlength="200">' + escapeHtml(n.note) + '</textarea>' +
+          '<div style="display:flex;gap:8px;margin-top:8px">' +
+          '<button class="btn-small" data-save-note-edit="' + n.id + '">Saqlash</button>' +
+          '<button class="btn-small" data-cancel-note-edit>Bekor qilish</button>' +
+          '</div></div>';
+      }
+      return '<div class="note-entry">' +
+        '<div class="note-meta"><span class="comment-name">' + escapeHtml(n.user_name) + '</span> · 📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:' + (n.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
+        '<img src="' + n.photo_url + '" class="note-photo-img" />' +
+        '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
+        '<div class="comment-actions">' +
+        (!isAdminMode && isMine ? '<button class="comment-action-btn" data-edit-note="' + n.id + '">✏ Tahrirlash</button>' : '') +
+        (isAdminMode ? '<button class="comment-action-btn" data-del-note="' + n.id + '">🗑 O\'chir</button>' : '') +
+        '</div></div>';
+    }
+
+    var commentsListHtml = unifiedItems.map(function (item) {
+      if (item.type === 'note') return noteRow(item.data);
+      var c = item.data;
+      var repliesHtml = expandedReplies[c.id] ? (repliesByParent[c.id] || []).map(function (r) { return commentRow(r, true); }).join('') : '';
+      return commentRow(c, false) + repliesHtml;
+    }).join('');
+
+    var canComment = !!mine && myCohortPhase !== 'signup' && myCohortPhase !== null;
+    var commentFormHtml = canComment
+      ? ((editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
+         replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
+        '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '">' + (editTarget ? escapeHtml(editTarget.text) : '') + '</textarea>' +
+        '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>')
+      : (!mine
+          ? '<div class="hint" style="margin-bottom:10px">Izohlarni ko\'rish va yozish uchun avval guruhga qo\'shiling.</div>'
+          : '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>');
+
+    var commentsTabHtml = commentFormHtml +
+      (canComment ? '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>' : '');
+
+    var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
+
+    body.innerHTML =
+      '<div class="hero-row">' + coverHtml +
+      '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
+      (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
+      (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet · Challenge: ' + readingDays + ' kun · Kunlik o\'qish me\'yori: ' + COHORT_SUGGESTED_DAILY_PAGES + ' bet</div>' : '') +
+      (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
+      '</div></div>' +
+      '<div class="segment">' +
+      '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">Qatnashuvchilar</button>' +
+      '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Izohlar</button>' +
+      (isAdminMode ? '' : '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">O\'qish jarayonim</button>') +
+      '</div>' +
+      activeTabHtml;
+
+    document.querySelectorAll('[data-detailtab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.detailTab = btn.dataset.detailtab;
+        renderBookDetail();
+      });
+    });
+    document.querySelectorAll('[data-open-link]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var url = a.dataset.openLink;
+        try { if (tg && tg.openLink) { tg.openLink(url); return; } } catch (e2) {}
+        window.open(url, '_blank');
+      });
+    });
+
+    if (state.detailTab === 'readers') {
+      document.querySelectorAll('[data-view-cohort]').forEach(function (row) {
+        row.addEventListener('click', function () {
+          selectedCohortMarker = row.dataset.viewCohort;
+          renderBookDetail();
+        });
+      });
+      var archiveToggleBtn = document.getElementById('archiveToggleBtn');
+      if (archiveToggleBtn) {
+        archiveToggleBtn.addEventListener('click', function () {
+          var listEl = document.getElementById('archiveList');
+          listEl.style.display = listEl.style.display === 'none' ? 'block' : 'none';
+        });
+      }
+      var joinBtnTop = document.getElementById('joinCohortBtnTop');
+      if (joinBtnTop) {
+        joinBtnTop.addEventListener('click', function () {
+          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+          var marker = joinBtnTop.dataset.marker;
+          var isCreatorJoin = String(book.created_by_id) === String(ME.id);
+          var confirmMsg = isCreatorJoin ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi " + JOIN_COST_QOVUN + " ta qovuncha. Tasdiqlaysizmi?");
+          confirmAction(confirmMsg, async function () {
+            try {
+              var ok = await joinCohortFlow(book, marker, progress);
+              if (!ok) return;
+              selectedCohortMarker = null;
+              vibrate('light');
+              showAlert('Guruhga qo\'shildingiz!');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      }
+    }
+
+    if (state.detailTab === 'comments') {
+      document.querySelectorAll('[data-like-comment]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var cid = btn.dataset.likeComment;
+          var alreadyLiked = btn.classList.contains('liked');
+          var oldCountMatch = btn.textContent.match(/\d+/);
+          var oldCount = oldCountMatch ? parseInt(oldCountMatch[0], 10) : 0;
+          var newLiked = !alreadyLiked;
+          var newCount = newLiked ? oldCount + 1 : Math.max(0, oldCount - 1);
+          btn.classList.toggle('liked', newLiked);
+          btn.textContent = (newLiked ? '❤️' : '🤍') + (newCount ? ' ' + newCount : '');
+          vibrate('light');
+          likeCounts[cid] = newCount;
+          if (newLiked) myLiked[cid] = true; else delete myLiked[cid];
+          try {
+            if (alreadyLiked) await sbDelete('comment_likes?comment_id=eq.' + cid + '&user_id=eq.' + ME.id);
+            else await sbPost('comment_likes', { comment_id: cid, user_id: ME.id });
+          } catch (e) {
+            console.error(e);
+            btn.classList.toggle('liked', alreadyLiked);
+            btn.textContent = (alreadyLiked ? '❤️' : '🤍') + (oldCount ? ' ' + oldCount : '');
+            likeCounts[cid] = oldCount;
+            if (alreadyLiked) myLiked[cid] = true; else delete myLiked[cid];
+            showAlert('Xatolik yuz berdi.');
+          }
+        });
+      });
+      document.querySelectorAll('[data-reply-comment]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          editTarget = null;
+          replyTarget = { id: btn.dataset.replyComment, name: btn.dataset.replyName };
+          renderBookDetail();
+        });
+      });
+      document.querySelectorAll('[data-edit-comment]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          replyTarget = null;
+          editTarget = { id: btn.dataset.editComment, text: btn.dataset.editText };
+          renderBookDetail();
+        });
+      });
+      document.querySelectorAll('[data-toggle-replies]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var cid = btn.dataset.toggleReplies;
+          expandedReplies[cid] = !expandedReplies[cid];
+          renderBookDetail();
+        });
+      });
+      var cancelReplyBtn = document.querySelector('[data-cancel-reply]');
+      if (cancelReplyBtn) cancelReplyBtn.addEventListener('click', function () { replyTarget = null; renderBookDetail(); });
+      var cancelEditBtn = document.querySelector('[data-cancel-edit]');
+      if (cancelEditBtn) cancelEditBtn.addEventListener('click', function () { editTarget = null; renderBookDetail(); });
+      document.querySelectorAll('[data-del-comment]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var cid = btn.dataset.delComment;
+          confirmAction("Komentariyani o'chirish?", async function () {
+            try {
+              await sbDelete('comments?id=eq.' + cid);
+              _bdCache.comments = comments.filter(function (c) { return String(c.id) !== String(cid) && String(c.reply_to_id) !== String(cid); });
+              vibrate('medium');
+              renderBookDetail();
+            }
+            catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      });
+      document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          noteEditTarget = btn.dataset.editNote;
+          renderBookDetail();
+        });
+      });
+      var cancelNoteEditBtn = document.querySelector('[data-cancel-note-edit]');
+      if (cancelNoteEditBtn) {
+        cancelNoteEditBtn.addEventListener('click', function () {
+          noteEditTarget = null;
+          renderBookDetail();
+        });
+      }
+      var noteEditPhotoInputEl = document.getElementById('noteEditPhotoInput');
+      if (noteEditPhotoInputEl) {
+        noteEditPhotoInputEl.addEventListener('change', function () {
+          var f = this.files[0];
+          if (!f) return;
+          document.getElementById('noteEditPhotoPreview').src = URL.createObjectURL(f);
+        });
+      }
+      document.querySelectorAll('[data-save-note-edit]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var noteId = btn.dataset.saveNoteEdit;
+          var editInputEl = document.getElementById('noteEditInput');
+          var newText = editInputEl.value.trim();
+          if (!newText) { showAlert('Fikr matni bo\'sh bo\'lishi mumkin emas.'); return; }
+          var sBtn = this; sBtn.disabled = true;
+          try {
+            var patch = { note: newText, edited: true };
+            var newPhotoFile = document.getElementById('noteEditPhotoInput') ? document.getElementById('noteEditPhotoInput').files[0] : null;
+            if (newPhotoFile) {
+              var ext = (newPhotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+              patch.photo_url = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, newPhotoFile);
+            }
+            await sbPatch('reading_notes?id=eq.' + noteId, patch);
+            var editedNote = allNotes.find(function (nn) { return String(nn.id) === String(noteId); });
+            if (editedNote) { editedNote.note = newText; editedNote.edited = true; if (patch.photo_url) editedNote.photo_url = patch.photo_url; }
+            noteEditTarget = null;
+            vibrate('light');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; }
+        });
+      });
+      document.querySelectorAll('[data-del-note]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var noteId = btn.dataset.delNote;
+          confirmAction("Bu yozuvni o'chirasizmi?", async function () {
+            try {
+              await sbDelete('reading_notes?id=eq.' + noteId);
+              _bdCache.allNotes = allNotes.filter(function (nn) { return String(nn.id) !== String(noteId); });
+              vibrate('medium');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      });
+      var sendCommentBtnEl = document.getElementById('sendCommentBtn');
+      if (sendCommentBtnEl) sendCommentBtnEl.addEventListener('click', function () {
+        if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+        var input = document.getElementById('commentInput');
+        var text = input.value.trim();
+        if (!text) return;
+        if (editTarget) {
+          var editId = editTarget.id;
+          showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
+            try {
+              await sbPatch('comments?id=eq.' + editId, { text: text, edited: true });
+              var editedC = comments.find(function (cc) { return String(cc.id) === String(editId); });
+              if (editedC) { editedC.text = text; editedC.edited = true; }
+              input.value = '';
+              editTarget = null;
+              vibrate('light');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+          return;
+        }
+        showAlert("Bu xabaringiz boshqa o'qiyotganlarga ko'rinadi.", async function () {
+          try {
+            var inserted = await sbPost('comments', { book_id: book.id, user_id: ME.id, user_name: isAdminMode ? 'Admin' : ME.name, text: text, reply_to_id: replyTarget ? replyTarget.id : null, cohort_start_date: myCohortMarker || null });
+            if (inserted && inserted[0]) comments.push(inserted[0]);
+            input.value = '';
+            if (replyTarget) expandedReplies[replyTarget.id] = true;
+            replyTarget = null;
+            vibrate('light');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    } else if (state.detailTab === 'progress') {
+      if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
+      var countdownEl = document.getElementById('cohortCountdown');
+      if (countdownEl) {
+        var targetMs = parseInt(countdownEl.dataset.target, 10);
+        var updateCountdown = function () {
+          var diffMs = targetMs - Date.now();
+          if (diffMs <= 0) { countdownEl.textContent = "O'qish boshlandi, sahifani yangilang."; clearInterval(_cohortCountdownInterval); return; }
+          var totalSec = Math.floor(diffMs / 1000);
+          var days = Math.floor(totalSec / 86400);
+          var hours = Math.floor((totalSec % 86400) / 3600);
+          var mins = Math.floor((totalSec % 3600) / 60);
+          countdownEl.textContent = '⏳ Boshlanishiga: ' + days + ' kun ' + hours + ' soat ' + mins + ' daqiqa qoldi';
+        };
+        updateCountdown();
+        _cohortCountdownInterval = setInterval(updateCountdown, 1000);
+      }
+      var noteInputEl = document.getElementById('noteInput');
+      var noteCharCountEl = document.getElementById('noteCharCount');
+      if (noteInputEl) {
+        noteInputEl.addEventListener('input', function () {
+          noteCharCountEl.textContent = noteInputEl.value.length;
+        });
+      }
+      var noteCoverInputEl = document.getElementById('noteCoverInput');
+      if (noteCoverInputEl) {
+        noteCoverInputEl.addEventListener('change', function () {
+          var f = this.files[0];
+          var prevEl = document.getElementById('noteCoverPreview');
+          if (!f) { prevEl.innerHTML = ''; return; }
+          if (f.size > 8 * 1024 * 1024) { showAlert('Rasm hajmi katta (8MB dan oshmasin).'); this.value = ''; prevEl.innerHTML = ''; return; }
+          prevEl.innerHTML = '<div style="position:relative;display:inline-block">' +
+            '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />' +
+            '<button type="button" id="removeNoteCoverBtn" style="position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:14px;font-weight:700;line-height:1;cursor:pointer">✕</button>' +
+            '</div>';
+          document.getElementById('removeNoteCoverBtn').addEventListener('click', function () {
+            document.getElementById('noteCoverInput').value = '';
+            prevEl.innerHTML = '';
+          });
+        });
+      }
+      var updateBtnEl = document.getElementById('updateProgressBtn');
+      if (updateBtnEl) {
+        updateBtnEl.addEventListener('click', function () {
+          if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+          var pagesInputEl = document.getElementById('pagesInput');
+          var requestedPages = parseInt(pagesInputEl.value, 10);
+          if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
+          var noteText = noteInputEl.value.trim();
+          if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
+          var photoFile = document.getElementById('noteCoverInput').files[0];
+          if (!photoFile) { showAlert("Rasm yuklang — rasmsiz saqlab bo'lmaydi."); return; }
+          if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
+          var oldPages = mine ? mine.pages_read : 0;
+          var delta = requestedPages - oldPages;
+          var saveBtn = document.getElementById('updateProgressBtn');
+          confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Yuklanmoqda...';
+            var photoUrl = null;
+            try {
+              var ext = (photoFile.name.split('.').pop() || 'jpg').toLowerCase();
+              photoUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, photoFile);
+            } catch (e) {
+              console.error(e);
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Saqlash';
+              showAlert("Rasm yuklanmadi. Internetni tekshirib qayta urinib ko'ring.");
+              return;
+            }
+            try {
+              await recordReadingActivity();
+              var finalPages = requestedPages;
+              await sbPost('progress?on_conflict=book_id,user_id', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(), cohort_start_date: myCohortMarker,
+              }, 'resolution=merge-duplicates,return=representation');
+              var insertedNote = await sbPost('reading_notes', {
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl, cohort_start_date: myCohortMarker,
+              });
+              if (insertedNote && insertedNote[0]) allNotes.push(insertedNote[0]);
+              vibrate('light');
+              var nowIso = new Date().toISOString();
+              mine.pages_read = finalPages;
+              mine.updated_at = nowIso;
+              progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
+              var finishedPct = totalPages ? Math.min(100, Math.round((finalPages / totalPages) * 100)) : Math.min(100, finalPages);
+              var medalMsg = finishedPct >= 100 ? await tryRecordFinish(book) : null;
+              if (medalMsg) showAlert(medalMsg);
+              else showAlert('Saqlandi.');
+              renderBookDetail();
+            } catch (e) {
+              console.error(e);
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Saqlash';
+              showAlert('Xatolik yuz berdi.');
+            }
+          });
+        });
+      }
+
+      var removeBtn = document.getElementById('removeFromListBtn');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', function () {
+          var isCreatorLeaving = String(book.created_by_id) === String(ME.id);
+          var willRefund = !isCreatorLeaving && myCohortPhase === 'signup';
+          var confirmText = willRefund
+            ? "Guruhdan chiqasizmi? Hali challenj boshlanmaganligi sababli " + JOIN_COST_QOVUN + " ta qovunchangiz qaytariladi."
+            : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi. To'langan qovuncha qaytarilmaydi.";
+          confirmAction(confirmText, async function () {
+            try {
+              await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
+              if (willRefund) {
+                await adjustWallet(ME.id, JOIN_COST_QOVUN, 0);
+                await adjustWallet(book.created_by_id, -(JOIN_COST_QOVUN / 2), 0);
+                await addToTreasury(-(JOIN_COST_QOVUN / 2));
+              }
+              vibrate('medium');
+              _bdCache = null;
+              state.view = 'home'; state.detailTab = 'readers'; render();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      }
+    }
+  } catch (e) {
+    body.innerHTML = '<div class="empty">Xatolik: kitob topilmadi.</div>';
+    console.error(e);
+  }
+}
+
+// ===== Tez kunda ekrani =====
+function renderComingSoon(icon, title) {
+  setBackButton(false);
+  renderShell('<div class="coming-soon"><div class="cs-icon">' + icon + '</div><div class="cs-title">' + title + '</div><div class="cs-sub">Tez kunda...</div></div>');
+}
+
+// ===== Voqealar (event delegation) =====
+document.addEventListener('click', function (e) {
+  var goEl = e.target.closest('[data-go]');
+  if (goEl) {
+    var view = goEl.dataset.go;
+    if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
+    if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; selectedCohortMarker = null; _bdCache = null; }
+    if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
+    state.view = view;
+    render();
+    return;
+  }
+  var tabEl = e.target.closest('[data-tab]');
+  if (tabEl) { state.tab = tabEl.dataset.tab; render(); return; }
+});
+
+render();
+</script>
+</body>
+</html>
