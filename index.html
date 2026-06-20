@@ -778,7 +778,7 @@ function renderFilteredList() {
 function bookCard(b, pct, pagesRead, readerCount) {
   var inner;
   if (pct !== null) {
-    var metaText = b.total_pages ? (pagesRead + ' · ' + pct + '%') : (pagesRead + ' bet');
+    var metaText = b.total_pages ? (pagesRead + ' bet - ' + pct + '%') : (pagesRead + ' bet');
     inner = '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
       '<div class="card-meta">' + metaText + '</div>';
   } else {
@@ -795,7 +795,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead) {
+function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead, dailyTargetInfo) {
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var medalSlotsHtml = '<div class="medal-slots-row">';
@@ -806,10 +806,17 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead) {
   var booksHtml = books.length
     ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
     : '<div class="empty">Hali kitob yo\'q.</div>';
+  var dailyTargetHtml = '';
+  if (isOwn && dailyTargetInfo) {
+    dailyTargetHtml = dailyTargetInfo.remaining > 0
+      ? '<div class="hint" style="margin-bottom:14px">📖 "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi me\'yordan <b>' + dailyTargetInfo.remaining + ' bet</b> qoldi.</div>'
+      : '<div class="hint" style="margin-bottom:14px;color:var(--accent-1)">✅ "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi me\'yorni bajardingiz!</div>';
+  }
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + totalPagesRead + '</div><div class="profile-stat-label">umumiy o\'qilgan bet</div></div>' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
     '</div>' +
+    dailyTargetHtml +
     (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
     '<div class="section-label">Medallar</div>' + medalSlotsHtml +
@@ -833,7 +840,23 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
       return { book: b, pct: pct, pagesRead: r.pages_read };
     });
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, totalPagesRead);
+    var dailyTargetInfo = null;
+    if (isOwn) {
+      var todayStr = cohortTodayStr();
+      for (var i = 0; i < progRows.length; i++) {
+        var pr = progRows[i];
+        if (!pr.cohort_start_date || !pr.books) continue;
+        var rd = bookReadingDays(pr.books);
+        var ph = cohortPhase(pr.cohort_start_date, todayStr, rd);
+        if (ph !== 'reading') continue;
+        var diff = cohortDiffDays(pr.cohort_start_date, todayStr);
+        var expectedByNow = Math.min(pr.books.total_pages || Infinity, (diff + 1) * COHORT_SUGGESTED_DAILY_PAGES);
+        var remaining = Math.max(0, expectedByNow - (pr.pages_read || 0));
+        dailyTargetInfo = { bookTitle: pr.books.title, remaining: remaining };
+        break;
+      }
+    }
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, totalPagesRead, dailyTargetInfo);
     if (isOwn) {
       document.getElementById('goWalletBtn').addEventListener('click', function () {
         state.view = 'wallet';
