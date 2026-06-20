@@ -355,7 +355,7 @@ async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
 async def setup_menu_button(application):
     try:
         await application.bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))
+            menu_button=MenuButtonWebApp(text="Menu", web_app=WebAppInfo(url=WEBAPP_URL))
         )
     except Exception as e:
         logger.error(f"Menu tugmasi sozlanmadi: {e}")
