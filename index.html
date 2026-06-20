@@ -1325,9 +1325,9 @@ function renderBookDetailBody() {
       (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
       '</div></div>' +
       '<div class="segment">' +
-      '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">O\'qiyotganlar</button>' +
-      '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Komentariyalar</button>' +
-      (isAdminMode ? '' : '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">Mening progressim</button>') +
+      '<button class="seg-btn' + (state.detailTab === 'readers' ? ' active' : '') + '" data-detailtab="readers">Qatnashuvchilar</button>' +
+      '<button class="seg-btn' + (state.detailTab === 'comments' ? ' active' : '') + '" data-detailtab="comments">Izohlar</button>' +
+      (isAdminMode ? '' : '<button class="seg-btn' + (state.detailTab === 'progress' ? ' active' : '') + '" data-detailtab="progress">O\'qish jarayonim</button>') +
       '</div>' +
       activeTabHtml;
 
