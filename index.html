@@ -1571,16 +1571,13 @@ async function renderBookDetail() {
       sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
       sbGet('progress?select=book_id,cohort_start_date&user_id=eq.' + ME.id),
+      sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=200'),
     ]);
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
     var myAllProgress = results[3];
-    var myCohortMarkerForNotes = null;
-    myAllProgress.forEach(function (p) { if (String(p.book_id) === String(state.bookId)) myCohortMarkerForNotes = p.cohort_start_date; });
-    var myNotes = myCohortMarkerForNotes
-      ? await sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&user_id=eq.' + ME.id + '&cohort_start_date=eq.' + myCohortMarkerForNotes + '&order=created_at.desc')
-      : [];
+    var allNotes = results[4];
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
@@ -1589,7 +1586,7 @@ async function renderBookDetail() {
     }
     _bdCache = {
       bookId: state.bookId, today: today, book: book, progress: progress, comments: comments,
-      likeCounts: likeCounts, myLiked: myLiked, myNotes: myNotes, myAllProgress: myAllProgress,
+      likeCounts: likeCounts, myLiked: myLiked, allNotes: allNotes, myAllProgress: myAllProgress,
     };
     renderBookDetailBody();
   } catch (e) {
@@ -1606,7 +1603,7 @@ function renderBookDetailBody() {
   var comments = _bdCache.comments;
   var likeCounts = _bdCache.likeCounts;
   var myLiked = _bdCache.myLiked;
-  var myNotes = _bdCache.myNotes;
+  var allNotes = _bdCache.allNotes;
   var myAllProgress = _bdCache.myAllProgress;
   try {
     var mine = progress.find(function (p) { return p.user_id === ME.id; });
@@ -1691,28 +1688,6 @@ function renderBookDetailBody() {
             '</div>';
         }).join('') + '</div>');
 
-    var notesHtml = myNotes.length
-      ? myNotes.map(function (n) {
-          var fromPage = (n.pages_from !== null && n.pages_from !== undefined) ? n.pages_from : 0;
-          var rangeLabel = fromPage + '-' + n.pages_read;
-          if (noteEditTarget && String(noteEditTarget) === String(n.id)) {
-            return '<div class="note-entry">' +
-              '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:</div>' +
-              '<textarea class="input" id="noteEditInput" rows="3" maxlength="200">' + escapeHtml(n.note) + '</textarea>' +
-              '<div style="display:flex;gap:8px;margin-top:8px">' +
-              '<button class="btn-small" data-save-note-edit="' + n.id + '">Saqlash</button>' +
-              '<button class="btn-small" data-cancel-note-edit>Bekor qilish</button>' +
-              '</div></div>';
-          }
-          return '<div class="note-entry">' +
-            '<div class="note-meta">📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:' + (n.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
-            (n.photo_url ? '<img src="' + n.photo_url + '" class="note-photo-img" />' : '') +
-            '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
-            '<button class="comment-action-btn" data-edit-note="' + n.id + '" style="margin-top:4px">✏ Tahrirlash</button>' +
-            '</div>';
-        }).join('')
-      : '<div class="empty">Hali fikr yozilmagan.</div>';
-
     var purchaseLinkHtml = book.purchase_link ? '<a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" class="btn-primary full" style="display:block;text-align:center;text-decoration:none;margin-top:10px">🛒 Kitobni sotib olish</a>' : '';
 
     var progressTabHtml;
@@ -1734,7 +1709,6 @@ function renderBookDetailBody() {
         ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>'
         : (cohortWaiting ? '<div class="hint cohort-countdown" id="cohortCountdown" data-target="' + readingStartMs + '" style="margin-bottom:14px"></div>' : '');
 
-      var notesHtmlForTab = notesHtml;
       progressTabHtml =
         phaseHintHtml +
         '<div class="form">' +
@@ -1748,15 +1722,12 @@ function renderBookDetailBody() {
         '</div>' +
         '<button id="removeFromListBtn" class="remove-link">Guruhdan chiqish</button>' +
         purchaseLinkHtml +
-        '<div class="section-label" style="margin-top:20px">Kitob haqida</div>' +
-        '<div class="notes-list">' + notesHtmlForTab + '</div>';
+        '<div class="hint" style="margin-top:14px">Yozgan fikringizni "Izohlar" tabidan ko\'rishingiz mumkin.</div>';
     }
 
-    var topLevelComments = comments.filter(function (c) { return !c.reply_to_id; }).sort(function (a, b) {
-      var diff = (likeCounts[b.id] || 0) - (likeCounts[a.id] || 0);
-      if (diff !== 0) return diff;
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
+    var unifiedItems = comments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
+      .concat(allNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
+      .sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
     var repliesByParent = {};
     comments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
 
@@ -1772,21 +1743,53 @@ function renderBookDetailBody() {
         (!isReply ? '<button class="comment-action-btn" data-reply-comment="' + c.id + '" data-reply-name="' + escapeHtml(c.user_name) + '">↩ Javob</button>' : '') +
         (replyCount > 0 ? '<button class="comment-action-btn" data-toggle-replies="' + c.id + '">' + (expandedReplies[c.id] ? '▴ Javoblarni yashirish' : '▾ Javoblar (' + replyCount + ')') + '</button>' : '') +
         (!isAdminMode && isMine && c.user_name !== 'Admin' ? '<button class="comment-action-btn" data-edit-comment="' + c.id + '" data-edit-text="' + escapeHtml(c.text) + '">✏ Tahrirlash</button>' : '') +
-        ((isMine || ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
+        ((ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-comment="' + c.id + '">🗑 O\'chir</button>' : '') +
         '</div></div>';
     }
 
-    var commentsListHtml = topLevelComments.map(function (c) {
+    function noteRow(n) {
+      var isMine = n.user_id === ME.id;
+      var fromPage = (n.pages_from !== null && n.pages_from !== undefined) ? n.pages_from : 0;
+      var rangeLabel = fromPage + '-' + n.pages_read;
+      if (noteEditTarget && String(noteEditTarget) === String(n.id)) {
+        return '<div class="note-entry">' +
+          '<div class="note-meta"><span class="comment-name">' + escapeHtml(n.user_name) + '</span> · 📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:</div>' +
+          '<img src="' + n.photo_url + '" class="note-photo-img" id="noteEditPhotoPreview" />' +
+          '<label class="file-btn" for="noteEditPhotoInput">📷 Rasmni almashtirish</label>' +
+          '<input type="file" id="noteEditPhotoInput" accept="image/*" style="display:none" />' +
+          '<textarea class="input" id="noteEditInput" rows="3" maxlength="200">' + escapeHtml(n.note) + '</textarea>' +
+          '<div style="display:flex;gap:8px;margin-top:8px">' +
+          '<button class="btn-small" data-save-note-edit="' + n.id + '">Saqlash</button>' +
+          '<button class="btn-small" data-cancel-note-edit>Bekor qilish</button>' +
+          '</div></div>';
+      }
+      return '<div class="note-entry">' +
+        '<div class="note-meta"><span class="comment-name">' + escapeHtml(n.user_name) + '</span> · 📅 ' + formatDate(n.created_at) + ' — ' + rangeLabel + ' bet uchun fikr:' + (n.edited ? ' <span class="edited-tag">(tahrirlangan)</span>' : '') + '</div>' +
+        '<img src="' + n.photo_url + '" class="note-photo-img" />' +
+        '<div class="note-text">' + escapeHtml(n.note) + '</div>' +
+        '<div class="comment-actions">' +
+        (!isAdminMode && isMine ? '<button class="comment-action-btn" data-edit-note="' + n.id + '">✏ Tahrirlash</button>' : '') +
+        ((ME.id === ADMIN_ID || isAdminMode) ? '<button class="comment-action-btn" data-del-note="' + n.id + '">🗑 O\'chir</button>' : '') +
+        '</div></div>';
+    }
+
+    var commentsListHtml = unifiedItems.map(function (item) {
+      if (item.type === 'note') return noteRow(item.data);
+      var c = item.data;
       var repliesHtml = expandedReplies[c.id] ? (repliesByParent[c.id] || []).map(function (r) { return commentRow(r, true); }).join('') : '';
       return commentRow(c, false) + repliesHtml;
     }).join('');
 
-    var commentsTabHtml =
-      (editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
-       replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
-      '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '">' + (editTarget ? escapeHtml(editTarget.text) : '') + '</textarea>' +
-      '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>' +
-      '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali komentariya yo\'q.</div>') + '</div>';
+    var canComment = !mine || (myCohortPhase !== 'signup' && myCohortPhase !== null);
+    var commentFormHtml = canComment
+      ? ((editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
+         replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
+        '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '">' + (editTarget ? escapeHtml(editTarget.text) : '') + '</textarea>' +
+        '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>')
+      : '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>';
+
+    var commentsTabHtml = commentFormHtml +
+      '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>';
 
     var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
@@ -1921,7 +1924,65 @@ function renderBookDetailBody() {
           });
         });
       });
-      document.getElementById('sendCommentBtn').addEventListener('click', function () {
+      document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          noteEditTarget = btn.dataset.editNote;
+          renderBookDetail();
+        });
+      });
+      var cancelNoteEditBtn = document.querySelector('[data-cancel-note-edit]');
+      if (cancelNoteEditBtn) {
+        cancelNoteEditBtn.addEventListener('click', function () {
+          noteEditTarget = null;
+          renderBookDetail();
+        });
+      }
+      var noteEditPhotoInputEl = document.getElementById('noteEditPhotoInput');
+      if (noteEditPhotoInputEl) {
+        noteEditPhotoInputEl.addEventListener('change', function () {
+          var f = this.files[0];
+          if (!f) return;
+          document.getElementById('noteEditPhotoPreview').src = URL.createObjectURL(f);
+        });
+      }
+      document.querySelectorAll('[data-save-note-edit]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var noteId = btn.dataset.saveNoteEdit;
+          var editInputEl = document.getElementById('noteEditInput');
+          var newText = editInputEl.value.trim();
+          if (!newText) { showAlert('Fikr matni bo\'sh bo\'lishi mumkin emas.'); return; }
+          var sBtn = this; sBtn.disabled = true;
+          try {
+            var patch = { note: newText, edited: true };
+            var newPhotoFile = document.getElementById('noteEditPhotoInput') ? document.getElementById('noteEditPhotoInput').files[0] : null;
+            if (newPhotoFile) {
+              var ext = (newPhotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+              patch.photo_url = await sbUploadFile(HUJJATLAR_BUCKET, 'notes/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, newPhotoFile);
+            }
+            await sbPatch('reading_notes?id=eq.' + noteId, patch);
+            var editedNote = allNotes.find(function (nn) { return String(nn.id) === String(noteId); });
+            if (editedNote) { editedNote.note = newText; editedNote.edited = true; if (patch.photo_url) editedNote.photo_url = patch.photo_url; }
+            noteEditTarget = null;
+            vibrate('light');
+            renderBookDetail();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; }
+        });
+      });
+      document.querySelectorAll('[data-del-note]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var noteId = btn.dataset.delNote;
+          confirmAction("Bu yozuvni o'chirasizmi?", async function () {
+            try {
+              await sbDelete('reading_notes?id=eq.' + noteId);
+              _bdCache.allNotes = allNotes.filter(function (nn) { return String(nn.id) !== String(noteId); });
+              vibrate('medium');
+              renderBookDetail();
+            } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+          });
+        });
+      });
+      var sendCommentBtnEl = document.getElementById('sendCommentBtn');
+      if (sendCommentBtnEl) sendCommentBtnEl.addEventListener('click', function () {
         if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
         var input = document.getElementById('commentInput');
         var text = input.value.trim();
@@ -2052,7 +2113,7 @@ function renderBookDetailBody() {
               var insertedNote = await sbPost('reading_notes', {
                 book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl, cohort_start_date: myCohortMarker,
               });
-              if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
+              if (insertedNote && insertedNote[0]) allNotes.push(insertedNote[0]);
               vibrate('light');
               var nowIso = new Date().toISOString();
               mine.pages_read = finalPages;
@@ -2072,36 +2133,6 @@ function renderBookDetailBody() {
           });
         });
       }
-
-      document.querySelectorAll('[data-edit-note]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          noteEditTarget = btn.dataset.editNote;
-          renderBookDetail();
-        });
-      });
-      var cancelNoteEditBtn = document.querySelector('[data-cancel-note-edit]');
-      if (cancelNoteEditBtn) {
-        cancelNoteEditBtn.addEventListener('click', function () {
-          noteEditTarget = null;
-          renderBookDetail();
-        });
-      }
-      document.querySelectorAll('[data-save-note-edit]').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-          var noteId = btn.dataset.saveNoteEdit;
-          var editInputEl = document.getElementById('noteEditInput');
-          var newText = editInputEl.value.trim();
-          if (!newText) { showAlert('Fikr matni bo\'sh bo\'lishi mumkin emas.'); return; }
-          try {
-            await sbPatch('reading_notes?id=eq.' + noteId, { note: newText, edited: true });
-            var editedNote = myNotes.find(function (nn) { return String(nn.id) === String(noteId); });
-            if (editedNote) { editedNote.note = newText; editedNote.edited = true; }
-            noteEditTarget = null;
-            vibrate('light');
-            renderBookDetail();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-        });
-      });
 
       var removeBtn = document.getElementById('removeFromListBtn');
       if (removeBtn) {
