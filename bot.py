@@ -2,7 +2,7 @@ import logging
 import calendar
 import httpx
 from datetime import datetime, timezone, time as dt_time, date as dt_date
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -37,13 +37,9 @@ WEBAPP_URL = "https://sirly-assistant-production.up.railway.app"
 
 # ===== Buyruqlar =====
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📚 Ilovani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]]
-    )
     await update.message.reply_text(
         "Salom! \"Bir bet\" ilovasiga xush kelibsiz 📖\n\n"
-        "Ilovani ochish uchun pastdagi tugmani bosing.",
-        reply_markup=keyboard,
+        "Ilovani ochish uchun pastdagi (chap tomondagi) Menu tugmasini bosing."
     )
 
 
@@ -356,8 +352,17 @@ async def check_join_notifications(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ===== Asosiy =====
+async def setup_menu_button(application):
+    try:
+        await application.bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="Menu", web_app=WebAppInfo(url=WEBAPP_URL))
+        )
+    except Exception as e:
+        logger.error(f"Menu tugmasi sozlanmadi: {e}")
+
+
 def main():
-    application = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TOKEN).post_init(setup_menu_button).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(contact_response_callback, pattern=r"^cr_(yes|no)_\d+$"))
