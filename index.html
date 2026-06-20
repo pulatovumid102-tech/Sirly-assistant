@@ -126,6 +126,12 @@ body{
 .note-meta{ font-size:11px; color:var(--accent-1); margin-bottom:4px; }
 .note-text{ font-size:13px; line-height:1.6; color:var(--text-muted); white-space:pre-wrap; }
 .note-photo-img{ width:100%; max-width:220px; border-radius:var(--radius-sm); margin-bottom:8px; display:block; box-shadow:5px 5px 12px var(--shadow-dark); }
+.cohort-schedule{ display:flex; flex-direction:column; gap:6px; }
+.cohort-sched-row{ display:flex; justify-content:space-between; align-items:center; background:var(--surface); border-radius:var(--radius-sm); padding:10px 12px; box-shadow:4px 4px 10px var(--shadow-dark), -3px -3px 8px var(--shadow-light); font-size:12px; }
+.cohort-sched-row.nearest{ box-shadow:0 0 0 2px var(--accent-1), 4px 4px 10px var(--shadow-dark); }
+.cohort-sched-row.mine{ background:var(--surface-alt); }
+.cohort-sched-date{ font-weight:700; }
+.cohort-sched-meta{ color:var(--text-muted); text-align:right; }
 .comment-action-btn{ background:none; border:none; color:var(--text-muted); font-size:11px; font-family:inherit; display:flex; align-items:center; gap:4px; padding:2px 0; }
 .comment-action-btn.liked{ color:var(--accent-1); font-weight:700; }
 .reply-banner{ display:flex; align-items:center; justify-content:space-between; background:var(--surface-alt); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:10px; font-size:12px; color:var(--accent-1); }
@@ -314,6 +320,10 @@ function localDateStr(d) {
   var m = String(d.getMonth() + 1).padStart(2, '0');
   var day = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + day;
+}
+function cohortTodayStr(d) {
+  d = d || new Date();
+  return localDateStr(new Date(d.getTime() - 4 * 60 * 60 * 1000));
 }
 
 async function recordReadingActivity() {
@@ -1084,19 +1094,22 @@ async function renderBookDetail() {
 
   var body = document.getElementById('bookDetailBody');
   try {
-    var today = localDateStr();
+    var today = cohortTodayStr();
     var results = await Promise.all([
       sbGet('books?select=*&id=eq.' + state.bookId),
       sbGet('progress?select=*&book_id=eq.' + state.bookId + '&order=pages_read.desc'),
       sbGet('comments?select=*&book_id=eq.' + state.bookId + '&order=created_at.asc&limit=100'),
-      sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&user_id=eq.' + ME.id + '&order=created_at.desc'),
       sbGet('progress?select=book_id,cohort_start_date&user_id=eq.' + ME.id),
     ]);
     var book = results[0][0];
     var progress = results[1];
     var comments = results[2];
-    var myNotes = results[3];
-    var myAllProgress = results[4];
+    var myAllProgress = results[3];
+    var myCohortMarkerForNotes = null;
+    myAllProgress.forEach(function (p) { if (String(p.book_id) === String(state.bookId)) myCohortMarkerForNotes = p.cohort_start_date; });
+    var myNotes = myCohortMarkerForNotes
+      ? await sbGet('reading_notes?select=*&book_id=eq.' + state.bookId + '&user_id=eq.' + ME.id + '&cohort_start_date=eq.' + myCohortMarkerForNotes + '&order=created_at.desc')
+      : [];
 
     var likeCounts = {}, myLiked = {};
     if (comments.length) {
@@ -1139,9 +1152,39 @@ function renderBookDetailBody() {
     });
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
 
+    var headerStatusText;
+    if (myCohortMarker) {
+      headerStatusText = cohortPhaseLabel(myCohortPhase, cohortDiffDays(myCohortMarker, today));
+    } else if (signupMarker) {
+      headerStatusText = cohortPhaseLabel('signup', cohortDiffDays(signupMarker, today));
+    } else {
+      headerStatusText = "Hozir yangi guruh ochilishini kuting.";
+    }
+
+    var membersByMarker = {};
+    progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
+    var allMarkers = nearbyCohortMarkers(today);
+    var nearestMarker = null, nearestAbsDiff = Infinity;
+    allMarkers.forEach(function (m) {
+      var d = Math.abs(cohortDiffDays(m, today));
+      if (d < nearestAbsDiff) { nearestAbsDiff = d; nearestMarker = m; }
+    });
+    var scheduleHtml = '<div class="cohort-schedule">' + allMarkers.map(function (m) {
+      var diff = cohortDiffDays(m, today);
+      var phase = cohortPhase(m, today);
+      var label = phase ? cohortPhaseLabel(phase, diff) : 'Hali boshlanmagan';
+      var count = membersByMarker[m] || 0;
+      var isNearest = m === nearestMarker;
+      return '<div class="cohort-sched-row' + (isNearest ? ' nearest' : '') + (m === myCohortMarker ? ' mine' : '') + '">' +
+        '<div class="cohort-sched-date">' + formatDate(m) + (isNearest ? ' — eng yaqin' : '') + (m === myCohortMarker ? ' (sizniki)' : '') + '</div>' +
+        '<div class="cohort-sched-meta">' + label + ' · ' + count + ' kishi</div>' +
+        '</div>';
+    }).join('') + '</div>';
+
     var cohortMates = myCohortMarker ? progress.filter(function (p) { return p.cohort_start_date === myCohortMarker; }) : [];
-    var readersTabHtml = !myCohortMarker
-      ? '<div class="empty">Bu kitobning o\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling ("Mening progressim" tabida).</div>'
+    var readersTabHtml = scheduleHtml + '<div class="section-label" style="margin-top:18px">' + (myCohortMarker ? 'Sizning guruhingiz' : 'Guruhga qo\'shilmagansiz') + '</div>' +
+      (!myCohortMarker
+      ? '<div class="empty">O\'qiyotganlar ro\'yxatini ko\'rish uchun avval guruhga qo\'shiling ("Mening progressim" tabida).</div>'
       : '<div class="readers">' + cohortMates.map(function (p, i) {
           var pPct = totalPages ? Math.min(100, Math.round((p.pages_read / totalPages) * 100)) : Math.min(100, p.pages_read);
           var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
@@ -1151,7 +1194,7 @@ function renderBookDetailBody() {
             '<div class="reader-note">📅 ' + formatDate(p.updated_at) + '</div></div>' +
             '<div class="reader-pages">' + p.pages_read + ' · ' + pPct + '%</div>' +
             '</div>';
-        }).join('') + '</div>';
+        }).join('') + '</div>');
 
     var notesHtml = myNotes.length
       ? myNotes.map(function (n) {
@@ -1181,19 +1224,16 @@ function renderBookDetailBody() {
     if (otherActive) {
       progressTabHtml = '<div class="empty">Siz hozir boshqa kitob guruhidasiz. Bir vaqtda faqat bitta guruhda ishtirok etish mumkin. Avval o\'sha kitobdan chiqing.</div>';
     } else if (!mine) {
-      var signupDiff = signupMarker ? cohortDiffDays(signupMarker, today) : null;
       var signupInfoHtml = signupMarker
-        ? '<div class="hint" style="margin-bottom:14px">🆕 ' + cohortPhaseLabel('signup', signupDiff) + '. Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + COHORT_READING_DAYS + ' kun.</div>'
-        : '<div class="hint" style="margin-bottom:14px">Hozir yangi guruh ochilishini kuting.</div>';
+        ? '<div class="hint" style="margin-bottom:14px">Tavsiya etilgan tezlik: kuniga ~' + COHORT_SUGGESTED_DAILY_PAGES + ' bet, jami ' + COHORT_READING_DAYS + ' kun.</div>'
+        : '';
       progressTabHtml = signupInfoHtml +
         (signupMarker ? '<button id="joinCohortBtn" class="btn-primary full" data-marker="' + signupMarker + '">✅ Ro\'yxatga qo\'shilish</button>' : '') +
         purchaseLinkHtml;
     } else {
-      var diff = cohortDiffDays(myCohortMarker, today);
-      var phaseLabel = cohortPhaseLabel(myCohortPhase, diff);
       var cohortLocked = myCohortPhase === 'ended';
       var disabledAttr = cohortLocked ? ' disabled' : '';
-      var phaseHintHtml = '<div class="hint" style="margin-bottom:14px' + (cohortLocked ? ';color:var(--danger)' : '') + '">' + (cohortLocked ? '⛔ ' : '📌 ') + phaseLabel + '</div>';
+      var phaseHintHtml = cohortLocked ? '<div class="hint" style="margin-bottom:14px;color:var(--danger)">⛔ Guruh yopilgan, endi bet qo\'sha olmaysiz.</div>' : '';
 
       var notesHtmlForTab = notesHtml;
       progressTabHtml =
@@ -1257,6 +1297,7 @@ function renderBookDetailBody() {
       '<div class="hero-info"><div class="book-hero-title">' + escapeHtml(book.title) + '</div>' +
       (book.author ? '<div class="book-hero-author">' + escapeHtml(book.author) + '</div>' : '') +
       (totalPages ? '<div class="book-hero-sub">' + totalPages + ' bet</div>' : '') +
+      '<div class="book-hero-sub" style="color:var(--accent-1);font-weight:600">📌 ' + headerStatusText + '</div>' +
       (book.purchase_link ? '<div class="book-hero-sub"><a href="#" data-open-link="' + escapeHtml(book.purchase_link) + '" style="color:var(--accent-1);text-decoration:underline">🛒 Sotib olish</a></div>' : '') +
       '</div></div>' +
       '<div class="segment">' +
@@ -1463,7 +1504,7 @@ function renderBookDetailBody() {
                 book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(), cohort_start_date: myCohortMarker,
               }, 'resolution=merge-duplicates,return=representation');
               var insertedNote = await sbPost('reading_notes', {
-                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl,
+                book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl, cohort_start_date: myCohortMarker,
               });
               if (insertedNote && insertedNote[0]) myNotes.unshift(insertedNote[0]);
               vibrate('light');
