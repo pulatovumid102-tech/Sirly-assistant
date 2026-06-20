@@ -415,6 +415,34 @@ async def check_payment_notifications(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_payment_notifications xato: {e}")
 
 
+async def check_book_approval_notifications(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{SB_URL}/rest/v1/book_approval_notifications",
+                headers=SB_HEADERS,
+                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
+            )
+            for row in r.json():
+                try:
+                    text = f"✅ \"{row['book_title']}\" kitobingiz admin tomonidan tasdiqlandi va endi ilovada hammaga ko'rinadi!"
+                    await context.bot.send_message(chat_id=row["creator_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Tasdiqlash xabari yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/book_approval_notifications",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"sent": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"notified belgilanmadi (book_approval id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_book_approval_notifications xato: {e}")
+
+
 # ===== Asosiy =====
 # ===== Ilova faylini (index.html) servisga chiqarish =====
 def run_web_server():
@@ -443,6 +471,7 @@ def main():
         application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
         application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
         application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
+        application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
