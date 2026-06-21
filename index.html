@@ -657,10 +657,10 @@ async function loadTopLists() {
     }).join('') : '<div class="empty">Hozircha hech kim kitob o\'qimayapti.</div>';
 
     el.innerHTML =
-      '<div class="h-title" style="font-size:16px;margin-bottom:4px">🏅 Top 5 kitobxon</div>' +
+      '<div class="h-title" style="font-size:16px;margin-bottom:4px">Top 5 kitobxon</div>' +
       (usingPagesFallback ? '<div class="hint" style="margin-bottom:10px">Hali hech kim kitob tugatmagan — hozircha umumiy o\'qilgan betlar bo\'yicha.</div>' : '<div style="margin-bottom:10px"></div>') +
       '<div class="readers" style="margin-bottom:24px">' + readersHtml + '</div>' +
-      '<div class="h-title" style="font-size:16px;margin-bottom:10px">📚 Top 5 kitob</div>' +
+      '<div class="h-title" style="font-size:16px;margin-bottom:10px">Top 5 kitob</div>' +
       '<div class="book-list">' + booksHtml + '</div>';
   } catch (e) {
     el.innerHTML = '<div class="empty">Ma\'lumot yuklanmadi.</div>';
