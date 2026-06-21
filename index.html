@@ -364,6 +364,9 @@ async function joinCohortFlow(book, marker, progress) {
   try {
     await sbPost('join_notifications', { book_id: book.id, creator_id: book.created_by_id, cohort_start_date: marker });
   } catch (e) { console.error(e); }
+  try {
+    await sbPost('join_confirmations', { book_id: book.id, user_id: ME.id, book_title: book.title, cohort_start_date: marker });
+  } catch (e) { console.error(e); }
   return true;
 }
 
@@ -2356,6 +2359,20 @@ document.addEventListener('click', function (e) {
   var tabEl = e.target.closest('[data-tab]');
   if (tabEl) { state.tab = tabEl.dataset.tab; render(); return; }
 });
+
+(function () {
+  try {
+    var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+    if (startParam && startParam.indexOf('book_') === 0) {
+      var bookIdFromLink = parseInt(startParam.slice(5), 10);
+      if (bookIdFromLink) {
+        state.view = 'bookDetail';
+        state.bookId = bookIdFromLink;
+        state.detailTab = 'readers';
+      }
+    }
+  } catch (e) { console.error(e); }
+})();
 
 render();
 </script>
