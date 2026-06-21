@@ -582,7 +582,7 @@ async function renderHome() {
     '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
     '</div>' +
     bodyHtml,
-    { fab: !isTop }
+    { fab: !isTop && ME.id === ADMIN_ID }
   );
   if (isTop) {
     await loadTopLists();
@@ -713,6 +713,7 @@ async function loadStreakBadge(targetId) {
       '<div class="streak-top-row"><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div>' +
       '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div></div>' +
       '<div class="streak-days-row">' + daysRow + '</div>' +
+      (s.last_active_date !== today ? '<div class="hint" style="margin-top:8px">🔥 Bugun o\'qisangiz, ' + (n + 1) + '-kun bo\'ladi!</div>' : '') +
       '</div>';
   } catch (e) { el.innerHTML = ''; console.error(e); }
 }
@@ -807,9 +808,9 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead, da
     : '<div class="empty">Hali kitob yo\'q.</div>';
   var dailyTargetHtml = '';
   if (isOwn && dailyTargetInfo) {
-    dailyTargetHtml = dailyTargetInfo.remaining > 0
-      ? '<div class="hint" style="margin-bottom:14px">📖 "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi me\'yordan <b>' + dailyTargetInfo.remaining + ' bet</b> qoldi.</div>'
-      : '<div class="hint" style="margin-bottom:14px;color:var(--accent-1)">✅ "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi me\'yorni bajardingiz!</div>';
+    var doneToday = dailyTargetInfo.todayRead >= dailyTargetInfo.dailyLimit;
+    dailyTargetHtml = '<div class="hint" style="margin-bottom:14px' + (doneToday ? ';color:var(--accent-1)' : '') + '">' +
+      (doneToday ? '✅ ' : '📖 ') + '"' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi: <b>' + dailyTargetInfo.todayRead + '/' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
   }
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + totalPagesRead + '</div><div class="profile-stat-label">umumiy o\'qilgan bet</div></div>' +
@@ -859,10 +860,13 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         var rd = bookReadingDays(pr.books);
         var ph = cohortPhase(pr.cohort_start_date, todayStr, rd);
         if (ph !== 'reading') continue;
-        var diff = cohortDiffDays(pr.cohort_start_date, todayStr);
-        var expectedByNow = Math.min(pr.books.total_pages || Infinity, (diff + 1) * COHORT_SUGGESTED_DAILY_PAGES);
-        var remaining = Math.max(0, expectedByNow - (pr.pages_read || 0));
-        dailyTargetInfo = { bookTitle: pr.books.title, remaining: remaining };
+        var todayNotes = await sbGet('reading_notes?select=pages_from,pages_read,created_at&book_id=eq.' + pr.book_id + '&user_id=eq.' + ME.id);
+        var todayRead = 0;
+        todayNotes.forEach(function (n) {
+          var noteDay = localDateStr(new Date(new Date(n.created_at).getTime() - 4 * 3600000));
+          if (noteDay === todayStr) todayRead += Math.max(0, (n.pages_read || 0) - (n.pages_from || 0));
+        });
+        dailyTargetInfo = { bookTitle: pr.books.title, todayRead: todayRead, dailyLimit: COHORT_SUGGESTED_DAILY_PAGES };
         break;
       }
     }
@@ -1815,12 +1819,12 @@ function renderBookDetailBody() {
         phaseHintHtml +
         '<div class="form">' +
         '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
-        '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="Kitob haqida fikringiz (shart)..."' + disabledAttr + '></textarea>' +
+        '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="O\'qigan betlaringiz haqida fikr yozing — bu sizni rostdan o\'qiganingizning bir isboti (shart)..."' + disabledAttr + '></textarea>' +
         '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
         '<label class="file-btn" for="noteCoverInput" style="' + ((cohortLocked || cohortWaiting) ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
         '<input type="file" id="noteCoverInput" accept="image/*" style="display:none"' + disabledAttr + ' />' +
         '<div id="noteCoverPreview"></div>' +
-        '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Saqlash</button>' +
+        '<button id="updateProgressBtn" class="btn-primary full"' + disabledAttr + '>Izohlar bo\'limiga yuborish</button>' +
         '</div>' +
         '<button id="removeFromListBtn" class="remove-link">Guruhdan chiqish</button>' +
         purchaseLinkHtml +
@@ -2168,7 +2172,7 @@ function renderBookDetailBody() {
           var requestedPages = parseInt(pagesInputEl.value, 10);
           if (isNaN(requestedPages) || requestedPages < 0) { showAlert("Oxirgi o'qilgan bet sonini to'g'ri kiriting."); return; }
           var noteText = noteInputEl.value.trim();
-          if (!noteText) { showAlert("Kitob haqida fikr yozish shart."); return; }
+          if (!noteText) { showAlert("O'qigan betlaringiz haqida fikr yozish shart."); return; }
           var photoFile = document.getElementById('noteCoverInput').files[0];
           if (!photoFile) { showAlert("Rasm yuklang — rasmsiz saqlab bo'lmaydi."); return; }
           if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
