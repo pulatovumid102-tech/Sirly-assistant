@@ -155,8 +155,7 @@ def book_reading_days(total_pages):
 
 
 def month_cohort_markers(year: int, month: int):
-    days_in_month = calendar.monthrange(year, month)[1]
-    days = [5, 10, 15, 20, 25, min(30, days_in_month)]
+    days = [1, 5, 10, 15, 20, 25]
     return [dt_date(year, month, d) for d in days]
 
 
