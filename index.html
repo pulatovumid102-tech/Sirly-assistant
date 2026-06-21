@@ -316,8 +316,8 @@ async function sbUploadFile(bucket, path, file) {
 async function getOrCreateWallet(userId, userName, username) {
   var rows = await sbGet('wallets?select=*&user_id=eq.' + userId);
   if (rows[0]) return rows[0];
-  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '', username: username || null, qovun_balance: 0, proteincha_balance: 0 }, 'resolution=merge-duplicates,return=representation');
-  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 0, proteincha_balance: 0 };
+  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '', username: username || null, qovun_balance: 10000, proteincha_balance: 1 }, 'resolution=merge-duplicates,return=representation');
+  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 10000, proteincha_balance: 1 };
 }
 async function adjustWallet(userId, qovunDelta, proteinchaDelta) {
   var w = await getOrCreateWallet(userId);
@@ -335,17 +335,19 @@ function formatSom(n) {
   n = Math.round(n || 0);
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + " so'm";
 }
-function furaLabel(qovun) {
-  var fura = Math.floor((qovun || 0) / FURA_SIZE);
-  var rest = (qovun || 0) % FURA_SIZE;
-  return fura + ' fura qovuncha' + (rest ? ' (+' + rest + ')' : '') + ' — ' + (qovun || 0) + ' ta';
+function formatNumber(n) {
+  n = Math.round(n || 0);
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+function qovunLabel(qovun) {
+  return formatNumber(qovun) + ' ta qovuncha';
 }
 async function joinCohortFlow(book, marker, progress) {
   var isCreator = String(book.created_by_id) === String(ME.id);
   if (!isCreator) {
     var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
     if ((wallet.qovun_balance || 0) < JOIN_COST_QOVUN) {
-      showAlert("Qovunchangiz yetarli emas. Challenjga qo'shilish uchun " + JOIN_COST_QOVUN + " ta qovuncha kerak.");
+      showAlert("Qovunchangiz yetarli emas. Challenjga qo'shilish uchun " + formatNumber(JOIN_COST_QOVUN) + " ta qovuncha kerak.");
       return false;
     }
   }
@@ -506,6 +508,7 @@ var noteEditTarget = null;
 var _cohortCountdownInterval = null;
 var selectedCohortMarker = null;
 var _adminUsersCache = [];
+var _adminBadgeInterval = null;
 var _adminTxHistoryCache = [];
 var _adminWdHistoryCache = [];
 function txCurrencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
@@ -995,7 +998,7 @@ async function loadWalletBody() {
 
     el.innerHTML =
       '<div class="profile-stats">' +
-      '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:14px">' + furaLabel(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
+      '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:18px">' + formatNumber(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
       '<div class="profile-stat-box"><div class="profile-stat-num">' + (wallet.proteincha_balance || 0) + '</div><div class="profile-stat-label">proteincha</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
@@ -1139,11 +1142,13 @@ async function renderAdmin() {
     '</div>' +
     '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
     '</div>';
-  document.getElementById('adminExitBtn').addEventListener('click', function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
+  document.getElementById('adminExitBtn').addEventListener('click', function () { isAdminMode = false; if (_adminBadgeInterval) { clearInterval(_adminBadgeInterval); _adminBadgeInterval = null; } state.view = 'modeSelect'; render(); });
   document.querySelectorAll('[data-admintab]').forEach(function (b) {
     b.addEventListener('click', function () { state.adminTab = b.dataset.admintab; renderAdmin(); });
   });
   loadAdminBadgeCounts();
+  if (_adminBadgeInterval) clearInterval(_adminBadgeInterval);
+  _adminBadgeInterval = setInterval(loadAdminBadgeCounts, 5000);
   if (state.adminTab === 'books') await loadAdminBooks();
   else if (state.adminTab === 'transactions') await loadAdminTransactions();
   else if (state.adminTab === 'withdrawals') await loadAdminWithdrawals();
@@ -1321,7 +1326,7 @@ async function renderDashboardBody(period) {
       '<div class="profile-stat-box"><div class="profile-stat-num">' + newUsers.length + '</div><div class="profile-stat-label">yangi qatnashuvchi</div></div>' +
       '</div>' +
       '<div class="profile-stats" style="margin-top:8px">' +
-      '<div class="profile-stat-box"><div class="profile-stat-num">' + furaLabel(treasury.qovun_balance) + '</div><div class="profile-stat-label">ilova xazinasi</div></div>' +
+      '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:18px">' + qovunLabel(treasury.qovun_balance) + '</div><div class="profile-stat-label">ilova xazinasi</div></div>' +
       '</div>' +
       '<div class="section-label" style="margin-top:18px">Yangi challenjlar</div>' +
       (newBooks.length ? newBooks.map(function (b) {
@@ -2023,7 +2028,7 @@ function renderBookDetailBody() {
           if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
           var marker = joinBtnTop.dataset.marker;
           var isCreatorJoin = String(book.created_by_id) === String(ME.id);
-          var confirmMsg = isCreatorJoin ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi " + JOIN_COST_QOVUN + " ta qovuncha. Tasdiqlaysizmi?");
+          var confirmMsg = isCreatorJoin ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi " + formatNumber(JOIN_COST_QOVUN) + " ta qovuncha. Tasdiqlaysizmi?");
           confirmAction(confirmMsg, async function () {
             try {
               var ok = await joinCohortFlow(book, marker, progress);
@@ -2315,7 +2320,7 @@ function renderBookDetailBody() {
           var isCreatorLeaving = String(book.created_by_id) === String(ME.id);
           var willRefund = !isCreatorLeaving && (myCohortPhase === 'signup' || myCohortPhase === null);
           var confirmText = willRefund
-            ? "Guruhdan chiqasizmi? Hali challenj boshlanmaganligi sababli " + JOIN_COST_QOVUN + " ta qovunchangiz qaytariladi."
+            ? "Guruhdan chiqasizmi? Hali challenj boshlanmaganligi sababli " + formatNumber(JOIN_COST_QOVUN) + " ta qovunchangiz qaytariladi."
             : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi. To'langan qovuncha qaytarilmaydi.";
           confirmAction(confirmText, async function () {
             try {
