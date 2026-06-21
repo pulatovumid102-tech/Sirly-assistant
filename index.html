@@ -392,10 +392,23 @@ function bookReadingDays(book) {
   if (!pages || pages <= 0) return COHORT_READING_DAYS;
   return Math.max(1, Math.ceil(pages / COHORT_SUGGESTED_DAILY_PAGES));
 }
+function previousCohortMarker(markerStr) {
+  var d = new Date(markerStr + 'T00:00:00');
+  var all = [];
+  for (var offset = -1; offset <= 0; offset++) {
+    var dm = new Date(d.getFullYear(), d.getMonth() + offset, 1);
+    all = all.concat(monthCohortMarkers(dm.getFullYear(), dm.getMonth()));
+  }
+  all.sort();
+  var idx = all.indexOf(markerStr);
+  return idx > 0 ? all[idx - 1] : null;
+}
 function cohortPhase(markerStr, todayStr, readingDays) {
   readingDays = readingDays || COHORT_READING_DAYS;
   var diff = cohortDiffDays(markerStr, todayStr);
-  if (diff < -COHORT_SIGNUP_DAYS) return null;
+  var prevMarker = previousCohortMarker(markerStr);
+  var signupDays = prevMarker ? cohortDiffDays(markerStr, prevMarker) * -1 : COHORT_SIGNUP_DAYS;
+  if (diff < -signupDays) return null;
   if (diff < 0) return 'signup';
   if (diff < readingDays) return 'reading';
   if (diff < readingDays + COHORT_CLOSING_DAYS) return 'closing';
@@ -407,6 +420,13 @@ function currentSignupCohortMarker(todayStr) {
     if (cohortPhase(markers[i], todayStr) === 'signup') return markers[i];
   }
   return null;
+}
+function nextUpcomingCohortMarker(todayStr) {
+  var markers = nearbyCohortMarkers(todayStr);
+  var signupMarker = currentSignupCohortMarker(todayStr);
+  if (!signupMarker) return null;
+  var idx = markers.indexOf(signupMarker);
+  return idx >= 0 && idx + 1 < markers.length ? markers[idx + 1] : null;
 }
 function addDaysToDateStr(markerStr, days) {
   var d = new Date(markerStr + 'T00:00:00');
@@ -1782,10 +1802,11 @@ function renderBookDetailBody() {
     var membersByMarker = {};
     progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
     var allMarkers = nearbyCohortMarkers(today);
+    var nextMarker = nextUpcomingCohortMarker(today);
     var activeMarkers = [], endedMarkers = [];
     allMarkers.forEach(function (m) {
       var ph = cohortPhase(m, today, readingDays);
-      if (ph === null) return;
+      if (ph === null) { if (m === nextMarker) activeMarkers.push(m); return; }
       if (ph === 'ended') { if (membersByMarker[m]) endedMarkers.push(m); return; }
       if (membersByMarker[m] || ph === 'signup') activeMarkers.push(m);
     });
@@ -1811,7 +1832,7 @@ function renderBookDetailBody() {
 
     var viewParticipants = viewMarker ? progress.filter(function (p) { return p.cohort_start_date === viewMarker; }) : [];
     var viewMarkerPhase = viewMarker ? cohortPhase(viewMarker, today, readingDays) : null;
-    var canJoinViewMarker = !mine && !otherActive && viewMarker && viewMarkerPhase === 'signup';
+    var canJoinViewMarker = !mine && !otherActive && viewMarker && (viewMarkerPhase === 'signup' || viewMarker === nextMarker);
     var joinTopBtnHtml = canJoinViewMarker ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + viewMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish (' + formatDate(viewMarker) + ')</button>' : '';
     var sectionTitle = viewMarker === myCohortMarker ? 'Sizning guruhingiz' : (formatDate(viewMarker || '') + ' guruhi');
     var readersTabHtml = scheduleHtml + joinTopBtnHtml + '<div class="section-label" style="margin-top:18px">' + sectionTitle + '</div>' +
@@ -2257,7 +2278,7 @@ function renderBookDetailBody() {
       if (removeBtn) {
         removeBtn.addEventListener('click', function () {
           var isCreatorLeaving = String(book.created_by_id) === String(ME.id);
-          var willRefund = !isCreatorLeaving && myCohortPhase === 'signup';
+          var willRefund = !isCreatorLeaving && (myCohortPhase === 'signup' || myCohortPhase === null);
           var confirmText = willRefund
             ? "Guruhdan chiqasizmi? Hali challenj boshlanmaganligi sababli " + JOIN_COST_QOVUN + " ta qovunchangiz qaytariladi."
             : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi. To'langan qovuncha qaytarilmaydi.";
