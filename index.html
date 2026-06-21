@@ -208,6 +208,30 @@ function confirmAction(msg, onYes) {
   } catch (e) {}
   if (window.confirm(msg)) onYes();
 }
+function customPrompt(message, callback) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface);border-radius:var(--radius,16px);padding:20px;width:100%;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,0.3);';
+  box.innerHTML =
+    '<div style="margin-bottom:12px;font-size:14px;color:var(--text-main,#fff)">' + escapeHtml(message) + '</div>' +
+    '<input id="customPromptInput" class="input" style="margin-bottom:14px;width:100%;box-sizing:border-box" />' +
+    '<div style="display:flex;gap:8px">' +
+    '<button id="customPromptCancel" class="btn-small" style="flex:1">Bekor qilish</button>' +
+    '<button id="customPromptOk" class="btn-primary" style="flex:1">OK</button>' +
+    '</div>';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  var input = box.querySelector('#customPromptInput');
+  setTimeout(function () { input.focus(); }, 50);
+  function cleanup(value) {
+    document.body.removeChild(overlay);
+    callback(value);
+  }
+  box.querySelector('#customPromptCancel').addEventListener('click', function () { cleanup(null); });
+  box.querySelector('#customPromptOk').addEventListener('click', function () { cleanup(input.value); });
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); cleanup(input.value); } });
+}
 
 // ===== Foydalanuvchi =====
 var ME = (function () {
@@ -582,7 +606,7 @@ async function renderHome() {
     '<button class="seg-btn' + (state.tab === 'all' ? ' active' : '') + '" data-tab="all">Barcha challenjlar</button>' +
     '</div>' +
     bodyHtml,
-    { fab: !isTop }
+    { fab: true }
   );
   if (isTop) {
     await loadTopLists();
@@ -1184,17 +1208,18 @@ function renderAdminUsersList() {
       '</div></div>';
   }).join('') : '<div class="empty">Foydalanuvchi topilmadi.</div>';
   document.querySelectorAll('[data-add-qovun]').forEach(function (btn) {
-    btn.addEventListener('click', async function () {
+    btn.addEventListener('click', function () {
       var id = parseInt(btn.dataset.addQovun, 10);
-      var raw = window.prompt(btn.dataset.name + " uchun nechta qovuncha qo'shamiz? (ayirish uchun manfiy son kiriting)");
-      if (raw === null) return;
-      var amt = parseInt(raw, 10);
-      if (isNaN(amt)) { showAlert("Noto'g'ri son."); return; }
-      try {
-        await adjustWallet(id, amt, 0);
-        vibrate('light');
-        showAlert('Bajarildi.');
-      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      customPrompt(btn.dataset.name + " uchun nechta qovuncha qo'shamiz? (ayirish uchun manfiy son kiriting)", async function (raw) {
+        if (raw === null) return;
+        var amt = parseInt(raw, 10);
+        if (isNaN(amt)) { showAlert("Noto'g'ri son."); return; }
+        try {
+          await adjustWallet(id, amt, 0);
+          vibrate('light');
+          showAlert('Bajarildi.');
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
     });
   });
   document.querySelectorAll('[data-block-id]').forEach(function (btn) {
@@ -1320,11 +1345,12 @@ async function loadAdminTransactions() {
     });
     document.querySelectorAll('[data-reject-purchase]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var reason = window.prompt("Rad etish sababi:") || '';
-        var id = btn.dataset.rejectPurchase;
-        sbPatch('qovun_purchase_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason, resolved_at: new Date().toISOString() })
-          .then(function () { vibrate('light'); loadAdminTransactions(); })
-          .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+        customPrompt("Rad etish sababi:", function (reason) {
+          var id = btn.dataset.rejectPurchase;
+          sbPatch('qovun_purchase_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason || '', resolved_at: new Date().toISOString() })
+            .then(function () { vibrate('light'); loadAdminTransactions(); })
+            .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+        });
       });
     });
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
@@ -1393,11 +1419,12 @@ async function loadAdminWithdrawals() {
     });
     document.querySelectorAll('[data-reject-withdrawal]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var reason = window.prompt("Rad etish sababi:") || '';
-        var id = btn.dataset.rejectWithdrawal;
-        sbPatch('withdrawal_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason, resolved_at: new Date().toISOString() })
-          .then(function () { vibrate('light'); loadAdminWithdrawals(); })
-          .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+        customPrompt("Rad etish sababi:", function (reason) {
+          var id = btn.dataset.rejectWithdrawal;
+          sbPatch('withdrawal_requests?id=eq.' + id, { status: 'rejected', reject_reason: reason || '', resolved_at: new Date().toISOString() })
+            .then(function () { vibrate('light'); loadAdminWithdrawals(); })
+            .catch(function (e) { console.error(e); showAlert('Xatolik yuz berdi.'); });
+        });
       });
     });
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
