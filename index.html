@@ -1882,13 +1882,14 @@ function renderBookDetailBody() {
         '<div class="hint" style="margin-top:14px">Yozgan fikringizni "Izohlar" bo\'limidan ko\'rishingiz mumkin.</div>';
     }
 
-    var myCohortComments = myCohortMarker ? comments.filter(function (c) { return c.cohort_start_date === myCohortMarker; }) : [];
-    var myCohortNotes = myCohortMarker ? allNotes.filter(function (n) { return n.cohort_start_date === myCohortMarker; }) : [];
-    var unifiedItems = myCohortComments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
-      .concat(myCohortNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
+    var displayCohortMarker = viewMarker;
+    var displayCohortComments = displayCohortMarker ? comments.filter(function (c) { return c.cohort_start_date === displayCohortMarker; }) : [];
+    var displayCohortNotes = displayCohortMarker ? allNotes.filter(function (n) { return n.cohort_start_date === displayCohortMarker; }) : [];
+    var unifiedItems = displayCohortComments.filter(function (c) { return !c.reply_to_id; }).map(function (c) { return { type: 'comment', data: c, ts: c.created_at }; })
+      .concat(displayCohortNotes.map(function (n) { return { type: 'note', data: n, ts: n.created_at }; }))
       .sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
     var repliesByParent = {};
-    myCohortComments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
+    displayCohortComments.forEach(function (c) { if (c.reply_to_id) { (repliesByParent[c.reply_to_id] = repliesByParent[c.reply_to_id] || []).push(c); } });
 
     function commentRow(c, isReply) {
       var liked = !!myLiked[c.id];
@@ -1939,18 +1940,25 @@ function renderBookDetailBody() {
       return commentRow(c, false) + repliesHtml;
     }).join('');
 
-    var canComment = !!mine && myCohortPhase !== 'signup' && myCohortPhase !== null;
-    var commentFormHtml = canComment
-      ? ((editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
+    var isViewingOwnCohort = displayCohortMarker === myCohortMarker;
+    var canComment = !!mine && isViewingOwnCohort && myCohortPhase !== 'signup' && myCohortPhase !== null;
+    var canViewComments = !!mine;
+    var commentFormHtml;
+    if (canComment) {
+      commentFormHtml = (editTarget ? '<div class="reply-banner"><span>✏ Komentariyani tahrirlamoqdasiz</span><button data-cancel-edit style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' :
          replyTarget ? '<div class="reply-banner"><span>↩ ' + escapeHtml(replyTarget.name) + ' ga javob yozyapsiz</span><button data-cancel-reply style="background:none;border:none;color:var(--accent-1);font-size:14px">✕</button></div>' : '') +
         '<div class="comment-form"><textarea id="commentInput" class="input" rows="2" placeholder="' + (replyTarget ? 'Javobingiz...' : "Fikringizni yozing...") + '">' + (editTarget ? escapeHtml(editTarget.text) : '') + '</textarea>' +
-        '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>')
-      : (!mine
-          ? '<div class="hint" style="margin-bottom:10px">Izohlarni ko\'rish va yozish uchun avval guruhga qo\'shiling.</div>'
-          : '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>');
+        '<button id="sendCommentBtn" class="btn-primary">' + (editTarget ? 'Saqlash' : 'Yubor') + '</button></div>';
+    } else if (!mine) {
+      commentFormHtml = '<div class="hint" style="margin-bottom:10px">Izohlarni ko\'rish va yozish uchun avval guruhga qo\'shiling.</div>';
+    } else if (isViewingOwnCohort) {
+      commentFormHtml = '<div class="hint" style="margin-bottom:10px">⏳ Guruhingiz hali boshlanmagan — izoh yozish challenj boshlangach ochiladi.</div>';
+    } else {
+      commentFormHtml = '<div class="hint" style="margin-bottom:10px">👀 Boshqa guruh izohlarini ko\'ryapsiz (faqat o\'qish mumkin).</div>';
+    }
 
     var commentsTabHtml = commentFormHtml +
-      (canComment ? '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>' : '');
+      (canViewComments ? '<div class="comments">' + (commentsListHtml || '<div class="empty">Hali izoh yo\'q.</div>') + '</div>' : '');
 
     var activeTabHtml = (state.detailTab === 'progress' && !isAdminMode) ? progressTabHtml : state.detailTab === 'comments' ? commentsTabHtml : readersTabHtml;
 
