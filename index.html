@@ -1129,7 +1129,7 @@ async function renderAdmin() {
     '<div class="header"><div class="h-title">Admin</div><button class="back" id="adminExitBtn" style="margin-left:auto">✕</button></div>' +
     '<div class="segment" style="flex-wrap:wrap">' +
     '<button class="seg-btn' + (state.adminTab === 'dashboard' ? ' active' : '') + '" data-admintab="dashboard">Dashboard</button>' +
-    '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar</button>' +
+    '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar<span id="badgeUsers"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar<span id="badgeBooks"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar<span id="badgeTx"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish<span id="badgeWd"></span></button>' +
@@ -1150,18 +1150,23 @@ async function renderAdmin() {
 
 async function loadAdminBadgeCounts() {
   try {
+    var stateRows = await sbGet('admin_state?select=*&id=eq.1');
+    var lastSeen = (stateRows[0] && stateRows[0].users_last_seen_at) || '1970-01-01T00:00:00Z';
     var results = await Promise.all([
       sbGet('books?select=id&approved=eq.false'),
       sbGet('qovun_purchase_requests?select=id&status=eq.pending'),
       sbGet('withdrawal_requests?select=id&status=eq.pending'),
+      sbGet('wallets?select=id&created_at=gt.' + encodeURIComponent(lastSeen)),
     ]);
     function badgeHtml(n) { return n > 0 ? ' <span style="background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">' + n + '</span>' : ''; }
     var bB = document.getElementById('badgeBooks');
     var bT = document.getElementById('badgeTx');
     var bW = document.getElementById('badgeWd');
+    var bU = document.getElementById('badgeUsers');
     if (bB) bB.innerHTML = badgeHtml(results[0].length);
     if (bT) bT.innerHTML = badgeHtml(results[1].length);
     if (bW) bW.innerHTML = badgeHtml(results[2].length);
+    if (bU) bU.innerHTML = badgeHtml(results[3].length);
   } catch (e) { console.error(e); }
 }
 
@@ -1191,6 +1196,9 @@ async function loadAllUsersMerged() {
 async function loadAdminUsers() {
   var el = document.getElementById('adminBody');
   try {
+    sbPost('admin_state?on_conflict=id', { id: 1, users_last_seen_at: new Date().toISOString() }, 'resolution=merge-duplicates').catch(function (e) { console.error(e); });
+    var badgeUsersEl = document.getElementById('badgeUsers');
+    if (badgeUsersEl) badgeUsersEl.innerHTML = '';
     var usersAndBlocked = await Promise.all([loadAllUsersMerged(), sbGet('blocked_users?select=user_id')]);
     _adminUsersCache = usersAndBlocked[0];
     var blockedRows = usersAndBlocked[1];
