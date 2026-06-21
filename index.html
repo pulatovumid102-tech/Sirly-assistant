@@ -2225,7 +2225,7 @@ function renderBookDetailBody() {
       }
       var updateBtnEl = document.getElementById('updateProgressBtn');
       if (updateBtnEl) {
-        updateBtnEl.addEventListener('click', function () {
+        updateBtnEl.addEventListener('click', async function () {
           if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
           var pagesInputEl = document.getElementById('pagesInput');
           var requestedPages = parseInt(pagesInputEl.value, 10);
@@ -2237,6 +2237,21 @@ function renderBookDetailBody() {
           if (totalPages && requestedPages > totalPages) requestedPages = totalPages;
           var oldPages = mine ? mine.pages_read : 0;
           var delta = requestedPages - oldPages;
+          if (delta <= 0) { showAlert("Yangi bet soni avvalgisidan ko'p bo'lishi kerak."); return; }
+          var todayStr2 = cohortTodayStr();
+          var alreadyToday = 0;
+          try {
+            var todayNotesCheck = await sbGet('reading_notes?select=pages_from,pages_read,created_at&book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
+            todayNotesCheck.forEach(function (n) {
+              var noteDay = localDateStr(new Date(new Date(n.created_at).getTime() - 4 * 3600000));
+              if (noteDay === todayStr2) alreadyToday += Math.max(0, (n.pages_read || 0) - (n.pages_from || 0));
+            });
+          } catch (e) { console.error(e); }
+          if (alreadyToday + delta > COHORT_SUGGESTED_DAILY_PAGES) {
+            var canStillAdd = Math.max(0, COHORT_SUGGESTED_DAILY_PAGES - alreadyToday);
+            showAlert("Kunlik limit " + COHORT_SUGGESTED_DAILY_PAGES + " bet. Bugun allaqachon " + alreadyToday + " bet kiritgansiz, yana faqat " + canStillAdd + " bet kiritishingiz mumkin.");
+            return;
+          }
           var saveBtn = document.getElementById('updateProgressBtn');
           confirmAction("Hammasini to'g'ri yozdingizmi?", async function () {
             saveBtn.disabled = true;
