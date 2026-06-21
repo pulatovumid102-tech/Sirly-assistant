@@ -831,9 +831,13 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, totalPagesRead, da
     : '<div class="empty">Hali kitob yo\'q.</div>';
   var dailyTargetHtml = '';
   if (isOwn && dailyTargetInfo) {
-    var doneToday = dailyTargetInfo.todayRead >= dailyTargetInfo.dailyLimit;
-    dailyTargetHtml = '<div class="hint" style="margin-bottom:14px' + (doneToday ? ';color:var(--accent-1)' : '') + '">' +
-      (doneToday ? '✅ ' : '📖 ') + '"' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi: <b>' + dailyTargetInfo.todayRead + '/' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
+    if (dailyTargetInfo.phase === 'signup') {
+      dailyTargetHtml = '<div class="hint" style="margin-bottom:14px">⏳ "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — hali boshlanmagan. Kunlik me\'yor: <b>' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
+    } else {
+      var doneToday = dailyTargetInfo.todayRead >= dailyTargetInfo.dailyLimit;
+      dailyTargetHtml = '<div class="hint" style="margin-bottom:14px' + (doneToday ? ';color:var(--accent-1)' : '') + '">' +
+        (doneToday ? '✅ ' : '📖 ') + '"' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi: <b>' + dailyTargetInfo.todayRead + '/' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
+    }
   }
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + totalPagesRead + '</div><div class="profile-stat-label">umumiy o\'qilgan bet</div></div>' +
@@ -882,14 +886,16 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         if (!pr.cohort_start_date || !pr.books) continue;
         var rd = bookReadingDays(pr.books);
         var ph = cohortPhase(pr.cohort_start_date, todayStr, rd);
-        if (ph !== 'reading') continue;
-        var todayNotes = await sbGet('reading_notes?select=pages_from,pages_read,created_at&book_id=eq.' + pr.book_id + '&user_id=eq.' + ME.id);
+        if (ph !== 'reading' && ph !== 'signup' && ph !== 'closing') continue;
         var todayRead = 0;
-        todayNotes.forEach(function (n) {
-          var noteDay = localDateStr(new Date(new Date(n.created_at).getTime() - 4 * 3600000));
-          if (noteDay === todayStr) todayRead += Math.max(0, (n.pages_read || 0) - (n.pages_from || 0));
-        });
-        dailyTargetInfo = { bookTitle: pr.books.title, todayRead: todayRead, dailyLimit: COHORT_SUGGESTED_DAILY_PAGES };
+        if (ph === 'reading') {
+          var todayNotes = await sbGet('reading_notes?select=pages_from,pages_read,created_at&book_id=eq.' + pr.book_id + '&user_id=eq.' + ME.id);
+          todayNotes.forEach(function (n) {
+            var noteDay = localDateStr(new Date(new Date(n.created_at).getTime() - 4 * 3600000));
+            if (noteDay === todayStr) todayRead += Math.max(0, (n.pages_read || 0) - (n.pages_from || 0));
+          });
+        }
+        dailyTargetInfo = { bookTitle: pr.books.title, todayRead: todayRead, dailyLimit: COHORT_SUGGESTED_DAILY_PAGES, phase: ph };
         break;
       }
     }
@@ -1844,7 +1850,7 @@ function renderBookDetailBody() {
       progressTabHtml =
         phaseHintHtml +
         '<div class="form">' +
-        '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet" value="' + myPages + '"' + disabledAttr + ' />' +
+        '<input id="pagesInput" class="input" type="number" min="0" max="' + (totalPages || '') + '" placeholder="Oxirgi o\'qilgan bet raqamini kiriting (masalan: 45)" value="' + (myPages > 0 ? myPages : '') + '"' + disabledAttr + ' />' +
         '<textarea id="noteInput" class="input" rows="3" maxlength="200" placeholder="O\'qigan betlaringiz haqida fikr yozing — bu sizni rostdan o\'qiganingizning bir isboti (shart)..."' + disabledAttr + '></textarea>' +
         '<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-top:-8px"><span id="noteCharCount">0</span>/200</div>' +
         '<label class="file-btn" for="noteCoverInput" style="' + ((cohortLocked || cohortWaiting) ? 'opacity:0.5;pointer-events:none;' : '') + '">📷 Rasm yuklash (majburiy)</label>' +
