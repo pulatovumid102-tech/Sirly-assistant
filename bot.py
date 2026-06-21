@@ -383,7 +383,7 @@ async def check_join_confirmations(context: ContextTypes.DEFAULT_TYPE):
             )
             for row in r.json():
                 try:
-                    share_link = f"https://t.me/{BOT_USERNAME}?startapp=book_{row['book_id']}"
+                    share_link = f"https://t.me/{BOT_USERNAME}/app?startapp=book_{row['book_id']}"
                     text = (
                         f"✅ {row['cohort_start_date']}da boshlanadigan \"{row['book_title']}\" "
                         f"challenjiga qo'shildingiz!\n\n"
