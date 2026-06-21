@@ -368,8 +368,7 @@ async function joinCohortFlow(book, marker, progress) {
 
 // ===== Kogort (guruh) sikli hisoblash =====
 function monthCohortMarkers(year, month) {
-  var daysInMonth = new Date(year, month + 1, 0).getDate();
-  var days = [5, 10, 15, 20, 25, Math.min(30, daysInMonth)];
+  var days = [1, 5, 10, 15, 20, 25];
   return days.map(function (d) {
     return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
   });
