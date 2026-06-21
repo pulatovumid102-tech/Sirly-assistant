@@ -174,10 +174,29 @@ def nearby_cohort_markers(today: dt_date):
     return sorted(markers)
 
 
+def previous_cohort_marker(marker: dt_date):
+    all_markers = []
+    for offset in (-1, 0):
+        y = marker.year
+        m = marker.month + offset
+        while m < 1:
+            m += 12
+            y -= 1
+        while m > 12:
+            m -= 12
+            y += 1
+        all_markers.extend(month_cohort_markers(y, m))
+    all_markers.sort()
+    idx = all_markers.index(marker) if marker in all_markers else -1
+    return all_markers[idx - 1] if idx > 0 else None
+
+
 def cohort_phase(marker: dt_date, today: dt_date, reading_days: int = None):
     reading_days = reading_days or COHORT_READING_DAYS
     diff = (today - marker).days
-    if diff < -COHORT_SIGNUP_DAYS:
+    prev_marker = previous_cohort_marker(marker)
+    signup_days = (marker - prev_marker).days if prev_marker else COHORT_SIGNUP_DAYS
+    if diff < -signup_days:
         return None
     if diff < 0:
         return "signup"
