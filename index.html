@@ -833,12 +833,23 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
     var progRows = profileResults[1];
     var totalPagesRead = 0;
+    var seenBookIds = {};
     var books = progRows.map(function (r) {
       var b = r.books;
+      seenBookIds[b.id] = true;
       totalPagesRead += r.pages_read || 0;
       var pct = b.total_pages ? Math.min(100, Math.round((r.pages_read / b.total_pages) * 100)) : Math.min(100, r.pages_read);
       return { book: b, pct: pct, pagesRead: r.pages_read };
     });
+    var missingFinisherBookIds = finishers.map(function (f) { return f.book_id; }).filter(function (id) { return !seenBookIds[id]; });
+    if (missingFinisherBookIds.length) {
+      try {
+        var extraBooks = await sbGet('books?select=*&id=in.(' + missingFinisherBookIds.join(',') + ')');
+        extraBooks.forEach(function (b) {
+          books.push({ book: b, pct: 100, pagesRead: b.total_pages || 0 });
+        });
+      } catch (e) { console.error(e); }
+    }
     var dailyTargetInfo = null;
     if (isOwn) {
       var todayStr = cohortTodayStr();
