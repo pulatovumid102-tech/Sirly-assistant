@@ -702,18 +702,17 @@ async function loadStreakBadge(targetId) {
     var yesterday = localDateStr(new Date(Date.now() - 86400000));
     var n = (s && (s.last_active_date === today || s.last_active_date === yesterday)) ? s.current_streak : 0;
     if (n <= 0) { el.innerHTML = ''; return; }
-    var cycleIndex = Math.floor((n - 1) / 3);
-    var lit = ((n - 1) % 3) + 1;
+    var cycleIndex = Math.floor((n - 1) / 5);
+    var lit = ((n - 1) % 5) + 1;
     var daysRow = '';
-    for (var i = 1; i <= 3; i++) {
-      var dayLabel = cycleIndex * 3 + i;
+    for (var i = 1; i <= 5; i++) {
+      var dayLabel = cycleIndex * 5 + i;
       daysRow += '<div class="streak-day"><div class="streak-day-icon' + (i <= lit ? ' lit' : '') + '">🔥</div><div class="streak-day-num">' + dayLabel + '</div></div>';
     }
     el.innerHTML = '<div class="streak-badge">' +
       '<div class="streak-top-row"><div><div class="streak-num">' + n + ' kun</div><div class="streak-label">ketma-ket o\'qiyapsiz</div></div>' +
       '<div class="streak-daraja">🏅 ' + escapeHtml(darajaTitle(n)) + '</div></div>' +
       '<div class="streak-days-row">' + daysRow + '</div>' +
-      (s.last_active_date !== today ? '<div class="hint" style="margin-top:8px">🔥 Bugun o\'qisangiz, ' + (n + 1) + '-kun bo\'ladi!</div>' : '') +
       '</div>';
   } catch (e) { el.innerHTML = ''; console.error(e); }
 }
