@@ -358,8 +358,7 @@ async function joinCohortFlow(book, marker, progress) {
   }
   if (!isCreator) {
     await adjustWallet(ME.id, -JOIN_COST_QOVUN, 0);
-    await adjustWallet(book.created_by_id, JOIN_COST_QOVUN / 2, 0);
-    await addToTreasury(JOIN_COST_QOVUN / 2);
+    await addToTreasury(JOIN_COST_QOVUN);
   }
   try {
     await sbPost('join_notifications', { book_id: book.id, creator_id: book.created_by_id, cohort_start_date: marker });
@@ -2268,8 +2267,7 @@ function renderBookDetailBody() {
               await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
               if (willRefund) {
                 await adjustWallet(ME.id, JOIN_COST_QOVUN, 0);
-                await adjustWallet(book.created_by_id, -(JOIN_COST_QOVUN / 2), 0);
-                await addToTreasury(-(JOIN_COST_QOVUN / 2));
+                await addToTreasury(-JOIN_COST_QOVUN);
               }
               vibrate('medium');
               _bdCache = null;
