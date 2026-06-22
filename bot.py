@@ -216,13 +216,15 @@ def parse_date_str(s: str) -> dt_date:
 async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient(timeout=15) as client:
+            today = datetime.now(timezone.utc).date()
+
+            # ===== KITOB REYTINGI =====
             books_r = await client.get(
                 f"{SB_URL}/rest/v1/books",
                 headers=SB_HEADERS,
                 params={"select": "id,title,total_pages"},
             )
             books = {b["id"]: b for b in books_r.json()}
-            today = datetime.now(timezone.utc).date()
 
             prog_r = await client.get(
                 f"{SB_URL}/rest/v1/progress",
@@ -234,10 +236,9 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                 },
             )
             all_progress = prog_r.json()
-
             groups = {}
             for p in all_progress:
-                key = (p["book_id"], p["cohort_start_date"])
+                key = (p["book_id"], str(p["cohort_start_date"])[:10])
                 groups.setdefault(key, []).append(p)
 
             for (book_id, cohort_str), members in groups.items():
@@ -265,14 +266,16 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                     current_rank = idx + 1
                     uid = p["user_id"]
                     prev_rank = tracker_map.get(uid)
-                    if prev_rank is not None and current_rank > prev_rank:
+                    if prev_rank is not None and current_rank != prev_rank:
+                        arrow = "📈" if current_rank < prev_rank else "📉"
+                        direction = "ko'tarildingiz" if current_rank < prev_rank else "tushdingiz"
                         try:
                             await context.bot.send_message(
                                 chat_id=uid,
-                                text=f"📉 \"{book['title']}\" guruhida darajangiz pastladi: endi {current_rank}-o'rindasiz.",
+                                text=f"{arrow} \"{book['title']}\" guruhida o'riningiz o'zgardi: endi {current_rank}-o'rindasiz.",
                             )
                         except Exception as e:
-                            logger.error(f"Daraja xabari yuborilmadi (user_id={uid}): {e}")
+                            logger.error(f"Kitob rank xabari yuborilmadi (user_id={uid}): {e}")
                     try:
                         await client.post(
                             f"{SB_URL}/rest/v1/rank_tracker?on_conflict=book_id,user_id,cohort_start_date",
@@ -286,6 +289,76 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                         )
                     except Exception as e:
                         logger.error(f"rank_tracker yangilanmadi (book_id={book_id}, user_id={uid}): {e}")
+
+            # ===== SPORT REYTINGI =====
+            sdl_r = await client.get(
+                f"{SB_URL}/rest/v1/sport_daily_logs",
+                headers=SB_HEADERS,
+                params={"select": "challenge_id,user_id,count_done,cohort_start_date"},
+            )
+            sport_logs = sdl_r.json()
+            sport_groups = {}
+            for l in sport_logs:
+                key = (l["challenge_id"], str(l["cohort_start_date"])[:10])
+                sport_groups.setdefault(key, {})
+                uid = l["user_id"]
+                sport_groups[key][uid] = sport_groups[key].get(uid, 0) + l["count_done"]
+
+            ch_r = await client.get(
+                f"{SB_URL}/rest/v1/sport_challenges",
+                headers=SB_HEADERS,
+                params={"select": "id,title,duration_days"},
+            )
+            challenges = {c["id"]: c for c in ch_r.json()}
+
+            for (ch_id, cohort_str), user_totals in sport_groups.items():
+                marker = parse_date_str(cohort_str)
+                ch = challenges.get(ch_id)
+                if not ch:
+                    continue
+                phase = cohort_phase(marker, today, ch.get("duration_days", 5))
+                if phase not in ("reading", "closing"):
+                    continue
+
+                sorted_users = sorted(user_totals.items(), key=lambda x: x[1], reverse=True)
+
+                sport_tracker_r = await client.get(
+                    f"{SB_URL}/rest/v1/rank_tracker",
+                    headers=SB_HEADERS,
+                    params={
+                        "challenge_id": f"eq.{ch_id}",
+                        "cohort_start_date": f"eq.{cohort_str}",
+                        "select": "user_id,last_rank",
+                    },
+                )
+                sport_tracker_map = {row["user_id"]: row["last_rank"] for row in sport_tracker_r.json()}
+
+                for idx, (uid, total) in enumerate(sorted_users):
+                    current_rank = idx + 1
+                    prev_rank = sport_tracker_map.get(uid)
+                    if prev_rank is not None and current_rank != prev_rank:
+                        arrow = "📈" if current_rank < prev_rank else "📉"
+                        try:
+                            await context.bot.send_message(
+                                chat_id=uid,
+                                text=f"{arrow} \"{ch['title']}\" sport guruhida o'riningiz o'zgardi: endi {current_rank}-o'rindasiz.",
+                            )
+                        except Exception as e:
+                            logger.error(f"Sport rank xabari yuborilmadi (user_id={uid}): {e}")
+                    try:
+                        await client.post(
+                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=challenge_id,user_id,cohort_start_date",
+                            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
+                            json={
+                                "challenge_id": ch_id,
+                                "user_id": uid,
+                                "cohort_start_date": cohort_str,
+                                "last_rank": current_rank,
+                            },
+                        )
+                    except Exception as e:
+                        logger.error(f"sport rank_tracker yangilanmadi (ch_id={ch_id}, user_id={uid}): {e}")
+
     except Exception as e:
         logger.error(f"check_rank_drops xato: {e}")
 
