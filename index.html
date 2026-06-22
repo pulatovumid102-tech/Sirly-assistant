@@ -878,7 +878,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo) {
+function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows) {
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var bookMedalHtml = '<div class="section-label">📚 Kitob medallari</div><div class="medal-slots-row">';
@@ -905,6 +905,13 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
         (doneToday ? '✅ ' : '📖 ') + '"' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi: <b>' + dailyTargetInfo.todayRead + '/' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
     }
   }
+  var sportBooksHtml = sportProgRows.length
+    ? '<div class="book-list">' + sportProgRows.map(function (p) {
+        var c = p.sport_challenges;
+        if (!c) return '';
+        return sportCard(c);
+      }).join('') + '</div>'
+    : '<div class="empty">Hali sport challenj yo\'q.</div>';
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label">tugatilgan sport</div></div>' +
@@ -913,7 +920,8 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
     (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
     bookMedalHtml + sportMedalHtml +
-    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml;
+    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml +
+    '<div class="section-label" style="margin-top:20px">Sport challenjlari</div>' + sportBooksHtml;
 }
 
 async function loadProfileInto(elId, userId, userName, isOwn) {
@@ -971,7 +979,7 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         break;
       }
     }
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo);
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows);
     if (isOwn) {
       document.getElementById('goWalletBtn').addEventListener('click', function () {
         state.view = 'wallet';
