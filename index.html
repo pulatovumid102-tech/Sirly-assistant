@@ -878,7 +878,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows) {
+function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge) {
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var bookMedalHtml = '<div class="section-label">📚 Kitob medallari</div><div class="medal-slots-row">';
@@ -909,7 +909,17 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
     ? '<div class="book-list">' + sportProgRows.map(function (p) {
         var c = p.sport_challenges;
         if (!c) return '';
-        return sportCard(c);
+        var totalEx = (sportTotalByChallenge || {})[c.id] || 0;
+        var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
+        var durationDays = c.duration_days || 5;
+        var maxTotal = durationDays * 50;
+        var pct = maxTotal > 0 ? Math.min(100, Math.round((totalEx / maxTotal) * 100)) : 0;
+        return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
+          '<div class="book-card-row">' + thumb +
+          '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
+          '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="card-meta">' + formatNumber(totalEx) + ' ta - ' + pct + '%</div>' +
+          '</div></div></div>';
       }).join('') + '</div>'
     : '<div class="empty">Hali sport challenj yo\'q.</div>';
   return '<div class="profile-stats">' +
@@ -931,11 +941,15 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       sbGet('finishers?select=*&user_id=eq.' + userId + '&order=finished_at.desc'),
       sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
       sbGet('sport_progress?select=*,sport_challenges(*)&user_id=eq.' + userId),
+      sbGet('sport_daily_logs?select=challenge_id,count_done&user_id=eq.' + userId),
     ]);
     var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
     var progRows = profileResults[1];
     var sportProgRows = profileResults[2];
+    var sportDailyLogs = profileResults[3] || [];
+    var sportTotalByChallenge = {};
+    sportDailyLogs.forEach(function (l) { sportTotalByChallenge[l.challenge_id] = (sportTotalByChallenge[l.challenge_id] || 0) + l.count_done; });
     var todayStr = cohortTodayStr();
     var finishedSportCount = sportProgRows.filter(function (p) {
       if (!p.sport_challenges) return false;
@@ -979,7 +993,7 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         break;
       }
     }
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows);
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge);
     if (isOwn) {
       document.getElementById('goWalletBtn').addEventListener('click', function () {
         state.view = 'wallet';
@@ -2650,9 +2664,14 @@ async function loadSportTopLists() {
         '<div class="reader-pages">' + formatNumber(u.total) + ' ta</div>' +
         '</div>';
     }).join('') + '</div>' : '<div class="empty">Hali hech kim mashq qilmagan.</div>';
-    var topChallengesHtml = challenges.filter(function (c) { return (memberCounts[c.id] || 0) > 0; }).slice(0, 5).map(function (c) {
+    var topChallengesHtml = challenges.filter(function (c) { return (memberCounts[c.id] || 0) > 0; }).slice(0, 5).map(function (c, i) {
       var count = memberCounts[c.id] || 0;
-      return sportCardWithCount(c, count);
+      var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
+      return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
+        '<div class="book-card-row">' + thumb +
+        '<div class="book-card-info"><div class="card-title">' + medalMark(i) + ' ' + escapeHtml(c.title) + '</div>' +
+        '<div class="card-meta">👥 ' + count + ' kishi qatnashyapti · ' + c.duration_days + ' kun</div>' +
+        '</div></div></div>';
     });
     var topChallengesHtmlStr = topChallengesHtml.length
       ? '<div class="book-list">' + topChallengesHtml.join('') + '</div>'
@@ -2843,12 +2862,12 @@ async function loadSportDetailBody() {
     }
 
     body.innerHTML =
-      (challenge.cover_url ? '<img src="' + challenge.cover_url + '" class="cover-hero" />' : '') +
-      '<div class="book-hero-info">' +
+      '<div class="book-card-row" style="margin-bottom:12px">' +
+      (challenge.cover_url ? '<img src="' + challenge.cover_url + '" class="cover-hero" style="width:100px;height:100px;object-fit:cover;border-radius:12px;flex-shrink:0" />' : '<div class="cover-hero-placeholder" style="width:100px;height:100px;font-size:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--surface);flex-shrink:0">🏃</div>') +
+      '<div class="book-hero-info" style="padding-left:12px">' +
       '<div class="book-hero-title">' + escapeHtml(challenge.title) + '</div>' +
-      '<div class="book-hero-author">' + escapeHtml(challenge.created_by_name) + '</div>' +
       '<div class="book-hero-sub">' + durationDays + ' kun · ' + exercises.length + ' mashq</div>' +
-      '</div>' +
+      '</div></div>' +
       (challenge.description ? '<div class="hint">' + escapeHtml(challenge.description) + '</div>' : '') +
       exercisesHtml +
       tabsHtml +
