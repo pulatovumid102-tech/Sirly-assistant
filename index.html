@@ -2749,8 +2749,40 @@ async function loadSportDetailBody() {
 
     var tabsHtml = '<div class="segment">' +
       '<button class="seg-btn' + (state.sportDetailTab === 'participants' ? ' active' : '') + '" data-sport-detail-tab="participants">Qatnashuvchilar</button>' +
+      '<button class="seg-btn' + (state.sportDetailTab === 'comments' ? ' active' : '') + '" data-sport-detail-tab="comments">Izohlar</button>' +
       '<button class="seg-btn' + (state.sportDetailTab === 'progress' ? ' active' : '') + '" data-sport-detail-tab="progress">Mening jarayonim</button>' +
       '</div>';
+
+    var sportLogsTab = '';
+    if (myCohortMarker) {
+      var allLogs = await sbGet('sport_daily_logs?select=*&challenge_id=eq.' + state.sportId + '&cohort_start_date=eq.' + myCohortMarker + '&order=created_at.desc');
+      var logsByUserDay = {};
+      allLogs.forEach(function (l) {
+        var key = l.user_id + '_' + l.log_date;
+        if (!logsByUserDay[key]) logsByUserDay[key] = { user_name: l.user_name, log_date: l.log_date, photo_before_url: l.photo_before_url, photo_after_url: l.photo_after_url, created_at: l.created_at, exercises: [] };
+        logsByUserDay[key].exercises.push({ name: l.exercise_name, done: l.count_done });
+      });
+      var logCards = Object.values(logsByUserDay).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+      sportLogsTab = logCards.length ? '<div class="comments">' + logCards.map(function (entry) {
+        var exLines = entry.exercises.map(function (e) {
+          var ex = exercises.find(function (x) { return x.name === e.name; });
+          var daily = ex ? ex.daily_count : '?';
+          return '<div style="font-size:13px">💪 ' + escapeHtml(e.name) + ': <b>' + e.done + '/' + daily + '</b></div>';
+        }).join('');
+        return '<div class="comment-card" style="margin-bottom:14px;background:var(--surface);border-radius:14px;padding:14px">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+          '<div class="reader-name">' + escapeHtml(entry.user_name) + '</div>' +
+          '<div class="reader-note">' + formatDateTime(entry.created_at) + '</div>' +
+          '</div>' +
+          exLines +
+          '<div style="display:flex;gap:8px;margin-top:10px">' +
+          (entry.photo_before_url ? '<img src="' + entry.photo_before_url + '" class="note-photo-img" style="flex:1;max-width:48%" />' : '') +
+          (entry.photo_after_url ? '<img src="' + entry.photo_after_url + '" class="note-photo-img" style="flex:1;max-width:48%" />' : '') +
+          '</div></div>';
+      }).join('') + '</div>' : '<div class="empty">Hali hech kim natija kirmagan.</div>';
+    } else {
+      sportLogsTab = '<div class="empty">Guruhga qo\'shilsangiz izohlarni ko\'rasiz.</div>';
+    }
 
     body.innerHTML =
       (challenge.cover_url ? '<img src="' + challenge.cover_url + '" class="cover-hero" />' : '') +
@@ -2762,7 +2794,7 @@ async function loadSportDetailBody() {
       (challenge.description ? '<div class="hint">' + escapeHtml(challenge.description) + '</div>' : '') +
       exercisesHtml +
       tabsHtml +
-      '<div id="sportDetailContent">' + (state.sportDetailTab === 'participants' ? participantsTab : myProgressTab) + '</div>';
+      '<div id="sportDetailContent">' + (state.sportDetailTab === 'participants' ? participantsTab : state.sportDetailTab === 'comments' ? sportLogsTab : myProgressTab) + '</div>';
 
     document.querySelectorAll('[data-sport-detail-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () { state.sportDetailTab = btn.dataset.sportDetailTab; loadSportDetailBody(); });
