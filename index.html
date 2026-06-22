@@ -2667,6 +2667,15 @@ async function loadSportDetailBody() {
     var viewMarkerPhase = selectedSportMarker ? sportCohortPhase(selectedSportMarker, today, durationDays) : null;
     var canJoin = !mine && !otherActive && selectedSportMarker && (viewMarkerPhase === 'signup' || selectedSportMarker === nextMarker);
 
+    var userTotalsMap = {};
+    if (viewParticipants.length && selectedSportMarker) {
+      var cohortLogs = await sbGet('sport_daily_logs?select=user_id,count_done&challenge_id=eq.' + state.sportId + '&cohort_start_date=eq.' + selectedSportMarker);
+      cohortLogs.forEach(function (l) { userTotalsMap[l.user_id] = (userTotalsMap[l.user_id] || 0) + l.count_done; });
+    }
+    viewParticipants = viewParticipants.slice().sort(function (a, b) {
+      return (userTotalsMap[b.user_id] || 0) - (userTotalsMap[a.user_id] || 0);
+    });
+
     function schedRowHtml(m) {
       var count = membersByMarker[m] || 0;
       var isMine = m === myCohortMarker;
@@ -2687,10 +2696,12 @@ async function loadSportDetailBody() {
       ? '<div class="readers">' + viewParticipants.map(function (p, i) {
         var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
         var isMe = String(p.user_id) === String(ME.id);
+        var total = userTotalsMap[p.user_id] || 0;
         return '<div class="reader-row' + (isMe ? ' me' : '') + '" data-go="' + (isMe ? 'profile' : 'userBooks') + '" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
           '<div class="reader-rank">' + rankMark + '</div>' +
           '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
           '<div class="reader-note">📅 ' + formatDate(p.started_at) + '</div></div>' +
+          '<div class="reader-pages">' + formatNumber(total) + ' ta</div>' +
           '</div>';
       }).join('') + '</div>'
       : '<div class="empty">Hali hech kim qo\'shilmagan.</div>';
