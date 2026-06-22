@@ -576,6 +576,8 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
     """Bugun boshlanayotgan challenj guruhlariga xabar yuborish."""
     try:
         today = dt_date.today()
+        months_uz = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+        today_str = f"{today.day}-{months_uz[today.month-1]}, {today.year}"
         async with httpx.AsyncClient(timeout=30) as client:
             # Kitob challenjlari
             prog_r = await client.get(
@@ -597,7 +599,7 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
                 book = books[0]
                 reading_days = -(-book.get("total_pages", 200) // 20)
                 members = [p for p in book_progs if p["book_id"] == book_id]
-                text = (
+                pm_text = (
                     f"📖 \"{book['title']}\" kitob challenjingiz bugun boshlandi!\n\n"
                     f"Challenj davomiyligi: {reading_days} kun\n"
                     f"Kunlik me'yor: 20 bet\n\n"
@@ -605,9 +607,23 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
                 )
                 for member in members:
                     try:
-                        await context.bot.send_message(chat_id=member["user_id"], text=text)
+                        await context.bot.send_message(chat_id=member["user_id"], text=pm_text)
                     except Exception as e:
                         logger.error(f"Kitob start xabari yuborilmadi (user_id={member['user_id']}): {e}")
+                # Kanalga xabar
+                channel_text = (
+                    f"📚 Kitob challenjи boshlandi!\n"
+                    f"📅 {today_str}\n"
+                    f"📖 \"{book['title']}\"\n\n"
+                    f"👥 {len(members)} kishi bugun challenjni boshladi!\n\n"
+                    f"🌱 Neyra — o'zingni rivojlantir\n"
+                    f"t.me/{BOT_USERNAME}/app"
+                )
+                for channel_id in CHANNEL_IDS:
+                    try:
+                        await context.bot.send_message(chat_id=channel_id, text=channel_text)
+                    except Exception as e:
+                        logger.error(f"Kanalga kitob start xabari yuborilmadi (id={channel_id}): {e}")
 
             # Sport challenjlari
             sp_r = await client.get(
@@ -635,7 +651,7 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
                 exercises = ex_r.json()
                 ex_lines = "\n".join([f"💪 {e['name']}: kuniga {e['daily_count']} ta" for e in exercises])
                 members = [p for p in sport_progs if p["challenge_id"] == ch_id]
-                text = (
+                pm_text = (
                     f"🏃 \"{ch['title']}\" sport challenjingiz bugun boshlandi!\n\n"
                     f"Challenj davomiyligi: {ch['duration_days']} kun\n\n"
                     f"{ex_lines}\n\n"
@@ -643,9 +659,23 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
                 )
                 for member in members:
                     try:
-                        await context.bot.send_message(chat_id=member["user_id"], text=text)
+                        await context.bot.send_message(chat_id=member["user_id"], text=pm_text)
                     except Exception as e:
                         logger.error(f"Sport start xabari yuborilmadi (user_id={member['user_id']}): {e}")
+                # Kanalga xabar
+                channel_text = (
+                    f"🏃 Sport challenjи boshlandi!\n"
+                    f"📅 {today_str}\n"
+                    f"💪 \"{ch['title']}\"\n\n"
+                    f"👥 {len(members)} kishi bugun challenjni boshladi!\n\n"
+                    f"🌱 Neyra — o'zingni rivojlantir\n"
+                    f"t.me/{BOT_USERNAME}/app"
+                )
+                for channel_id in CHANNEL_IDS:
+                    try:
+                        await context.bot.send_message(chat_id=channel_id, text=channel_text)
+                    except Exception as e:
+                        logger.error(f"Kanalga sport start xabari yuborilmadi (id={channel_id}): {e}")
     except Exception as e:
         logger.error(f"check_challenge_start xato: {e}")
 
