@@ -1289,15 +1289,21 @@ async function loadAdminSport() {
   var el = document.getElementById('adminBody');
   try {
     var challenges = await sbGet('sport_challenges?select=*&order=created_at.desc');
+    challenges = challenges.slice().sort(function (a, b) {
+      if (a.approved === b.approved) return (a.title || '').localeCompare(b.title || '');
+      return a.approved ? 1 : -1;
+    });
     el.innerHTML = challenges.length ? challenges.map(function (c) {
       return '<div class="card" style="margin-bottom:10px"><div class="book-card-row">' +
         (c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>') +
         '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
         (c.approved === false ? '<div class="reader-note" style="color:var(--danger);font-weight:600">⏳ Tasdiq kutilmoqda</div>' : '') +
-        '<div class="card-author">' + escapeHtml(c.created_by_name) + '</div>' +
-        '<div class="reader-note">' + c.duration_days + ' kun · ' + formatDateTime(c.created_at) + '</div>' +
+        '<div class="reader-note">👤 ' + escapeHtml(c.created_by_name || 'Noma\'lum') + '</div>' +
+        '<div class="reader-note">⏱ ' + c.duration_days + ' kun</div>' +
+        '<div class="reader-note">📅 ' + formatDateTime(c.created_at) + '</div>' +
         '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
         (c.approved === false ? '<button class="btn-small" data-approve-sport="' + c.id + '" data-creator="' + c.created_by_id + '" data-title="' + escapeHtml(c.title) + '">✅ Tasdiqlash</button>' : '') +
+        '<button class="btn-small" data-edit-sport="' + c.id + '">Tahrirlash</button>' +
         '<button class="btn-small danger" data-delete-sport="' + c.id + '">O\'chirish</button>' +
         '</div></div></div></div>';
     }).join('') : '<div class="empty">Sport challenj yo\'q.</div>';
@@ -1317,6 +1323,19 @@ async function loadAdminSport() {
         });
       });
     });
+
+    document.querySelectorAll('[data-edit-sport]').forEach(function (btn) {
+      btn.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        var id = btn.dataset.editSport;
+        var c = challenges.find(function (x) { return String(x.id) === String(id); });
+        if (!c) return;
+        var exercises = await sbGet('sport_exercises?select=*&challenge_id=eq.' + id + '&order=sort_order.asc');
+        var hasMembers = (await sbGet('sport_progress?select=id&challenge_id=eq.' + id)).length > 0;
+        renderAdminSportEdit(c, exercises, hasMembers);
+      });
+    });
+
     document.querySelectorAll('[data-delete-sport]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -1331,6 +1350,87 @@ async function loadAdminSport() {
       });
     });
   } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+function renderAdminSportEdit(c, exercises, hasMembers) {
+  var el = document.getElementById('adminBody');
+  var exList = exercises.map(function (e) { return { id: e.id, name: e.name, total: e.total_count, daily: e.daily_count }; });
+
+  function renderExList() {
+    var listEl = document.getElementById('adminSportExList');
+    if (!listEl) return;
+    listEl.innerHTML = exList.map(function (e, i) {
+      return '<div style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:8px">' +
+        '<input class="input adex-name" type="text" placeholder="Mashq nomi" value="' + escapeHtml(e.name) + '" data-idx="' + i + '" />' +
+        '<div style="display:flex;gap:8px">' +
+        '<input class="input adex-total" type="number" min="1" placeholder="Jami soni" value="' + (e.total || '') + '" data-idx="' + i + '" style="flex:1" />' +
+        '<input class="input adex-daily" type="number" min="1" placeholder="Kuniga" value="' + (e.daily || '') + '" data-idx="' + i + '" style="flex:1" />' +
+        '</div>' +
+        '<button class="remove-link adex-remove" data-idx="' + i + '">O\'chirish</button>' +
+        '</div>';
+    }).join('') || '<div class="empty" style="font-size:13px">Hali mashq yo\'q</div>';
+    listEl.querySelectorAll('.adex-name').forEach(function (inp) { inp.addEventListener('input', function () { exList[inp.dataset.idx].name = inp.value; }); });
+    listEl.querySelectorAll('.adex-total').forEach(function (inp) { inp.addEventListener('input', function () { exList[inp.dataset.idx].total = parseInt(inp.value, 10) || 0; }); });
+    listEl.querySelectorAll('.adex-daily').forEach(function (inp) { inp.addEventListener('input', function () { exList[inp.dataset.idx].daily = parseInt(inp.value, 10) || 0; }); });
+    listEl.querySelectorAll('.adex-remove').forEach(function (btn) { btn.addEventListener('click', function () { exList.splice(parseInt(btn.dataset.idx, 10), 1); renderExList(); }); });
+  }
+
+  el.innerHTML =
+    '<div class="form" style="padding:0">' +
+    '<div class="section-label">Asosiy ma\'lumotlar</div>' +
+    '<input id="adminSportTitle" class="input" value="' + escapeHtml(c.title) + '" placeholder="Sarlavha" />' +
+    '<textarea id="adminSportDesc" class="input" rows="2" placeholder="Tavsif">' + escapeHtml(c.description || '') + '</textarea>' +
+    '<label class="file-btn" for="adminSportCoverInput">📷 Yangi rasm (ixtiyoriy)</label>' +
+    '<input type="file" id="adminSportCoverInput" accept="image/*" style="display:none" />' +
+    '<div id="adminSportCoverPreview">' + (c.cover_url ? '<img src="' + c.cover_url + '" class="note-photo-img" />' : '') + '</div>' +
+    '<input id="adminSportDuration" class="input" type="number" min="1" max="30" value="' + c.duration_days + '" placeholder="Necha kun?" ' + (hasMembers ? 'disabled title="Qatnashuvchisi bor — kun sonini o\'zgartirish mumkin emas"' : '') + ' />' +
+    (hasMembers ? '<div class="hint" style="color:var(--danger)">⚠️ Qatnashuvchisi bor — kun sonini o\'zgartirish bloklanган.</div>' : '') +
+    '<div class="section-label" style="margin-top:16px">Mashqlar</div>' +
+    '<div id="adminSportExList"></div>' +
+    '<button id="adminAddExBtn" class="btn-small" style="margin-top:8px">+ Mashq qo\'shish</button>' +
+    '<div style="display:flex;gap:8px;margin-top:16px">' +
+    '<button id="adminSportSaveBtn" class="btn-primary" style="flex:1">Saqlash</button>' +
+    '<button id="adminSportCancelBtn" class="btn-small" style="flex:1">Bekor</button>' +
+    '</div></div>';
+
+  renderExList();
+
+  document.getElementById('adminSportCoverInput').addEventListener('change', function () {
+    var f = this.files[0];
+    if (!f) return;
+    document.getElementById('adminSportCoverPreview').innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />';
+  });
+  document.getElementById('adminAddExBtn').addEventListener('click', function () {
+    exList.push({ id: null, name: '', total: 0, daily: 0 });
+    renderExList();
+  });
+  document.getElementById('adminSportCancelBtn').addEventListener('click', function () { loadAdminSport(); });
+  document.getElementById('adminSportSaveBtn').addEventListener('click', async function () {
+    var title = document.getElementById('adminSportTitle').value.trim();
+    if (!title) { showAlert("Sarlavha kiriting."); return; }
+    var duration = hasMembers ? c.duration_days : parseInt(document.getElementById('adminSportDuration').value, 10);
+    if (!duration || duration < 1) { showAlert("Kun sonini kiriting."); return; }
+    for (var e of exList) {
+      if (!e.name || !e.total || !e.daily) { showAlert("Barcha mashqlar uchun nom, jami va kunlik son kiriting."); return; }
+    }
+    var btn = this; btn.disabled = true; btn.textContent = 'Saqlanmoqda...';
+    try {
+      var coverUrl = c.cover_url;
+      var coverFile = document.getElementById('adminSportCoverInput').files[0];
+      if (coverFile) {
+        var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+        coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'sport/covers/' + Date.now() + '.' + ext, coverFile);
+      }
+      await sbPatch('sport_challenges?id=eq.' + c.id, { title: title, description: document.getElementById('adminSportDesc').value.trim() || null, cover_url: coverUrl, duration_days: duration });
+      await sbDelete('sport_exercises?challenge_id=eq.' + c.id);
+      for (var i = 0; i < exList.length; i++) {
+        await sbPost('sport_exercises', { challenge_id: c.id, name: exList[i].name, total_count: exList[i].total, daily_count: exList[i].daily, sort_order: i });
+      }
+      vibrate('light');
+      showAlert("Saqlandi!");
+      loadAdminSport();
+    } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); btn.disabled = false; btn.textContent = 'Saqlash'; }
+  });
 }
 
 async function loadAdminDashboard() {
@@ -2454,13 +2554,14 @@ function sportCard(c) {
 }
 function sportCardWithCount(c, count) {
   var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
-  var meta = c.duration_days + ' kunlik challenj';
-  if (count !== null) meta += ' · ' + count + ' kishi';
+  var meta = count !== null
+    ? '<div class="card-meta">👥 ' + count + ' kishi qatnashyapti · ' + c.duration_days + ' kun</div>'
+    : '<div class="card-meta">' + c.duration_days + ' kunlik challenj</div>';
   return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
     '<div class="book-card-row">' + thumb +
     '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
     (c.approved === false ? '<div class="card-meta" style="color:var(--danger)">⏳ Tasdiq kutilmoqda</div>' : '') +
-    '<div class="card-author">' + meta + '</div>' +
+    meta +
     '</div></div></div>';
 }
 
