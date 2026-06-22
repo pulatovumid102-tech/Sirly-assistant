@@ -498,7 +498,7 @@ async function tryRecordFinish(book) {
 }
 
 // ===== Holat =====
-var state = { view: 'modeSelect', tab: 'top', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'dashboard' };
+var state = { view: 'modeSelect', tab: 'top', bookId: null, detailTab: 'readers', listData: [], viewUserId: null, viewUserName: null, adminTab: 'dashboard', sportTab: 'top', sportId: null, sportDetailTab: 'participants' };
 var replyTarget = null;
 var editTarget = null;
 var expandedReplies = {};
@@ -557,11 +557,13 @@ function render() {
   else if (state.view === 'profile') renderMyProfile();
   else if (state.view === 'wallet') renderWallet();
   else if (state.view === 'admin') renderAdmin();
-  else if (state.view === 'sport') renderComingSoon('🏃', 'Sport');
+  else if (state.view === 'sport') renderSportHome();
+  else if (state.view === 'sportDetail') renderSportDetail();
+  else if (state.view === 'addSport') renderAddSport();
 }
 
 function currentSection() {
-  if (state.view === 'sport') return 'sport';
+  if (state.view === 'sport' || state.view === 'sportDetail' || state.view === 'addSport') return 'sport';
   if (state.view === 'profile' || state.view === 'wallet') return 'profile';
   return 'home';
 }
@@ -574,9 +576,10 @@ function tabBtn(view, icon, label) {
 function renderShell(innerHtml, opts) {
   opts = opts || {};
   var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
+  var fabTarget = opts.fabAction === 'addSport' ? 'addSport' : 'addBook';
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
-    (opts.fab ? '<button class="fab" data-go="addBook">+</button>' : '') +
+    (opts.fab ? '<button class="fab" data-go="' + fabTarget + '">+</button>' : '') +
     '<nav class="tabbar">' + tabs + '</nav>';
 }
 
@@ -1137,6 +1140,7 @@ async function renderAdmin() {
     '<button class="seg-btn' + (state.adminTab === 'dashboard' ? ' active' : '') + '" data-admintab="dashboard">Dashboard</button>' +
     '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar<span id="badgeUsers"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar<span id="badgeBooks"></span></button>' +
+    '<button class="seg-btn' + (state.adminTab === 'sport' ? ' active' : '') + '" data-admintab="sport">Sport<span id="badgeSport"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar<span id="badgeTx"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish<span id="badgeWd"></span></button>' +
     '</div>' +
@@ -1150,6 +1154,7 @@ async function renderAdmin() {
   if (_adminBadgeInterval) clearInterval(_adminBadgeInterval);
   _adminBadgeInterval = setInterval(loadAdminBadgeCounts, 5000);
   if (state.adminTab === 'books') await loadAdminBooks();
+  else if (state.adminTab === 'sport') await loadAdminSport();
   else if (state.adminTab === 'transactions') await loadAdminTransactions();
   else if (state.adminTab === 'withdrawals') await loadAdminWithdrawals();
   else if (state.adminTab === 'dashboard') await loadAdminDashboard();
@@ -1165,16 +1170,19 @@ async function loadAdminBadgeCounts() {
       sbGet('qovun_purchase_requests?select=id&status=eq.pending'),
       sbGet('withdrawal_requests?select=id&status=eq.pending'),
       sbGet('wallets?select=id&created_at=gt.' + encodeURIComponent(lastSeen)),
+      sbGet('sport_challenges?select=id&approved=eq.false'),
     ]);
     function badgeHtml(n) { return n > 0 ? ' <span style="background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">' + n + '</span>' : ''; }
     var bB = document.getElementById('badgeBooks');
     var bT = document.getElementById('badgeTx');
     var bW = document.getElementById('badgeWd');
     var bU = document.getElementById('badgeUsers');
+    var bS = document.getElementById('badgeSport');
     if (bB) bB.innerHTML = badgeHtml(results[0].length);
     if (bT) bT.innerHTML = badgeHtml(results[1].length);
     if (bW) bW.innerHTML = badgeHtml(results[2].length);
     if (bU) bU.innerHTML = badgeHtml(results[3].length);
+    if (bS) bS.innerHTML = badgeHtml(results[4].length);
   } catch (e) { console.error(e); }
 }
 
@@ -1275,6 +1283,54 @@ function renderAdminUsersList() {
       } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
     });
   });
+}
+
+async function loadAdminSport() {
+  var el = document.getElementById('adminBody');
+  try {
+    var challenges = await sbGet('sport_challenges?select=*&order=created_at.desc');
+    el.innerHTML = challenges.length ? challenges.map(function (c) {
+      return '<div class="card" style="margin-bottom:10px"><div class="book-card-row">' +
+        (c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>') +
+        '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
+        (c.approved === false ? '<div class="reader-note" style="color:var(--danger);font-weight:600">⏳ Tasdiq kutilmoqda</div>' : '') +
+        '<div class="card-author">' + escapeHtml(c.created_by_name) + '</div>' +
+        '<div class="reader-note">' + c.duration_days + ' kun · ' + formatDateTime(c.created_at) + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
+        (c.approved === false ? '<button class="btn-small" data-approve-sport="' + c.id + '" data-creator="' + c.created_by_id + '" data-title="' + escapeHtml(c.title) + '">✅ Tasdiqlash</button>' : '') +
+        '<button class="btn-small danger" data-delete-sport="' + c.id + '">O\'chirish</button>' +
+        '</div></div></div></div>';
+    }).join('') : '<div class="empty">Sport challenj yo\'q.</div>';
+
+    document.querySelectorAll('[data-approve-sport]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        confirmAction("Bu sport challenjni tasdiqlaysizmi?", async function () {
+          try {
+            var id = btn.dataset.approveSport;
+            await sbPatch('sport_challenges?id=eq.' + id, { approved: true });
+            await sbPost('sport_approval_notifications', { challenge_id: id, creator_id: btn.dataset.creator, challenge_title: btn.dataset.title });
+            vibrate('light');
+            loadAdminSport();
+            loadAdminBadgeCounts();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    });
+    document.querySelectorAll('[data-delete-sport]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        confirmAction("Bu sport challenjni o'chirasizmi?", async function () {
+          try {
+            await sbDelete('sport_challenges?id=eq.' + btn.dataset.deleteSport);
+            vibrate('medium');
+            loadAdminSport();
+            loadAdminBadgeCounts();
+          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+        });
+      });
+    });
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
 }
 
 async function loadAdminDashboard() {
@@ -2343,6 +2399,422 @@ function renderBookDetailBody() {
   }
 }
 
+
+// ===== SPORT MODULI =====
+
+var _sportCache = null;
+var selectedSportCohortMarker = null;
+
+function sportCohortPhase(markerStr, todayStr, durationDays) {
+  return cohortPhase(markerStr, todayStr, durationDays);
+}
+
+function sportBookReadingDays(challenge) {
+  return challenge.duration_days || 5;
+}
+
+async function renderSportHome() {
+  setBackButton(false);
+  var isTop = state.sportTab === 'top';
+  var bodyHtml = isTop
+    ? '<div id="sportTopLists"><div class="loading">Yuklanmoqda...</div></div>'
+    : '<input id="sportListSearch" class="input" placeholder="Challenj qidirish..." style="margin-bottom:12px"><div id="sportList"><div class="loading">Yuklanmoqda...</div></div>';
+  renderShell(
+    '<div class="header"><div class="h-title">Sport</div></div>' +
+    '<div class="segment">' +
+    '<button class="seg-btn' + (state.sportTab === 'top' ? ' active' : '') + '" data-sport-tab="top">🏆 TOP</button>' +
+    '<button class="seg-btn' + (state.sportTab === 'all' ? ' active' : '') + '" data-sport-tab="all">Barcha challenjlar</button>' +
+    '</div>' + bodyHtml,
+    { fab: true, fabAction: 'addSport' }
+  );
+  if (isTop) {
+    await loadSportTopLists();
+  } else {
+    document.getElementById('sportListSearch').addEventListener('input', renderFilteredSportList);
+    await loadSportList();
+  }
+  document.querySelectorAll('[data-sport-tab]').forEach(function (btn) {
+    btn.addEventListener('click', function () { state.sportTab = btn.dataset.sportTab; renderSportHome(); });
+  });
+}
+
+var _sportListCache = [];
+async function loadSportList() {
+  _sportListCache = await sbGet('sport_challenges?select=*&approved=eq.true&order=created_at.desc');
+  renderFilteredSportList();
+}
+function renderFilteredSportList() {
+  var listEl = document.getElementById('sportList');
+  var q = (document.getElementById('sportListSearch') ? document.getElementById('sportListSearch').value.trim().toLowerCase() : '');
+  var items = _sportListCache.filter(function (c) { return !q || c.title.toLowerCase().indexOf(q) !== -1; });
+  listEl.innerHTML = items.length ? items.map(function (c) { return sportCard(c); }).join('') : '<div class="empty">Challenj topilmadi.</div>';
+}
+function sportCard(c) {
+  var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
+  return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
+    '<div class="book-card-row">' + thumb +
+    '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
+    (c.approved === false ? '<div class="card-meta" style="color:var(--danger)">⏳ Tasdiq kutilmoqda</div>' : '') +
+    '<div class="card-author">' + c.duration_days + ' kunlik challenj</div>' +
+    '</div></div></div>';
+}
+
+async function loadSportTopLists() {
+  var el = document.getElementById('sportTopLists');
+  try {
+    var results = await Promise.all([
+      sbGet('sport_daily_logs?select=user_id,user_name,count_done&order=count_done.desc'),
+      sbGet('sport_challenges?select=*&approved=eq.true&order=created_at.desc&limit=5'),
+    ]);
+    var logs = results[0]; var challenges = results[1];
+    var userTotals = {};
+    logs.forEach(function (l) {
+      userTotals[l.user_id] = userTotals[l.user_id] || { name: l.user_name, total: 0 };
+      userTotals[l.user_id].total += l.count_done;
+    });
+    var topSportsmen = Object.keys(userTotals).map(function (id) { return { id: id, name: userTotals[id].name, total: userTotals[id].total }; })
+      .sort(function (a, b) { return b.total - a.total; }).slice(0, 5);
+    var medalMark = function (i) { return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1); };
+    var topSportsmenHtml = topSportsmen.length ? '<div class="readers">' + topSportsmen.map(function (u, i) {
+      var isMe = String(u.id) === String(ME.id);
+      return '<div class="reader-row' + (isMe ? ' me' : '') + '" data-go="' + (isMe ? 'profile' : 'userBooks') + '" data-userid="' + u.id + '" data-username="' + escapeHtml(u.name) + '">' +
+        '<div class="reader-rank">' + medalMark(i) + '</div>' +
+        '<div class="reader-info"><div class="reader-name">' + escapeHtml(u.name) + '</div></div>' +
+        '<div class="reader-pages">' + formatNumber(u.total) + ' ta</div>' +
+        '</div>';
+    }).join('') + '</div>' : '<div class="empty">Hali hech kim mashq qilmagan.</div>';
+    var topChallengesHtml = challenges.length ? '<div class="book-list">' + challenges.map(function (c) { return sportCard(c); }).join('') + '</div>' : '<div class="empty">Hali challenj yo\'q.</div>';
+    el.innerHTML =
+      '<div class="h-title" style="font-size:16px;margin-bottom:4px">Top 5 sportchi</div>' + topSportsmenHtml +
+      '<div class="h-title" style="font-size:16px;margin-top:20px;margin-bottom:10px">Top 5 challenj</div>' + topChallengesHtml;
+  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
+}
+
+async function renderSportDetail() {
+  setBackButton(true, function () { state.view = 'sport'; render(); });
+  var body = document.getElementById('sportDetailBody') || (function () {
+    renderShell(
+      '<div class="header"><button class="back" data-go="sport">←</button><div class="h-title">Challenj</div></div>' +
+      '<div id="sportDetailBody"><div class="loading">Yuklanmoqda...</div></div>'
+    );
+    return document.getElementById('sportDetailBody');
+  })();
+  renderShell(
+    '<div class="header"><button class="back" data-go="sport">←</button><div class="h-title">Challenj</div></div>' +
+    '<div id="sportDetailBody"><div class="loading">Yuklanmoqda...</div></div>'
+  );
+  await loadSportDetailBody();
+}
+
+async function loadSportDetailBody() {
+  var body = document.getElementById('sportDetailBody');
+  try {
+    var today = cohortTodayStr();
+    var results = await Promise.all([
+      sbGet('sport_challenges?select=*&id=eq.' + state.sportId),
+      sbGet('sport_exercises?select=*&challenge_id=eq.' + state.sportId + '&order=sort_order.asc'),
+      sbGet('sport_progress?select=*&challenge_id=eq.' + state.sportId + '&order=started_at.asc'),
+      sbGet('sport_progress?select=challenge_id,cohort_start_date&user_id=eq.' + ME.id),
+    ]);
+    var challenge = results[0][0];
+    if (!challenge) { body.innerHTML = '<div class="empty">Challenj topilmadi.</div>'; return; }
+    if (challenge.approved === false && String(challenge.created_by_id) !== String(ME.id) && !isAdminMode) {
+      body.innerHTML = '<div class="empty">⏳ Bu challenj hali admin tomonidan tasdiqlanmagan.</div>'; return;
+    }
+    var exercises = results[1];
+    var progress = results[2];
+    var myAllSportProgress = results[3];
+    var durationDays = sportBookReadingDays(challenge);
+    var signupMarker = currentSignupCohortMarker(today);
+    var nextMarker = nextUpcomingCohortMarker(today);
+    var mine = progress.find(function (p) { return String(p.user_id) === String(ME.id); });
+    var myCohortMarker = mine ? mine.cohort_start_date : null;
+    var myCohortPhase = myCohortMarker ? sportCohortPhase(myCohortMarker, today, durationDays) : null;
+    var otherActive = myAllSportProgress.find(function (p) {
+      if (String(p.challenge_id) === String(state.sportId)) return false;
+      if (!p.cohort_start_date) return false;
+      var ph = sportCohortPhase(p.cohort_start_date, today, durationDays);
+      return ph !== 'ended';
+    });
+    var membersByMarker = {};
+    progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
+    var allMarkers = nearbyCohortMarkers(today);
+    var activeMarkers = [], endedMarkers = [];
+    allMarkers.forEach(function (m) {
+      var ph = sportCohortPhase(m, today, durationDays);
+      if (ph === null) { if (m === nextMarker) activeMarkers.push(m); return; }
+      if (ph === 'ended') { if (membersByMarker[m]) endedMarkers.push(m); return; }
+      if (membersByMarker[m] || ph === 'signup') activeMarkers.push(m);
+    });
+    activeMarkers.sort(); endedMarkers.sort();
+    var selectedSportMarker = state.selectedSportCohortMarker || myCohortMarker || signupMarker;
+    var viewParticipants = selectedSportMarker ? progress.filter(function (p) { return p.cohort_start_date === selectedSportMarker; }) : [];
+    var viewMarkerPhase = selectedSportMarker ? sportCohortPhase(selectedSportMarker, today, durationDays) : null;
+    var canJoin = !mine && !otherActive && selectedSportMarker && (viewMarkerPhase === 'signup' || selectedSportMarker === nextMarker);
+
+    function schedRowHtml(m) {
+      var count = membersByMarker[m] || 0;
+      var isMine = m === myCohortMarker;
+      var isSel = m === selectedSportMarker;
+      return '<div class="cohort-sched-row' + (isSel ? ' mine' : '') + '" data-sport-view-cohort="' + m + '" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
+        '<div class="cohort-sched-date">Start sanasi: ' + formatDate(m) + (isMine ? ' <span style="color:var(--accent-1);font-weight:600">(siz qatnashayotgan)</span>' : '') + '</div>' +
+        '<div class="cohort-sched-meta">' + count + ' kishi</div>' +
+        '</div>';
+    }
+    var schedHtml = '<div class="cohort-schedule">' + activeMarkers.map(schedRowHtml).join('') + '</div>' +
+      (endedMarkers.length ? '<button id="sportArchiveBtn" class="btn-small" style="margin-top:10px">📦 Arxiv (' + endedMarkers.length + ')</button><div id="sportArchiveList" class="cohort-schedule" style="display:none;margin-top:8px">' + endedMarkers.map(schedRowHtml).join('') + '</div>' : '');
+
+    var exercisesHtml = exercises.map(function (e) {
+      return '<div class="hint" style="margin-bottom:6px"><b>' + escapeHtml(e.name) + '</b>: jami ' + formatNumber(e.total_count) + ' ta · kuniga ' + formatNumber(e.daily_count) + ' ta</div>';
+    }).join('');
+
+    var participantsHtml = viewParticipants.length
+      ? '<div class="readers">' + viewParticipants.map(function (p, i) {
+        var rankMark = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+        var isMe = String(p.user_id) === String(ME.id);
+        return '<div class="reader-row' + (isMe ? ' me' : '') + '" data-go="' + (isMe ? 'profile' : 'userBooks') + '" data-userid="' + p.user_id + '" data-username="' + escapeHtml(p.user_name) + '">' +
+          '<div class="reader-rank">' + rankMark + '</div>' +
+          '<div class="reader-info"><div class="reader-name">' + escapeHtml(p.user_name) + '</div>' +
+          '<div class="reader-note">📅 ' + formatDate(p.started_at) + '</div></div>' +
+          '</div>';
+      }).join('') + '</div>'
+      : '<div class="empty">Hali hech kim qo\'shilmagan.</div>';
+
+    var participantsTab = schedHtml +
+      (canJoin ? '<button id="joinSportBtn" class="btn-primary full" data-marker="' + selectedSportMarker + '" style="margin:10px 0">✅ Qo\'shilish (1 proteincha)</button>' : '') +
+      '<div class="section-label" style="margin-top:12px">' + (selectedSportMarker ? formatDate(selectedSportMarker) + ' guruhi' : 'Qatnashuvchilar') + '</div>' +
+      participantsHtml;
+
+    var myProgressTab = '';
+    if (!mine) {
+      myProgressTab = '<div class="empty">Qo\'shilish uchun "Qatnashuvchilar" bo\'limiga o\'ting.</div>';
+    } else if (myCohortPhase === 'signup' || myCohortPhase === null) {
+      var readingStart = new Date(myCohortMarker + 'T04:00:00').getTime();
+      var msLeft = readingStart - Date.now();
+      var dDays = Math.floor(msLeft / 86400000);
+      var dHours = Math.floor((msLeft % 86400000) / 3600000);
+      var dMins = Math.floor((msLeft % 3600000) / 60000);
+      myProgressTab = '<div class="hint">⏳ Boshlanishiga: ' + dDays + ' kun ' + dHours + ' soat ' + dMins + ' daqiqa qoldi</div>' +
+        '<button id="sportLeaveBtn" class="remove-link" style="margin-top:16px">Guruhdan chiqish</button>';
+    } else if (myCohortPhase === 'reading') {
+      var todayLogs = await sbGet('sport_daily_logs?select=*&challenge_id=eq.' + state.sportId + '&user_id=eq.' + ME.id + '&log_date=eq.' + today);
+      var logsByExercise = {};
+      todayLogs.forEach(function (l) { logsByExercise[l.exercise_id] = l.count_done; });
+      var exerciseInputs = exercises.map(function (e) {
+        return '<div style="margin-bottom:10px"><label style="font-size:13px;color:var(--text-muted)">' + escapeHtml(e.name) + ' (kuniga ' + e.daily_count + ' ta)</label>' +
+          '<input class="input sport-exercise-input" type="number" min="0" max="' + e.daily_count + '" placeholder="Bugun nechta qildingiz?" data-exercise-id="' + e.id + '" data-exercise-name="' + escapeHtml(e.name) + '" value="' + (logsByExercise[e.id] || '') + '" /></div>';
+      }).join('');
+      myProgressTab =
+        '<div class="section-label">Bugungi natijalar</div>' +
+        '<div class="form">' + exerciseInputs +
+        '<label class="file-btn" for="sportPhotoBeforeInput">📷 Before rasm (majburiy)</label>' +
+        '<input type="file" id="sportPhotoBeforeInput" accept="image/*" style="display:none" />' +
+        '<div id="sportPhotoBeforePreview"></div>' +
+        '<label class="file-btn" for="sportPhotoAfterInput" style="margin-top:8px">📷 After rasm (majburiy)</label>' +
+        '<input type="file" id="sportPhotoAfterInput" accept="image/*" style="display:none" />' +
+        '<div id="sportPhotoAfterPreview"></div>' +
+        '<button id="saveSportLogBtn" class="btn-primary full" style="margin-top:12px">Izohlar bo\'limiga yuborish</button>' +
+        '</div>' +
+        '<button id="sportLeaveBtn" class="remove-link" style="margin-top:16px">Guruhdan chiqish</button>';
+    } else {
+      myProgressTab = '<div class="hint">⛔ Challenj yakunlandi.</div>' +
+        '<button id="sportLeaveBtn" class="remove-link" style="margin-top:16px">Guruhdan chiqish</button>';
+    }
+
+    var tabsHtml = '<div class="segment">' +
+      '<button class="seg-btn' + (state.sportDetailTab === 'participants' ? ' active' : '') + '" data-sport-detail-tab="participants">Qatnashuvchilar</button>' +
+      '<button class="seg-btn' + (state.sportDetailTab === 'progress' ? ' active' : '') + '" data-sport-detail-tab="progress">Mening jarayonim</button>' +
+      '</div>';
+
+    body.innerHTML =
+      (challenge.cover_url ? '<img src="' + challenge.cover_url + '" class="cover-hero" />' : '') +
+      '<div class="book-hero-info">' +
+      '<div class="book-hero-title">' + escapeHtml(challenge.title) + '</div>' +
+      '<div class="book-hero-author">' + escapeHtml(challenge.created_by_name) + '</div>' +
+      '<div class="book-hero-sub">' + durationDays + ' kun · ' + exercises.length + ' mashq</div>' +
+      '</div>' +
+      (challenge.description ? '<div class="hint">' + escapeHtml(challenge.description) + '</div>' : '') +
+      exercisesHtml +
+      tabsHtml +
+      '<div id="sportDetailContent">' + (state.sportDetailTab === 'participants' ? participantsTab : myProgressTab) + '</div>';
+
+    document.querySelectorAll('[data-sport-detail-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () { state.sportDetailTab = btn.dataset.sportDetailTab; loadSportDetailBody(); });
+    });
+    document.querySelectorAll('[data-sport-view-cohort]').forEach(function (row) {
+      row.addEventListener('click', function () { state.selectedSportCohortMarker = row.dataset.sportViewCohort; loadSportDetailBody(); });
+    });
+    var archiveBtn = document.getElementById('sportArchiveBtn');
+    if (archiveBtn) archiveBtn.addEventListener('click', function () { var l = document.getElementById('sportArchiveList'); l.style.display = l.style.display === 'none' ? 'block' : 'none'; });
+
+    var joinBtn = document.getElementById('joinSportBtn');
+    if (joinBtn) joinBtn.addEventListener('click', function () {
+      if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
+      var marker = joinBtn.dataset.marker;
+      var isCreator = String(challenge.created_by_id) === String(ME.id);
+      var msg = isCreator ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi 1 ta proteincha. Tasdiqlaysizmi?");
+      confirmAction(msg, async function () {
+        try {
+          var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
+          if (!isCreator && (wallet.proteincha_balance || 0) < 1) { showAlert("Proteinchangiz yetarli emas. Qo'shilish uchun 1 ta proteincha kerak."); return; }
+          var nowIso = new Date().toISOString();
+          await sbPost('sport_progress?on_conflict=challenge_id,user_id', { challenge_id: state.sportId, user_id: ME.id, user_name: ME.name, cohort_start_date: marker, started_at: nowIso }, 'resolution=merge-duplicates,return=representation');
+          if (!isCreator) {
+            await adjustWallet(ME.id, 0, -1);
+            await addToTreasury(0);
+          }
+          try { await sbPost('sport_join_confirmations', { challenge_id: state.sportId, user_id: ME.id, challenge_title: challenge.title, cohort_start_date: marker }); } catch (e) { console.error(e); }
+          state.selectedSportCohortMarker = null;
+          vibrate('light');
+          showAlert("Guruhga qo'shildingiz!");
+          loadSportDetailBody();
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
+    });
+
+    var leaveBtn = document.getElementById('sportLeaveBtn');
+    if (leaveBtn) leaveBtn.addEventListener('click', function () {
+      var willRefund = myCohortPhase === 'signup' || myCohortPhase === null;
+      var isCreator = String(challenge.created_by_id) === String(ME.id);
+      var txt = (willRefund && !isCreator) ? "Guruhdan chiqasizmi? Challenj boshlanmaganligi uchun 1 ta proteinchangiz qaytariladi." : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi.";
+      confirmAction(txt, async function () {
+        try {
+          await sbDelete('sport_progress?challenge_id=eq.' + state.sportId + '&user_id=eq.' + ME.id);
+          if (willRefund && !isCreator) await adjustWallet(ME.id, 0, 1);
+          vibrate('medium');
+          state.view = 'sport'; render();
+        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
+      });
+    });
+
+    var saveSportLogBtn = document.getElementById('saveSportLogBtn');
+    if (saveSportLogBtn) saveSportLogBtn.addEventListener('click', async function () {
+      var beforeFile = document.getElementById('sportPhotoBeforeInput').files[0];
+      var afterFile = document.getElementById('sportPhotoAfterInput').files[0];
+      if (!beforeFile) { showAlert("Before rasm yuklang."); return; }
+      if (!afterFile) { showAlert("After rasm yuklang."); return; }
+      var inputs = document.querySelectorAll('.sport-exercise-input');
+      var hasData = false;
+      inputs.forEach(function (inp) { if (parseInt(inp.value, 10) > 0) hasData = true; });
+      if (!hasData) { showAlert("Kamida bitta mashq uchun son kiriting."); return; }
+      saveSportLogBtn.disabled = true; saveSportLogBtn.textContent = 'Yuklanmoqda...';
+      try {
+        var ext1 = (beforeFile.name.split('.').pop() || 'jpg').toLowerCase();
+        var ext2 = (afterFile.name.split('.').pop() || 'jpg').toLowerCase();
+        var beforeUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'sport/before_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext1, beforeFile);
+        var afterUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'sport/after_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext2, afterFile);
+        for (var inp of inputs) {
+          var val = parseInt(inp.value, 10);
+          if (isNaN(val) || val < 0) continue;
+          var exId = inp.dataset.exerciseId;
+          var exName = inp.dataset.exerciseName;
+          var dailyMax = exercises.find(function (e) { return String(e.id) === String(exId); });
+          var capped = dailyMax ? Math.min(val, dailyMax.daily_count) : val;
+          await sbPost('sport_daily_logs', { challenge_id: state.sportId, user_id: ME.id, user_name: ME.name, cohort_start_date: myCohortMarker, log_date: today, exercise_id: exId, exercise_name: exName, count_done: capped, photo_before_url: beforeUrl, photo_after_url: afterUrl });
+        }
+        await recordReadingActivity();
+        vibrate('light');
+        showAlert("Saqlandi!");
+        loadSportDetailBody();
+      } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); saveSportLogBtn.disabled = false; saveSportLogBtn.textContent = 'Izohlar bo\'limiga yuborish'; }
+    });
+
+    ['sportPhotoBeforeInput', 'sportPhotoAfterInput'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var previewId = id === 'sportPhotoBeforeInput' ? 'sportPhotoBeforePreview' : 'sportPhotoAfterPreview';
+      el.addEventListener('change', function () {
+        var f = this.files[0];
+        var prev = document.getElementById(previewId);
+        if (!f || !prev) return;
+        prev.innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />';
+      });
+    });
+  } catch (e) { body.innerHTML = '<div class="empty">Xatolik yuz berdi.</div>'; console.error(e); }
+}
+
+async function renderAddSport() {
+  setBackButton(true, function () { state.view = 'sport'; render(); });
+  renderShell(
+    '<div class="header"><button class="back" data-go="sport">←</button><div class="h-title">Yangi sport challenj</div></div>' +
+    '<div class="form" style="padding:16px">' +
+    '<input id="sportTitle" class="input" placeholder="Challenj nomi (shart)" />' +
+    '<textarea id="sportDesc" class="input" rows="2" placeholder="Tavsif (ixtiyoriy)"></textarea>' +
+    '<label class="file-btn" for="sportCoverInput">📷 Rasm yuklash</label>' +
+    '<input type="file" id="sportCoverInput" accept="image/*" style="display:none" />' +
+    '<div id="sportCoverPreview"></div>' +
+    '<input id="sportDuration" class="input" type="number" min="1" max="30" placeholder="Necha kunlik challenj? (masalan: 5)" />' +
+    '<div class="section-label" style="margin-top:16px">Mashqlar</div>' +
+    '<div id="sportExercisesList"></div>' +
+    '<button id="addExerciseBtn" class="btn-small" style="margin-top:8px">+ Mashq qo\'shish</button>' +
+    '<button id="createSportBtn" class="btn-primary full" style="margin-top:16px">Yaratish</button>' +
+    '</div>'
+  );
+  var exercises = [];
+  function renderExercises() {
+    var el = document.getElementById('sportExercisesList');
+    el.innerHTML = exercises.map(function (e, i) {
+      return '<div style="background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px">' +
+        '<input class="input ex-name" type="text" placeholder="Mashq nomi (masalan: Otjimani)" value="' + escapeHtml(e.name) + '" data-idx="' + i + '" />' +
+        '<div style="display:flex;gap:8px">' +
+        '<input class="input ex-total" type="number" min="1" placeholder="Jami soni" value="' + (e.total || '') + '" data-idx="' + i + '" style="flex:1" />' +
+        '<input class="input ex-daily" type="number" min="1" placeholder="Kuniga" value="' + (e.daily || '') + '" data-idx="' + i + '" style="flex:1" />' +
+        '</div>' +
+        '<button class="remove-link" data-remove-ex="' + i + '">O\'chirish</button>' +
+        '</div>';
+    }).join('') || '<div class="empty" style="font-size:13px">Hali mashq yo\'q</div>';
+    el.querySelectorAll('.ex-name').forEach(function (inp) { inp.addEventListener('input', function () { exercises[inp.dataset.idx].name = inp.value; }); });
+    el.querySelectorAll('.ex-total').forEach(function (inp) { inp.addEventListener('input', function () { exercises[inp.dataset.idx].total = parseInt(inp.value, 10) || 0; }); });
+    el.querySelectorAll('.ex-daily').forEach(function (inp) { inp.addEventListener('input', function () { exercises[inp.dataset.idx].daily = parseInt(inp.value, 10) || 0; }); });
+    el.querySelectorAll('[data-remove-ex]').forEach(function (btn) { btn.addEventListener('click', function () { exercises.splice(parseInt(btn.dataset.removeEx, 10), 1); renderExercises(); }); });
+  }
+  renderExercises();
+  document.getElementById('addExerciseBtn').addEventListener('click', function () { exercises.push({ name: '', total: 0, daily: 0 }); renderExercises(); });
+  document.getElementById('sportCoverInput').addEventListener('change', function () {
+    var f = this.files[0];
+    if (!f) return;
+    document.getElementById('sportCoverPreview').innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />';
+  });
+  document.getElementById('createSportBtn').addEventListener('click', async function () {
+    var title = document.getElementById('sportTitle').value.trim();
+    if (!title) { showAlert("Challenj nomini kiriting."); return; }
+    var duration = parseInt(document.getElementById('sportDuration').value, 10);
+    if (!duration || duration < 1) { showAlert("Kunlik muddat kiriting."); return; }
+    if (!exercises.length) { showAlert("Kamida bitta mashq qo'shing."); return; }
+    for (var e of exercises) {
+      if (!e.name || !e.total || !e.daily) { showAlert("Barcha mashqlar uchun nom, jami va kunlik sonni kiriting."); return; }
+    }
+    var myActive = await sbGet('sport_progress?select=challenge_id,cohort_start_date&user_id=eq.' + ME.id);
+    var todayStr = cohortTodayStr();
+    for (var p of myActive) {
+      var ch = await sbGet('sport_challenges?select=duration_days&id=eq.' + p.challenge_id);
+      if (!ch[0]) continue;
+      var ph = sportCohortPhase(p.cohort_start_date, todayStr, ch[0].duration_days);
+      if (ph && ph !== 'ended') { showAlert("Sizning faol sport challenjingiz bor. Yangi yaratish uchun avvalgisi tugashini kuting."); return; }
+    }
+    var btn = this; btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+    try {
+      var coverUrl = null;
+      var coverFile = document.getElementById('sportCoverInput').files[0];
+      if (coverFile) {
+        var ext = (coverFile.name.split('.').pop() || 'jpg').toLowerCase();
+        coverUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'sport/covers/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, coverFile);
+      }
+      var desc = document.getElementById('sportDesc').value.trim();
+      var created = await sbPost('sport_challenges', { title: title, description: desc || null, cover_url: coverUrl, duration_days: duration, created_by_id: ME.id, created_by_name: ME.name, approved: false });
+      var cid = created[0].id;
+      for (var i = 0; i < exercises.length; i++) {
+        await sbPost('sport_exercises', { challenge_id: cid, name: exercises[i].name, total_count: exercises[i].total, daily_count: exercises[i].daily, sort_order: i });
+      }
+      var marker = currentSignupCohortMarker(cohortTodayStr());
+      if (marker) await sbPost('sport_progress', { challenge_id: cid, user_id: ME.id, user_name: ME.name, cohort_start_date: marker });
+      vibrate('medium');
+      showAlert("Challenj yaratildi! Admin tasdiqlashini kuting.");
+      state.view = 'sport'; render();
+    } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); btn.disabled = false; btn.textContent = 'Yaratish'; }
+  });
+}
+
 // ===== Tez kunda ekrani =====
 function renderComingSoon(icon, title) {
   setBackButton(false);
@@ -2357,6 +2829,8 @@ document.addEventListener('click', function (e) {
     if (_cohortCountdownInterval) { clearInterval(_cohortCountdownInterval); _cohortCountdownInterval = null; }
     if (view === 'bookDetail') { state.bookId = parseInt(goEl.dataset.id, 10); state.detailTab = 'readers'; replyTarget = null; editTarget = null; expandedReplies = {}; noteEditTarget = null; selectedCohortMarker = null; _bdCache = null; }
     if (view === 'userBooks') { state.viewUserId = parseInt(goEl.dataset.userid, 10); state.viewUserName = goEl.dataset.username; }
+    if (view === 'sportDetail') { state.sportId = parseInt(goEl.dataset.sportId, 10); state.sportDetailTab = 'participants'; state.selectedSportCohortMarker = null; }
+    if (view === 'addSport') { state.view = 'addSport'; render(); return; }
     state.view = view;
     render();
     return;
@@ -2370,11 +2844,10 @@ document.addEventListener('click', function (e) {
     var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
     if (startParam && startParam.indexOf('book_') === 0) {
       var bookIdFromLink = parseInt(startParam.slice(5), 10);
-      if (bookIdFromLink) {
-        state.view = 'bookDetail';
-        state.bookId = bookIdFromLink;
-        state.detailTab = 'readers';
-      }
+      if (bookIdFromLink) { state.view = 'bookDetail'; state.bookId = bookIdFromLink; state.detailTab = 'readers'; }
+    } else if (startParam && startParam.indexOf('sport_') === 0) {
+      var sportIdFromLink = parseInt(startParam.slice(6), 10);
+      if (sportIdFromLink) { state.view = 'sportDetail'; state.sportId = sportIdFromLink; state.sportDetailTab = 'participants'; }
     }
   } catch (e) { console.error(e); }
 })();
