@@ -2450,12 +2450,17 @@ function renderFilteredSportList() {
   listEl.innerHTML = items.length ? items.map(function (c) { return sportCard(c); }).join('') : '<div class="empty">Challenj topilmadi.</div>';
 }
 function sportCard(c) {
+  return sportCardWithCount(c, null);
+}
+function sportCardWithCount(c, count) {
   var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
+  var meta = c.duration_days + ' kunlik challenj';
+  if (count !== null) meta += ' · ' + count + ' kishi';
   return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
     '<div class="book-card-row">' + thumb +
     '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
     (c.approved === false ? '<div class="card-meta" style="color:var(--danger)">⏳ Tasdiq kutilmoqda</div>' : '') +
-    '<div class="card-author">' + c.duration_days + ' kunlik challenj</div>' +
+    '<div class="card-author">' + meta + '</div>' +
     '</div></div></div>';
 }
 
@@ -2465,8 +2470,11 @@ async function loadSportTopLists() {
     var results = await Promise.all([
       sbGet('sport_daily_logs?select=user_id,user_name,count_done&order=count_done.desc'),
       sbGet('sport_challenges?select=*&approved=eq.true&order=created_at.desc&limit=5'),
+      sbGet('sport_progress?select=challenge_id,user_id'),
     ]);
-    var logs = results[0]; var challenges = results[1];
+    var logs = results[0]; var challenges = results[1]; var allProgress = results[2];
+    var memberCounts = {};
+    allProgress.forEach(function (p) { memberCounts[p.challenge_id] = (memberCounts[p.challenge_id] || 0) + 1; });
     var userTotals = {};
     logs.forEach(function (l) {
       userTotals[l.user_id] = userTotals[l.user_id] || { name: l.user_name, total: 0 };
@@ -2483,7 +2491,10 @@ async function loadSportTopLists() {
         '<div class="reader-pages">' + formatNumber(u.total) + ' ta</div>' +
         '</div>';
     }).join('') + '</div>' : '<div class="empty">Hali hech kim mashq qilmagan.</div>';
-    var topChallengesHtml = challenges.length ? '<div class="book-list">' + challenges.map(function (c) { return sportCard(c); }).join('') + '</div>' : '<div class="empty">Hali challenj yo\'q.</div>';
+    var topChallengesHtml = challenges.length ? '<div class="book-list">' + challenges.map(function (c) {
+      var count = memberCounts[c.id] || 0;
+      return sportCardWithCount(c, count);
+    }).join('') + '</div>' : '<div class="empty">Hali challenj yo\'q.</div>';
     el.innerHTML =
       '<div class="h-title" style="font-size:16px;margin-bottom:4px">Top 5 sportchi</div>' + topSportsmenHtml +
       '<div class="h-title" style="font-size:16px;margin-top:20px;margin-bottom:10px">Top 5 challenj</div>' + topChallengesHtml;
