@@ -495,6 +495,67 @@ async def check_book_approval_notifications(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_book_approval_notifications xato: {e}")
 
 
+async def check_sport_approval_notifications(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{SB_URL}/rest/v1/sport_approval_notifications",
+                headers=SB_HEADERS,
+                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
+            )
+            for row in r.json():
+                try:
+                    text = f"✅ \"{row['challenge_title']}\" sport challenjingiz admin tomonidan tasdiqlandi va endi ilovada hammaga ko'rinadi!"
+                    await context.bot.send_message(chat_id=row["creator_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Sport approval xabari yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/sport_approval_notifications",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"sent": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"sport_approval belgilanmadi (id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_sport_approval_notifications xato: {e}")
+
+
+async def check_sport_join_confirmations(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{SB_URL}/rest/v1/sport_join_confirmations",
+                headers=SB_HEADERS,
+                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
+            )
+            for row in r.json():
+                try:
+                    share_link = f"https://t.me/{BOT_USERNAME}/app?startapp=sport_{row['challenge_id']}"
+                    text = (
+                        f"✅ {row['cohort_start_date']}da boshlanadigan \"{row['challenge_title']}\" "
+                        f"sport challenjiga qo'shildingiz!\n\n"
+                        f"Do'stlaringizni ham taklif qiling, ulashish uchun havola:\n{share_link}"
+                    )
+                    await context.bot.send_message(chat_id=row["user_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Sport join confirmation yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/sport_join_confirmations",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"sent": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"sport_join_confirmations belgilanmadi (id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_sport_join_confirmations xato: {e}")
+
+
 # ===== Asosiy =====
 # ===== Ilova faylini (index.html) servisga chiqarish =====
 def run_web_server():
@@ -525,6 +586,8 @@ def main():
         application.job_queue.run_repeating(check_join_confirmations, interval=15, first=11)
         application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
         application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
+        application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
+        application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
