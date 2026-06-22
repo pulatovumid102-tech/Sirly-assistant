@@ -2013,7 +2013,7 @@ function renderBookDetailBody() {
     var myPages = mine ? mine.pages_read : 0;
     var totalPages = book.total_pages;
     var readingDays = bookReadingDays(book);
-    var myCohortMarker = mine ? mine.cohort_start_date : null;
+    var myCohortMarker = mine ? String(mine.cohort_start_date).slice(0, 10) : null;
     var myCohortPhase = myCohortMarker ? cohortPhase(myCohortMarker, today, readingDays) : null;
     var signupMarker = currentSignupCohortMarker(today);
     var otherActive = myAllProgress.find(function (p) {
@@ -2025,7 +2025,12 @@ function renderBookDetailBody() {
     var coverHtml = book.cover_url ? '<img src="' + book.cover_url + '" class="cover-hero" />' : '<div class="cover-hero-placeholder">📖</div>';
 
     var membersByMarker = {};
-    progress.forEach(function (p) { if (p.cohort_start_date) membersByMarker[p.cohort_start_date] = (membersByMarker[p.cohort_start_date] || 0) + 1; });
+    progress.forEach(function (p) {
+      if (p.cohort_start_date) {
+        var d = String(p.cohort_start_date).slice(0, 10);
+        membersByMarker[d] = (membersByMarker[d] || 0) + 1;
+      }
+    });
     var allMarkers = nearbyCohortMarkers(today);
     var nextMarker = nextUpcomingCohortMarker(today);
     var activeMarkers = [], endedMarkers = [];
@@ -2038,7 +2043,7 @@ function renderBookDetailBody() {
     activeMarkers.sort();
     endedMarkers.sort();
 
-    var viewMarker = selectedCohortMarker || myCohortMarker || signupMarker;
+    var viewMarker = (selectedCohortMarker || myCohortMarker || signupMarker || '').slice(0, 10) || null;
 
     function schedRowHtml(m) {
       var count = membersByMarker[m] || 0;
@@ -2055,7 +2060,7 @@ function renderBookDetailBody() {
           '<div id="archiveList" class="cohort-schedule" style="display:none;margin-top:8px">' + endedMarkers.map(schedRowHtml).join('') + '</div>'
         : '');
 
-    var viewParticipants = viewMarker ? progress.filter(function (p) { return p.cohort_start_date === viewMarker; }) : [];
+    var viewParticipants = viewMarker ? progress.filter(function (p) { return String(p.cohort_start_date).slice(0, 10) === viewMarker; }) : [];
     var viewMarkerPhase = viewMarker ? cohortPhase(viewMarker, today, readingDays) : null;
     var canJoinViewMarker = !mine && !otherActive && viewMarker && (viewMarkerPhase === 'signup' || viewMarker === nextMarker);
     var joinTopBtnHtml = canJoinViewMarker ? '<button id="joinCohortBtnTop" class="btn-primary full" data-marker="' + viewMarker + '" style="margin-bottom:14px">✅ Ro\'yxatga qo\'shilish (' + formatDate(viewMarker) + ')</button>' : '';
