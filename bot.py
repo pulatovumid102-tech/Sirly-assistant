@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # ===== Sozlamalar =====
 TOKEN = "8500527121:AAF_Z3rqt9ZxbrygkI_DQMgitoO3WzTj5Ss"
 CHAT_ID = -1003914304171
+CHANNEL_IDS = [-1004451061109, -1001644206432]
 
 SB_URL = "https://ubakgpkcemlchpfejmke.supabase.co"
 SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU"
@@ -571,6 +572,201 @@ async def check_sport_join_notifications(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"check_sport_join_notifications xato: {e}")
 
 
+async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
+    """Bugun boshlanayotgan challenj guruhlariga xabar yuborish."""
+    try:
+        today = dt_date.today()
+        async with httpx.AsyncClient(timeout=30) as client:
+            # Kitob challenjlari
+            prog_r = await client.get(
+                f"{SB_URL}/rest/v1/progress",
+                headers=SB_HEADERS,
+                params={"cohort_start_date": f"eq.{today}", "select": "user_id,book_id,cohort_start_date"},
+            )
+            book_progs = prog_r.json()
+            book_ids = list(set(p["book_id"] for p in book_progs))
+            for book_id in book_ids:
+                book_r = await client.get(
+                    f"{SB_URL}/rest/v1/books",
+                    headers=SB_HEADERS,
+                    params={"id": f"eq.{book_id}", "select": "title,total_pages"},
+                )
+                books = book_r.json()
+                if not books:
+                    continue
+                book = books[0]
+                reading_days = -(-book.get("total_pages", 200) // 20)
+                members = [p for p in book_progs if p["book_id"] == book_id]
+                text = (
+                    f"📖 \"{book['title']}\" kitob challenjingiz bugun boshlandi!\n\n"
+                    f"Challenj davomiyligi: {reading_days} kun\n"
+                    f"Kunlik me'yor: 20 bet\n\n"
+                    f"Muvaffaqiyat! 🌱"
+                )
+                for member in members:
+                    try:
+                        await context.bot.send_message(chat_id=member["user_id"], text=text)
+                    except Exception as e:
+                        logger.error(f"Kitob start xabari yuborilmadi (user_id={member['user_id']}): {e}")
+
+            # Sport challenjlari
+            sp_r = await client.get(
+                f"{SB_URL}/rest/v1/sport_progress",
+                headers=SB_HEADERS,
+                params={"cohort_start_date": f"eq.{today}", "select": "user_id,challenge_id"},
+            )
+            sport_progs = sp_r.json()
+            ch_ids = list(set(p["challenge_id"] for p in sport_progs))
+            for ch_id in ch_ids:
+                ch_r = await client.get(
+                    f"{SB_URL}/rest/v1/sport_challenges",
+                    headers=SB_HEADERS,
+                    params={"id": f"eq.{ch_id}", "select": "title,duration_days"},
+                )
+                chs = ch_r.json()
+                if not chs:
+                    continue
+                ch = chs[0]
+                ex_r = await client.get(
+                    f"{SB_URL}/rest/v1/sport_exercises",
+                    headers=SB_HEADERS,
+                    params={"challenge_id": f"eq.{ch_id}", "select": "name,daily_count", "order": "sort_order.asc"},
+                )
+                exercises = ex_r.json()
+                ex_lines = "\n".join([f"💪 {e['name']}: kuniga {e['daily_count']} ta" for e in exercises])
+                members = [p for p in sport_progs if p["challenge_id"] == ch_id]
+                text = (
+                    f"🏃 \"{ch['title']}\" sport challenjingiz bugun boshlandi!\n\n"
+                    f"Challenj davomiyligi: {ch['duration_days']} kun\n\n"
+                    f"{ex_lines}\n\n"
+                    f"Muvaffaqiyat! 🌱"
+                )
+                for member in members:
+                    try:
+                        await context.bot.send_message(chat_id=member["user_id"], text=text)
+                    except Exception as e:
+                        logger.error(f"Sport start xabari yuborilmadi (user_id={member['user_id']}): {e}")
+    except Exception as e:
+        logger.error(f"check_challenge_start xato: {e}")
+
+
+async def send_daily_top(context: ContextTypes.DEFAULT_TYPE):
+    """Har kuni 22:00 UZT (17:00 UTC) da kanalga TOP 3 yuborish."""
+    try:
+        today = dt_date.today()
+        today_str = today.strftime("%d-%B, %Y").replace("January", "yanvar").replace("February", "fevral").replace("March", "mart").replace("April", "aprel").replace("May", "may").replace("June", "iyun").replace("July", "iyul").replace("August", "avgust").replace("September", "sentabr").replace("October", "oktabr").replace("November", "noyabr").replace("December", "dekabr")
+        medals = ["🥇", "🥈", "🥉"]
+        async with httpx.AsyncClient(timeout=30) as client:
+            # ===== KITOB TOP 3 =====
+            book_lines = []
+            prog_r = await client.get(
+                f"{SB_URL}/rest/v1/progress",
+                headers=SB_HEADERS,
+                params={"select": "user_id,user_name,pages_read,book_id,cohort_start_date", "order": "pages_read.desc"},
+            )
+            progs = prog_r.json()
+            # Faqat bugun "reading" holatidagi guruhlar
+            active_progs = []
+            for p in progs:
+                if not p.get("cohort_start_date"):
+                    continue
+                cohort_date = dt_date.fromisoformat(p["cohort_start_date"])
+                diff = (today - cohort_date).days
+                if 0 <= diff < 60:
+                    active_progs.append(p)
+
+            if active_progs:
+                top_book = active_progs[:3]
+                book_r = await client.get(
+                    f"{SB_URL}/rest/v1/books",
+                    headers=SB_HEADERS,
+                    params={"id": f"eq.{active_progs[0]['book_id']}", "select": "title,total_pages"},
+                )
+                book_info = book_r.json()
+                book_title = book_info[0]["title"] if book_info else "Kitob"
+                total_pages = book_info[0]["total_pages"] if book_info else 0
+                cohort_date_str = active_progs[0]["cohort_start_date"]
+                cohort_dt = dt_date.fromisoformat(cohort_date_str)
+                cohort_str = f"{cohort_dt.day}-{['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr'][cohort_dt.month-1]} guruhi"
+                daily_limit = 20
+                for i, p in enumerate(top_book):
+                    book_lines.append(f"{medals[i]} {p['user_name']} — {p['pages_read']}/{daily_limit} bet")
+
+            # ===== SPORT TOP 3 =====
+            sport_lines = []
+            sdl_r = await client.get(
+                f"{SB_URL}/rest/v1/sport_daily_logs",
+                headers=SB_HEADERS,
+                params={"log_date": f"eq.{today}", "select": "user_id,user_name,count_done,challenge_id,cohort_start_date"},
+            )
+            sport_logs = sdl_r.json()
+            user_totals = {}
+            ch_id_day = None
+            cohort_start_day = None
+            for l in sport_logs:
+                uid = l["user_id"]
+                if uid not in user_totals:
+                    user_totals[uid] = {"name": l["user_name"], "total": 0, "ex_count": 0, "challenge_id": l["challenge_id"], "cohort_start_date": l["cohort_start_date"]}
+                user_totals[uid]["total"] += l["count_done"]
+                user_totals[uid]["ex_count"] += 1
+                ch_id_day = l["challenge_id"]
+                cohort_start_day = l["cohort_start_date"]
+
+            top_sport = sorted(user_totals.values(), key=lambda x: x["total"], reverse=True)[:3]
+            ch_title = "Challenj"
+            ch_cohort_str = ""
+            if ch_id_day:
+                ch_r = await client.get(
+                    f"{SB_URL}/rest/v1/sport_challenges",
+                    headers=SB_HEADERS,
+                    params={"id": f"eq.{ch_id_day}", "select": "title"},
+                )
+                ch_list = ch_r.json()
+                if ch_list:
+                    ch_title = ch_list[0]["title"]
+                if cohort_start_day:
+                    cdt = dt_date.fromisoformat(cohort_start_day)
+                    ch_cohort_str = f"{cdt.day}-{['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr'][cdt.month-1]} guruhi"
+                ex_r = await client.get(
+                    f"{SB_URL}/rest/v1/sport_exercises",
+                    headers=SB_HEADERS,
+                    params={"challenge_id": f"eq.{ch_id_day}", "select": "id"},
+                )
+                total_ex_count = len(ex_r.json())
+                for i, u in enumerate(top_sport):
+                    unique_ex = min(u["ex_count"], total_ex_count)
+                    sport_lines.append(f"{medals[i]} {u['name']} — {unique_ex}/{total_ex_count} mashq · jami {u['total']} ta")
+
+            # ===== XABAR YARATISH =====
+            if not book_lines and not sport_lines:
+                return
+
+            msg_parts = [f"📅 {today_str}\n"]
+            if book_lines:
+                msg_parts.append(f"📚 Kitob challenjida bugungi TOP 3")
+                if active_progs:
+                    msg_parts.append(f"📖 \"{book_title}\" — {cohort_str}")
+                msg_parts.extend(book_lines)
+                msg_parts.append("")
+            if sport_lines:
+                msg_parts.append(f"🏃 Sport challenjida bugungi TOP 3")
+                if ch_id_day:
+                    msg_parts.append(f"💪 \"{ch_title}\" — {ch_cohort_str}")
+                msg_parts.extend(sport_lines)
+                msg_parts.append("")
+            msg_parts.append("🌱 Neyra — o'zingni rivojlantir")
+            msg_parts.append(f"t.me/{BOT_USERNAME}/app")
+
+            text = "\n".join(msg_parts)
+            for channel_id in CHANNEL_IDS:
+                try:
+                    await context.bot.send_message(chat_id=channel_id, text=text)
+                except Exception as e:
+                    logger.error(f"Kanalga xabar yuborilmadi (id={channel_id}): {e}")
+    except Exception as e:
+        logger.error(f"send_daily_top xato: {e}")
+
+
 async def check_sport_join_confirmations(context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -638,8 +834,12 @@ def main():
         application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
         application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
         application.job_queue.run_daily(
-            send_daily_motivation,
-            time=dt_time(5, 0, 0, tzinfo=timezone.utc),
+            check_challenge_start,
+            time=dt_time(23, 0, 0, tzinfo=timezone.utc),  # 04:00 UZT
+        )
+        application.job_queue.run_daily(
+            send_daily_top,
+            time=dt_time(17, 0, 0, tzinfo=timezone.utc),  # 22:00 UZT
         )
     else:
         logger.warning(
