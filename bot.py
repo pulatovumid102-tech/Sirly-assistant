@@ -505,7 +505,11 @@ async def check_sport_approval_notifications(context: ContextTypes.DEFAULT_TYPE)
             )
             for row in r.json():
                 try:
-                    text = f"✅ \"{row['challenge_title']}\" sport challenjingiz admin tomonidan tasdiqlandi va endi ilovada hammaga ko'rinadi!"
+                    share_link = f"https://t.me/{BOT_USERNAME}/app?startapp=sport_{row['challenge_id']}"
+                    text = (
+                        f"✅ \"{row['challenge_title']}\" sport challenjingiz admin tomonidan tasdiqlandi va endi ilovada hammaga ko'rinadi!\n\n"
+                        f"Do'stlaringizni taklif qiling:\n{share_link}"
+                    )
                     await context.bot.send_message(chat_id=row["creator_id"], text=text)
                 except Exception as e:
                     logger.error(f"Sport approval xabari yuborilmadi (id={row.get('id')}): {e}")
@@ -521,6 +525,50 @@ async def check_sport_approval_notifications(context: ContextTypes.DEFAULT_TYPE)
                         logger.error(f"sport_approval belgilanmadi (id={row.get('id')}): {e}")
     except Exception as e:
         logger.error(f"check_sport_approval_notifications xato: {e}")
+
+
+async def check_sport_join_notifications(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{SB_URL}/rest/v1/sport_join_notifications",
+                headers=SB_HEADERS,
+                params={"sent": "eq.false", "select": "*", "order": "created_at.asc"},
+            )
+            for row in r.json():
+                try:
+                    total_r = await client.get(
+                        f"{SB_URL}/rest/v1/sport_progress",
+                        headers=SB_HEADERS,
+                        params={"challenge_id": f"eq.{row['challenge_id']}", "cohort_start_date": f"eq.{row['cohort_start_date']}", "select": "user_id"},
+                    )
+                    total = len(total_r.json())
+                    ch_r = await client.get(
+                        f"{SB_URL}/rest/v1/sport_challenges",
+                        headers=SB_HEADERS,
+                        params={"id": f"eq.{row['challenge_id']}", "select": "title"},
+                    )
+                    ch_list = ch_r.json()
+                    title = ch_list[0]["title"] if ch_list else "Challenj"
+                    text = (
+                        f"📈 {row['cohort_start_date']}da boshlanadigan \"{title}\" sport "
+                        f"challenjiga yana 1 kishi qo'shildi, jami {total} kishi."
+                    )
+                    await context.bot.send_message(chat_id=row["creator_id"], text=text)
+                except Exception as e:
+                    logger.error(f"Sport join notification yuborilmadi (id={row.get('id')}): {e}")
+                finally:
+                    try:
+                        await client.patch(
+                            f"{SB_URL}/rest/v1/sport_join_notifications",
+                            headers=SB_HEADERS,
+                            params={"id": f"eq.{row['id']}"},
+                            json={"sent": True},
+                        )
+                    except Exception as e:
+                        logger.error(f"sport_join_notifications belgilanmadi (id={row.get('id')}): {e}")
+    except Exception as e:
+        logger.error(f"check_sport_join_notifications xato: {e}")
 
 
 async def check_sport_join_confirmations(context: ContextTypes.DEFAULT_TYPE):
@@ -588,6 +636,7 @@ def main():
         application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
         application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
         application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
+        application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
         application.job_queue.run_daily(
             send_daily_motivation,
             time=dt_time(5, 0, 0, tzinfo=timezone.utc),
