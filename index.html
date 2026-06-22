@@ -2776,6 +2776,9 @@ async function loadSportDetailBody() {
             await addToTreasury(0);
           }
           try { await sbPost('sport_join_confirmations', { challenge_id: state.sportId, user_id: ME.id, challenge_title: challenge.title, cohort_start_date: marker }); } catch (e) { console.error(e); }
+          if (!isCreator) {
+            try { await sbPost('sport_join_notifications', { challenge_id: state.sportId, creator_id: challenge.created_by_id, cohort_start_date: marker }); } catch (e) { console.error(e); }
+          }
           state.selectedSportCohortMarker = null;
           vibrate('light');
           showAlert("Guruhga qo'shildingiz!");
