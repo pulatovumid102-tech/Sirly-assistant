@@ -648,7 +648,10 @@ async def check_sport_join_notifications(context: ContextTypes.DEFAULT_TYPE):
 async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
     """Bugun boshlanayotgan challenj guruhlariga xabar yuborish."""
     try:
-        today = dt_date.today()
+        from datetime import timezone as tz
+        import pytz
+        uzt = pytz.timezone('Asia/Tashkent')
+        today = datetime.now(uzt).date()
         months_uz = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
         today_str = f"{today.day}-{months_uz[today.month-1]}, {today.year}"
         async with httpx.AsyncClient(timeout=30) as client:
@@ -756,8 +759,11 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
 async def send_daily_top(context: ContextTypes.DEFAULT_TYPE):
     """Har kuni 22:00 UZT (17:00 UTC) da kanalga TOP 3 yuborish."""
     try:
-        today = dt_date.today()
-        today_str = today.strftime("%d-%B, %Y").replace("January", "yanvar").replace("February", "fevral").replace("March", "mart").replace("April", "aprel").replace("May", "may").replace("June", "iyun").replace("July", "iyul").replace("August", "avgust").replace("September", "sentabr").replace("October", "oktabr").replace("November", "noyabr").replace("December", "dekabr")
+        import pytz
+        uzt = pytz.timezone('Asia/Tashkent')
+        today = datetime.now(uzt).date()
+        months_uz = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+        today_str = f"{today.day}-{months_uz[today.month-1]}, {today.year}"
         medals = ["🥇", "🥈", "🥉"]
         async with httpx.AsyncClient(timeout=30) as client:
             # ===== KITOB TOP 3 =====
