@@ -1138,7 +1138,7 @@ async function loadWalletBody() {
     });
 
     var withdrawBtn = document.getElementById('withdrawBtn');
-    withdrawBtn.addEventListener('click', function () {
+    if (withdrawBtn) withdrawBtn.addEventListener('click', function () {
       var showing = withdrawFormEl.style.display !== 'none';
       withdrawFormEl.style.display = showing ? 'none' : 'block';
       buyForm.style.display = 'none';
