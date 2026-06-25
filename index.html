@@ -2511,7 +2511,6 @@ function renderBookDetailBody() {
               return;
             }
             try {
-        await recordReadingActivity();
         await recordSportActivity();
               var finalPages = requestedPages;
               await sbPost('progress?on_conflict=book_id,user_id', {
