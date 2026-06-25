@@ -878,7 +878,7 @@ function bookCard(b, pct, pagesRead, readerCount) {
 }
 
 // ===== Profil (o'zim va boshqalar uchun umumiy) =====
-function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge) {
+function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge, sportMaxByChallenge) {
   var medalCount = medals.length;
   var litSlots = Math.min(medalCount, 5);
   var bookMedalHtml = '<div class="section-label">📚 Kitob medallari</div><div class="medal-slots-row">';
@@ -910,10 +910,9 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
         var c = p.sport_challenges;
         if (!c) return '';
         var totalEx = (sportTotalByChallenge || {})[c.id] || 0;
-        var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
-        var durationDays = c.duration_days || 5;
-        var maxTotal = durationDays * 50;
+        var maxTotal = (sportMaxByChallenge || {})[c.id] || 0;
         var pct = maxTotal > 0 ? Math.min(100, Math.round((totalEx / maxTotal) * 100)) : 0;
+        var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
         return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
           '<div class="book-card-row">' + thumb +
           '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
@@ -942,14 +941,18 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       sbGet('progress?select=*,books(*)&user_id=eq.' + userId + '&order=updated_at.desc'),
       sbGet('sport_progress?select=*,sport_challenges(*)&user_id=eq.' + userId),
       sbGet('sport_daily_logs?select=challenge_id,count_done&user_id=eq.' + userId),
+      sbGet('sport_exercises?select=challenge_id,total_count'),
     ]);
     var finishers = profileResults[0];
     var medals = finishers.filter(function (f) { return f.medal === 1 || f.medal === 2; });
     var progRows = profileResults[1];
     var sportProgRows = profileResults[2];
     var sportDailyLogs = profileResults[3] || [];
+    var sportExercises = profileResults[4] || [];
     var sportTotalByChallenge = {};
     sportDailyLogs.forEach(function (l) { sportTotalByChallenge[l.challenge_id] = (sportTotalByChallenge[l.challenge_id] || 0) + l.count_done; });
+    var sportMaxByChallenge = {};
+    sportExercises.forEach(function (e) { sportMaxByChallenge[e.challenge_id] = (sportMaxByChallenge[e.challenge_id] || 0) + e.total_count; });
     var todayStr = cohortTodayStr();
     var finishedSportCount = sportProgRows.filter(function (p) {
       if (!p.sport_challenges) return false;
@@ -993,7 +996,7 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
         break;
       }
     }
-    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge);
+    el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge, sportMaxByChallenge);
     if (isOwn) {
       document.getElementById('goWalletBtn').addEventListener('click', function () {
         state.view = 'wallet';
