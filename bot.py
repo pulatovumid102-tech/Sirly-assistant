@@ -331,7 +331,7 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                 sorted_users = sorted(user_totals.items(), key=lambda x: x[1], reverse=True)
 
                 sport_tracker_r = await client.get(
-                    f"{SB_URL}/rest/v1/rank_tracker",
+                    f"{SB_URL}/rest/v1/sport_rank_tracker",
                     headers=SB_HEADERS,
                     params={
                         "challenge_id": f"eq.{ch_id}",
@@ -363,18 +363,17 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                             logger.error(f"Sport rank xabari yuborilmadi (user_id={uid}): {e}")
                     try:
                         await client.post(
-                            f"{SB_URL}/rest/v1/rank_tracker?on_conflict=challenge_id,user_id,cohort_start_date",
+                            f"{SB_URL}/rest/v1/sport_rank_tracker?on_conflict=challenge_id,user_id,cohort_start_date",
                             headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"},
                             json={
                                 "challenge_id": ch_id,
-                                "book_id": 0,
                                 "user_id": uid,
                                 "cohort_start_date": cohort_str,
                                 "last_rank": current_rank,
                             },
                         )
                     except Exception as e:
-                        logger.error(f"sport rank_tracker yangilanmadi (ch_id={ch_id}, user_id={uid}): {e}")
+                        logger.error(f"sport_rank_tracker yangilanmadi (ch_id={ch_id}, user_id={uid}): {e}")
 
     except Exception as e:
         logger.error(f"check_rank_drops xato: {e}")
