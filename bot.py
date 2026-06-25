@@ -266,9 +266,17 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                     current_rank = idx + 1
                     uid = p["user_id"]
                     prev_rank = tracker_map.get(uid)
-                    if prev_rank is not None and current_rank != prev_rank:
+                    if prev_rank is None:
+                        # Birinchi marta
+                        try:
+                            await context.bot.send_message(
+                                chat_id=uid,
+                                text=f"🏅 \"{book['title']}\" guruhida siz {current_rank}-o'rindasiz!",
+                            )
+                        except Exception as e:
+                            logger.error(f"Kitob rank xabari yuborilmadi (user_id={uid}): {e}")
+                    elif current_rank != prev_rank:
                         arrow = "📈" if current_rank < prev_rank else "📉"
-                        direction = "ko'tarildingiz" if current_rank < prev_rank else "tushdingiz"
                         try:
                             await context.bot.send_message(
                                 chat_id=uid,
@@ -336,7 +344,15 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                 for idx, (uid, total) in enumerate(sorted_users):
                     current_rank = idx + 1
                     prev_rank = sport_tracker_map.get(uid)
-                    if prev_rank is not None and current_rank != prev_rank:
+                    if prev_rank is None:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=uid,
+                                text=f"🏅 \"{ch['title']}\" sport guruhida siz {current_rank}-o'rindasiz!",
+                            )
+                        except Exception as e:
+                            logger.error(f"Sport rank xabari yuborilmadi (user_id={uid}): {e}")
+                    elif current_rank != prev_rank:
                         arrow = "📈" if current_rank < prev_rank else "📉"
                         try:
                             await context.bot.send_message(
