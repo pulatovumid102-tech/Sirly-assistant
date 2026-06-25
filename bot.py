@@ -364,9 +364,10 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                     try:
                         await client.post(
                             f"{SB_URL}/rest/v1/rank_tracker?on_conflict=challenge_id,user_id,cohort_start_date",
-                            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
+                            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"},
                             json={
                                 "challenge_id": ch_id,
+                                "book_id": 0,
                                 "user_id": uid,
                                 "cohort_start_date": cohort_str,
                                 "last_rank": current_rank,
