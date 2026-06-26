@@ -262,12 +262,19 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                 )
                 tracker_map = {row["user_id"]: row["last_rank"] for row in tracker_r.json()}
 
+                # TOP 3 o'zgarganini aniqlash
+                old_top3 = set(uid for uid, rank in tracker_map.items() if rank <= 3)
+                new_top3 = set(p["user_id"] for i, p in enumerate(members) if i < 3)
+                top3_changed = old_top3 != new_top3 or any(
+                    tracker_map.get(p["user_id"]) != i + 1
+                    for i, p in enumerate(members[:3])
+                )
+
                 for idx, p in enumerate(members):
                     current_rank = idx + 1
                     uid = p["user_id"]
                     prev_rank = tracker_map.get(uid)
                     if prev_rank is None:
-                        # Birinchi marta
                         try:
                             await context.bot.send_message(
                                 chat_id=uid,
@@ -297,6 +304,26 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                         )
                     except Exception as e:
                         logger.error(f"rank_tracker yangilanmadi (book_id={book_id}, user_id={uid}): {e}")
+
+                # TOP 3 o'zgardi — kanalga xabar
+                if top3_changed and len(members) >= 1:
+                    medals = ["🥇", "🥈", "🥉"]
+                    months_uz = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+                    today_str = f"{today.day}-{months_uz[today.month-1]}, {today.year}"
+                    lines = []
+                    for i, p in enumerate(members[:3]):
+                        lines.append(f"{medals[i]} {p['user_name']} — {p['pages_read']} bet")
+                    channel_text = (
+                        f"🏆 \"{book['title']}\" TOP 3 yangilandi!\n"
+                        f"📅 {today_str}\n\n"
+                        + "\n".join(lines) +
+                        f"\n\n🌱 Neyra — o'zingni rivojlantir\nt.me/{BOT_USERNAME}/app"
+                    )
+                    for channel_id in CHANNEL_IDS:
+                        try:
+                            await context.bot.send_message(chat_id=channel_id, text=channel_text)
+                        except Exception as e:
+                            logger.error(f"Kanalga kitob TOP3 xabari yuborilmadi: {e}")
 
             # ===== SPORT REYTINGI =====
             sdl_r = await client.get(
@@ -341,6 +368,13 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                 )
                 sport_tracker_map = {row["user_id"]: row["last_rank"] for row in sport_tracker_r.json()}
 
+                old_sport_top3 = set(uid for uid, rank in sport_tracker_map.items() if rank <= 3)
+                new_sport_top3 = set(uid for i, (uid, _) in enumerate(sorted_users) if i < 3)
+                sport_top3_changed = old_sport_top3 != new_sport_top3 or any(
+                    sport_tracker_map.get(uid) != i + 1
+                    for i, (uid, _) in enumerate(sorted_users[:3])
+                )
+
                 for idx, (uid, total) in enumerate(sorted_users):
                     current_rank = idx + 1
                     prev_rank = sport_tracker_map.get(uid)
@@ -374,6 +408,35 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                         )
                     except Exception as e:
                         logger.error(f"sport_rank_tracker yangilanmadi (ch_id={ch_id}, user_id={uid}): {e}")
+
+                # Sport TOP 3 o'zgardi — kanalga xabar
+                if sport_top3_changed and len(sorted_users) >= 1:
+                    medals = ["🥇", "🥈", "🥉"]
+                    months_uz = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+                    today_str = f"{today.day}-{months_uz[today.month-1]}, {today.year}"
+                    lines = []
+                    for i, (uid, total) in enumerate(sorted_users[:3]):
+                        name = sport_groups[(ch_id, cohort_str)]  # user name kerak
+                        # user_name ni sport_daily_logs dan topamiz
+                        u_name_r = await client.get(
+                            f"{SB_URL}/rest/v1/sport_daily_logs",
+                            headers=SB_HEADERS,
+                            params={"challenge_id": f"eq.{ch_id}", "user_id": f"eq.{uid}", "select": "user_name", "limit": "1"},
+                        )
+                        u_name_list = u_name_r.json()
+                        u_name = u_name_list[0]["user_name"] if u_name_list else str(uid)
+                        lines.append(f"{medals[i]} {u_name} — {total} ta")
+                    channel_text = (
+                        f"🏆 \"{ch['title']}\" sport TOP 3 yangilandi!\n"
+                        f"📅 {today_str}\n\n"
+                        + "\n".join(lines) +
+                        f"\n\n🌱 Neyra — o'zingni rivojlantir\nt.me/{BOT_USERNAME}/app"
+                    )
+                    for channel_id in CHANNEL_IDS:
+                        try:
+                            await context.bot.send_message(chat_id=channel_id, text=channel_text)
+                        except Exception as e:
+                            logger.error(f"Kanalga sport TOP3 xabari yuborilmadi: {e}")
 
     except Exception as e:
         logger.error(f"check_rank_drops xato: {e}")
