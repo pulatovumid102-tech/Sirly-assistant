@@ -923,14 +923,12 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
     : '<div class="empty">Hali sport challenj yo\'q.</div>';
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
-    '<div class="profile-stat-box"><div class="profile-stat-num">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label">tugatilgan sport</div></div>' +
     '</div>' +
     dailyTargetHtml +
     (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
-    bookMedalHtml + sportMedalHtml +
-    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml +
-    '<div class="section-label" style="margin-top:20px">Sport challenjlari</div>' + sportBooksHtml;
+    bookMedalHtml +
+    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml;
 }
 
 async function loadProfileInto(elId, userId, userName, isOwn) {
