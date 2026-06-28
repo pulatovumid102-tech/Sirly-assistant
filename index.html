@@ -597,7 +597,7 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
+  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('profile', '👤', 'Profil');
   var fabTarget = opts.fabAction === 'addSport' ? 'addSport' : 'addBook';
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
@@ -1071,7 +1071,6 @@ async function loadWalletBody() {
     el.innerHTML =
       '<div class="profile-stats">' +
       '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:18px">' + formatNumber(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
-      '<div class="profile-stat-box"><div class="profile-stat-num">' + (wallet.proteincha_balance || 0) + '</div><div class="profile-stat-label">proteincha</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
       '<button id="buyBtn" class="btn-small" style="flex:1">💰 Sotib olish</button>' +
@@ -1089,8 +1088,8 @@ async function loadWalletBody() {
       withdrawFormEl.style.display = 'none';
       if (!showing) {
         buyForm.innerHTML =
-          '<select id="buyCurrency" class="input">' +
-          '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
+          '<select id="buyCurrency" class="input" style="display:none">' +
+          '<option value="qovun">Qovuncha</option>' +
           '</select>' +
           '<input id="buyAmount" class="input" type="number" min="1" placeholder="Nechta sotib olmoqchisiz?" style="margin-top:8px" />' +
           '<div id="buyAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
