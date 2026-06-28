@@ -325,8 +325,10 @@ async def check_rank_drops(context: ContextTypes.DEFAULT_TYPE):
                         except Exception as e:
                             logger.error(f"Kanalga kitob TOP3 xabari yuborilmadi: {e}")
 
-            # ===== SPORT REYTINGI =====
-            sdl_r = await client.get(
+            # ===== SPORT REYTINGI ===== (vaqtincha to'xtatilgan)
+            pass
+            if False:
+              sdl_r = await client.get(
                 f"{SB_URL}/rest/v1/sport_daily_logs",
                 headers=SB_HEADERS,
                 params={"select": "challenge_id,user_id,count_done,cohort_start_date"},
@@ -780,8 +782,9 @@ async def check_challenge_start(context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logger.error(f"Kanalga kitob start xabari yuborilmadi (id={channel_id}): {e}")
 
-            # Sport challenjlari
-            sp_r = await client.get(
+            # Sport challenjlari (vaqtincha to'xtatilgan)
+            if False:
+              sp_r = await client.get(
                 f"{SB_URL}/rest/v1/sport_progress",
                 headers=SB_HEADERS,
                 params={"cohort_start_date": f"eq.{today}", "select": "user_id,challenge_id"},
@@ -1018,9 +1021,10 @@ def main():
         application.job_queue.run_repeating(check_join_confirmations, interval=15, first=11)
         application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
         application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
-        application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
-        application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
-        application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
+        # Sport moduli vaqtincha to'xtatilgan
+        # application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
+        # application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
+        # application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
         application.job_queue.run_daily(
             check_challenge_start,
             time=dt_time(23, 0, 0, tzinfo=timezone.utc),  # 04:00 UZT
