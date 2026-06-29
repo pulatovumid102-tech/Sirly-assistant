@@ -35,7 +35,7 @@ body{
   min-height:100vh;
   -webkit-font-smoothing:antialiased;
 }
-#app{ min-height:100vh; padding-bottom:120px; }
+#app{ min-height:100vh; padding-bottom:120px; max-width:480px; margin:0 auto; }
 .screen{ padding:20px 16px 12px; }
 
 .header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; min-height:38px; }
@@ -1036,11 +1036,44 @@ async function loadProfileStatus() {
     var lastActive = null;
     if (bookDate && sportDate) lastActive = bookDate > sportDate ? bookDate : sportDate;
     else lastActive = bookDate || sportDate;
-    if (!lastActive) { el.innerHTML = '💀 O\'ldi'; return; }
-    var diffDays = Math.floor((new Date(today) - new Date(lastActive)) / 86400000);
-    if (diffDays === 0) el.innerHTML = '🔥 Faol';
-    else if (diffDays >= 3) el.innerHTML = '💀 O\'ldi';
-    else el.innerHTML = '';
+    var diffDays = lastActive ? Math.floor((new Date(today) - new Date(lastActive)) / 86400000) : 999;
+
+    var statusText, statusColor, needleAngle;
+    if (diffDays === 0) {
+      statusText = 'Faol'; statusColor = '#4ade80'; needleAngle = 0;
+    } else if (diffDays === 1) {
+      statusText = 'Sustlashdi'; statusColor = '#facc15'; needleAngle = -45;
+    } else if (diffDays === 2) {
+      statusText = 'Past'; statusColor = '#fb923c'; needleAngle = -90;
+    } else {
+      statusText = "O'ldi"; statusColor = '#f87171'; needleAngle = -130;
+    }
+
+    // Speedometer SVG
+    var r = 28, cx = 36, cy = 36;
+    var arcStart = -210, arcEnd = -30;
+    function polarToXY(angleDeg, radius) {
+      var rad = (angleDeg * Math.PI) / 180;
+      return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+    }
+    var s1 = polarToXY(arcStart, r), e1 = polarToXY(arcEnd, r);
+    var arcPath = 'M ' + s1.x + ' ' + s1.y + ' A ' + r + ' ' + r + ' 0 1 1 ' + e1.x + ' ' + e1.y;
+    var nAngle = -120 + (needleAngle + 130) * (240 / 130);
+    var needleTip = polarToXY(nAngle, r - 6);
+    var needleBase1 = polarToXY(nAngle + 90, 4);
+    var needleBase2 = polarToXY(nAngle - 90, 4);
+    var svg = '<svg viewBox="0 0 72 50" xmlns="http://www.w3.org/2000/svg" style="width:64px;height:45px">' +
+      '<path d="' + arcPath + '" fill="none" stroke="#3a4a3a" stroke-width="5" stroke-linecap="round"/>' +
+      '<path d="' + arcPath + '" fill="none" stroke="' + statusColor + '" stroke-width="5" stroke-linecap="round" stroke-dasharray="' + (180 * (diffDays === 0 ? 1 : diffDays === 1 ? 0.65 : diffDays === 2 ? 0.35 : 0.05)) + ' 999"/>' +
+      '<polygon points="' + needleTip.x + ',' + needleTip.y + ' ' + needleBase1.x + ',' + needleBase1.y + ' ' + needleBase2.x + ',' + needleBase2.y + '" fill="' + statusColor + '"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="3.5" fill="var(--bg)" stroke="' + statusColor + '" stroke-width="1.5"/>' +
+      '</svg>';
+
+    el.innerHTML = '<div style="display:inline-flex;align-items:center;gap:10px;background:var(--surface);border-radius:14px;padding:8px 14px;margin-top:8px">' +
+      svg +
+      '<div><div style="font-size:11px;color:var(--text-muted)">Faollik</div>' +
+      '<div style="font-size:15px;font-weight:700;color:' + statusColor + '">' + statusText + '</div></div>' +
+      '</div>';
   } catch (e) { el.innerHTML = ''; }
 }
 
