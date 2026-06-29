@@ -597,7 +597,7 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
+  var tabs = tabBtn('profile', '📊', 'Dashboard') + tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport');
   var fabTarget = opts.fabAction === 'addSport' ? 'addSport' : 'addBook';
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
@@ -1048,10 +1048,110 @@ async function renderMyProfile() {
   renderShell(
     '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div></div>' +
     '<div id="profileStreakBadge"></div>' +
-    '<div id="profileBody"><div class="loading">Yuklanmoqda...</div></div>'
+    '<div id="dashboardChart"><div class="loading">Yuklanmoqda...</div></div>' +
+    '<div id="profileBody"><div class="loading">...</div></div>'
   );
   loadStreakBadge('profileStreakBadge');
+  await loadDashboardChart();
   await loadProfileInto('profileBody', ME.id, ME.name, true);
+}
+
+async function loadDashboardChart() {
+  var el = document.getElementById('dashboardChart');
+  if (!el) return;
+  var periods = [7, 30, 90];
+  var selectedDays = 30;
+
+  async function renderChart(days) {
+    selectedDays = days;
+    var today = new Date();
+    var labels = [], bookData = [], sportData = [];
+    for (var i = days - 1; i >= 0; i--) {
+      var d = new Date(today); d.setDate(d.getDate() - i);
+      var ds = d.toISOString().slice(0, 10);
+      labels.push(ds.slice(5));
+      bookData.push(0); sportData.push(0);
+    }
+    try {
+      var startDate = new Date(today); startDate.setDate(today.getDate() - (days - 1));
+      var startStr = startDate.toISOString().slice(0, 10);
+      var results = await Promise.all([
+        sbGet('progress?select=updated_at,pages_read&user_id=eq.' + ME.id + '&updated_at=gte.' + startStr + 'T00:00:00'),
+        sbGet('sport_daily_logs?select=log_date,count_done&user_id=eq.' + ME.id + '&log_date=gte.' + startStr),
+      ]);
+      results[0].forEach(function (r) {
+        var d = r.updated_at ? r.updated_at.slice(5, 10) : null;
+        var idx = labels.indexOf(d);
+        if (idx !== -1) bookData[idx] += r.pages_read || 0;
+      });
+      results[1].forEach(function (r) {
+        var d = r.log_date ? r.log_date.slice(5) : null;
+        var idx = labels.indexOf(d);
+        if (idx !== -1) sportData[idx] += r.count_done || 0;
+      });
+    } catch (e) { console.error(e); }
+
+    var yesterday = bookData[bookData.length - 2] || 0;
+    var today_book = bookData[bookData.length - 1] || 0;
+    var diff = today_book - yesterday;
+    var diffHtml = diff > 0
+      ? '<span style="color:var(--accent-1)">+' + diff + ' bet kechadan ko\'ra</span>'
+      : diff < 0
+      ? '<span style="color:var(--danger)">' + diff + ' bet kechadan ko\'ra</span>'
+      : '<span style="color:var(--text-muted)">Kechaga teng</span>';
+
+    var maxVal = Math.max(Math.max(...bookData), Math.max(...sportData), 1);
+    var step = days > 30 ? 7 : days > 14 ? 3 : 1;
+    var svgH = 120, svgW = 320, padL = 28, padB = 20, padT = 8;
+    var chartW = svgW - padL - 8, chartH = svgH - padB - padT;
+    function xPos(i) { return padL + (i / (labels.length - 1)) * chartW; }
+    function yPos(v) { return padT + chartH - (v / maxVal) * chartH; }
+    function polyline(data, color) {
+      var pts = data.map(function (v, i) { return xPos(i) + ',' + yPos(v); }).join(' ');
+      return '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    function dots(data, color) {
+      return data.map(function (v, i) {
+        return v > 0 ? '<circle cx="' + xPos(i) + '" cy="' + yPos(v) + '" r="3" fill="' + color + '"/>' : '';
+      }).join('');
+    }
+    var xLabels = '';
+    for (var i = 0; i < labels.length; i += step) {
+      xLabels += '<text x="' + xPos(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + labels[i] + '</text>';
+    }
+    var yLines = '';
+    for (var y = 0; y <= 4; y++) {
+      var yv = padT + (chartH / 4) * y;
+      var val = Math.round(maxVal - (maxVal / 4) * y);
+      yLines += '<line x1="' + padL + '" y1="' + yv + '" x2="' + (svgW - 8) + '" y2="' + yv + '" stroke="var(--surface)" stroke-width="1"/>';
+      yLines += '<text x="' + (padL - 4) + '" y="' + (yv + 3) + '" text-anchor="end" font-size="8" fill="var(--text-muted)">' + val + '</text>';
+    }
+    var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">' +
+      yLines + polyline(bookData, 'var(--accent-1)') + polyline(sportData, '#60a5fa') +
+      dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + '</svg>';
+
+    el.innerHTML =
+      '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div style="font-size:13px;font-weight:600">Rivojlanish grafigi</div>' +
+      '<div style="display:flex;gap:6px">' +
+      [7, 30, 90].map(function (d) {
+        return '<button class="btn-small' + (d === selectedDays ? ' active' : '') + '" style="padding:3px 8px;font-size:11px" data-chart-days="' + d + '">' + (d === 90 ? '3 oy' : d + ' kun') + '</button>';
+      }).join('') +
+      '</div></div>' +
+      '<div style="display:flex;gap:12px;margin-bottom:6px">' +
+      '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:var(--accent-1);border-radius:2px"></div>Kitob (bet)</div>' +
+      '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:#60a5fa;border-radius:2px"></div>Sport (ta)</div>' +
+      '</div>' +
+      svg +
+      '<div style="font-size:12px;margin-top:6px">' + diffHtml + '</div>' +
+      '</div>';
+
+    el.querySelectorAll('[data-chart-days]').forEach(function (btn) {
+      btn.addEventListener('click', function () { renderChart(parseInt(btn.dataset.chartDays)); });
+    });
+  }
+  await renderChart(30);
 }
 
 // ===== Hamyon sahifasi =====
