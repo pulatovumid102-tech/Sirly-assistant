@@ -173,9 +173,6 @@ var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
 var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 var HUJJATLAR_BUCKET = 'hujjatlar';
-var JOIN_COST_QOVUN = 0;
-var QOVUN_PER_SOM = 1;
-var PROTEINCHA_PER_SOM = 10000;
 var FURA_SIZE = 5000;
 var PAYMENT_CARD = "UMIDJON PULATOV 9860 1701 0633 3009";
 var COHORT_SIGNUP_DAYS = 5;
@@ -253,7 +250,6 @@ var iAmBlocked = false;
 // Foydalanuvchini darhol saqlash (hamyon yaratish orqali)
 (function () {
   if (ME.id) {
-    getOrCreateWallet(ME.id, ME.name, ME.username).catch(function () {});
   }
 })();
 
@@ -312,25 +308,6 @@ async function sbUploadFile(bucket, path, file) {
   return SB_URL + '/storage/v1/object/public/' + bucket + '/' + path;
 }
 
-// ===== Hamyon (qovuncha/proteincha) =====
-async function getOrCreateWallet(userId, userName, username) {
-  var rows = await sbGet('wallets?select=*&user_id=eq.' + userId);
-  if (rows[0]) return rows[0];
-  var inserted = await sbPost('wallets?on_conflict=user_id', { user_id: userId, user_name: userName || '', username: username || null, qovun_balance: 10000, proteincha_balance: 1 }, 'resolution=merge-duplicates,return=representation');
-  return (inserted && inserted[0]) || { user_id: userId, user_name: userName || '', qovun_balance: 10000, proteincha_balance: 1 };
-}
-async function adjustWallet(userId, qovunDelta, proteinchaDelta) {
-  var w = await getOrCreateWallet(userId);
-  var newQovun = (w.qovun_balance || 0) + (qovunDelta || 0);
-  var newProteincha = (w.proteincha_balance || 0) + (proteinchaDelta || 0);
-  await sbPost('wallets?on_conflict=user_id', { user_id: userId, qovun_balance: newQovun, proteincha_balance: newProteincha }, 'resolution=merge-duplicates,return=representation');
-  return { qovun_balance: newQovun, proteincha_balance: newProteincha };
-}
-async function addToTreasury(qovunDelta) {
-  var rows = await sbGet('treasury?select=*&id=eq.1');
-  var current = (rows[0] && rows[0].qovun_balance) || 0;
-  await sbPatch('treasury?id=eq.1', { qovun_balance: current + qovunDelta });
-}
 function formatSom(n) {
   n = Math.round(n || 0);
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + " so'm";
@@ -338,9 +315,6 @@ function formatSom(n) {
 function formatNumber(n) {
   n = Math.round(n || 0);
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-function qovunLabel(qovun) {
-  return formatNumber(qovun) + ' ta qovuncha';
 }
 async function joinCohortFlow(book, marker, progress) {
   var nowIso = new Date().toISOString();
@@ -521,7 +495,6 @@ var _adminUsersCache = [];
 var _adminBadgeInterval = null;
 var _adminTxHistoryCache = [];
 var _adminWdHistoryCache = [];
-function txCurrencyLabel(r) { return r.currency === 'proteincha' ? 'proteincha' : 'qovuncha'; }
 var _adminBlockedSet = {};
 var _adminBooksCache = [];
 var app = document.getElementById('app');
@@ -565,7 +538,6 @@ function render() {
   else if (state.view === 'bookDetail') renderBookDetail();
   else if (state.view === 'userBooks') renderUserBooks();
   else if (state.view === 'profile') renderMyProfile();
-  else if (state.view === 'wallet') renderWallet();
   else if (state.view === 'admin') renderAdmin();
   else if (state.view === 'sport') renderSportHome();
   else if (state.view === 'sportDetail') renderSportDetail();
@@ -884,15 +856,6 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
     ? '<div class="book-list">' + books.map(function (it) { return bookCard(it.book, it.pct, it.pagesRead); }).join('') + '</div>'
     : '<div class="empty">Hali kitob yo\'q.</div>';
   var dailyTargetHtml = '';
-  if (isOwn && dailyTargetInfo) {
-    if (dailyTargetInfo.phase === 'signup') {
-      dailyTargetHtml = '<div class="hint" style="margin-bottom:14px">⏳ "' + escapeHtml(dailyTargetInfo.bookTitle) + '" — hali boshlanmagan. Kunlik me\'yor: <b>' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
-    } else {
-      var doneToday = dailyTargetInfo.todayRead >= dailyTargetInfo.dailyLimit;
-      dailyTargetHtml = '<div class="hint" style="margin-bottom:14px' + (doneToday ? ';color:var(--accent-1)' : '') + '">' +
-        (doneToday ? '✅ ' : '📖 ') + '"' + escapeHtml(dailyTargetInfo.bookTitle) + '" — bugungi: <b>' + dailyTargetInfo.todayRead + '/' + dailyTargetInfo.dailyLimit + ' bet</b></div>';
-    }
-  }
   var sportBooksHtml = sportProgRows.length
     ? '<div class="book-list">' + sportProgRows.map(function (p) {
         var c = p.sport_challenges;
@@ -1135,168 +1098,6 @@ async function loadDashboardChart() {
   await renderChart(30);
 }
 
-// ===== Hamyon sahifasi =====
-async function renderWallet() {
-  setBackButton(true, function () { state.view = 'profile'; render(); });
-  renderShell(
-    '<div class="header"><button class="back" data-go="profile">←</button><div class="h-title">🏦 Hamyon</div></div>' +
-    '<div id="walletBody"><div class="loading">Yuklanmoqda...</div></div>',
-    { fab: false }
-  );
-  await loadWalletBody();
-}
-
-async function loadWalletBody() {
-  var el = document.getElementById('walletBody');
-  try {
-    var results = await Promise.all([
-      getOrCreateWallet(ME.id, ME.name, ME.username),
-      sbGet('qovun_purchase_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
-      sbGet('withdrawal_requests?select=*&user_id=eq.' + ME.id + '&order=created_at.desc&limit=30'),
-    ]);
-    var wallet = results[0];
-    var purchases = results[1].map(function (r) { r._type = 'purchase'; return r; });
-    var withdrawals = results[2].map(function (r) { r._type = 'withdrawal'; return r; });
-    var history = purchases.concat(withdrawals).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
-
-    var historyHtml = history.length ? history.map(function (r) {
-      var statusEmoji = r.status === 'pending' ? '⏳' : (r.status === 'approved' || r.status === 'paid') ? '✅' : '❌';
-      var statusText = r.status === 'pending' ? 'Kutilmoqda' : r.status === 'approved' ? 'Tasdiqlandi' : r.status === 'paid' ? "To'landi" : ('Rad etildi' + (r.reject_reason ? ' (' + escapeHtml(r.reject_reason) + ')' : ''));
-      var currencyLabel = r.currency === 'proteincha' ? 'proteincha' : 'qovuncha';
-      var line = r._type === 'purchase'
-        ? (currencyLabel.charAt(0).toUpperCase() + currencyLabel.slice(1)) + ' sotib olish: ' + r.qovun_amount + ' ta'
-        : "Pulga aylantirish: " + r.amount + ' ta ' + currencyLabel + ' → ' + r.money_amount + " so'm";
-      return '<div class="admin-row"><div class="admin-row-info"><div class="reader-name">' + line + '</div>' +
-        '<div class="reader-note">' + statusEmoji + ' ' + statusText + '</div>' +
-        '<div class="reader-note">' + formatDate(r.created_at) + '</div></div></div>';
-    }).join('') : '<div class="empty">Tarix yo\'q.</div>';
-
-    el.innerHTML =
-      '<div class="profile-stats">' +
-      '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:18px">' + formatNumber(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
-      '</div>' +
-      '<div id="buyForm" style="display:none;margin-top:10px"></div>' +
-      '<div id="withdrawForm" style="display:none;margin-top:10px"></div>' +
-      '<div class="section-label" style="margin-top:20px">Tarix</div>' + historyHtml;
-
-    var buyBtn = document.getElementById('buyBtn');
-    var buyForm = document.getElementById('buyForm');
-    var withdrawFormEl = document.getElementById('withdrawForm');
-    buyBtn.addEventListener('click', function () {
-      var showing = buyForm.style.display !== 'none';
-      buyForm.style.display = showing ? 'none' : 'block';
-      withdrawFormEl.style.display = 'none';
-      if (!showing) {
-        buyForm.innerHTML =
-          '<select id="buyCurrency" class="input" style="display:none">' +
-          '<option value="qovun">Qovuncha</option>' +
-          '</select>' +
-          '<input id="buyAmount" class="input" type="number" min="1" placeholder="Nechta sotib olmoqchisiz?" style="margin-top:8px" />' +
-          '<div id="buyAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
-          '<div class="hint" style="margin-top:8px">To\'lov uchun karta:<br><div style="display:flex;align-items:center;gap:8px;margin-top:4px"><b id="paymentCardText">' + PAYMENT_CARD + '</b><button type="button" id="copyCardBtn" class="btn-small" style="flex-shrink:0">📋 Nusxalash</button></div><div style="margin-top:6px">To\'lov qilib, kvitansiya rasmini yuklang. Kvitansiyada SANA, SOAT va SUMMA aniq ko\'rinib turishi shart.</div></div>' +
-          '<label class="file-btn" for="buyReceiptInput" style="margin-top:8px">🧾 Kvitansiya yuklash</label>' +
-          '<input type="file" id="buyReceiptInput" accept="image/*" style="display:none" />' +
-          '<div id="buyReceiptPreview"></div>' +
-          '<button id="submitBuyBtn" class="btn-primary full" style="margin-top:8px">Yuborish</button>';
-        var updateBuySom = function () {
-          var amt = parseInt(document.getElementById('buyAmount').value, 10) || 0;
-          var cur = document.getElementById('buyCurrency').value;
-          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
-          document.getElementById('buyAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
-        };
-        document.getElementById('buyAmount').addEventListener('input', updateBuySom);
-        document.getElementById('buyCurrency').addEventListener('change', updateBuySom);
-        document.getElementById('copyCardBtn').addEventListener('click', function () {
-          var text = PAYMENT_CARD;
-          var btnEl = this;
-          function done() { vibrate('light'); var old = btnEl.textContent; btnEl.textContent = '✅ Nusxalandi'; setTimeout(function () { btnEl.textContent = old; }, 1500); }
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(done).catch(function () { showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text); });
-          } else { showAlert("Nusxalab bo'lmadi. Qo'lda yozib oling: " + text); }
-        });
-        document.getElementById('buyReceiptInput').addEventListener('change', function () {
-          var f = this.files[0];
-          var prevEl = document.getElementById('buyReceiptPreview');
-          if (!f) { prevEl.innerHTML = ''; return; }
-          prevEl.innerHTML = '<img src="' + URL.createObjectURL(f) + '" class="note-photo-img" />';
-        });
-        document.getElementById('submitBuyBtn').addEventListener('click', async function () {
-          var currency = document.getElementById('buyCurrency').value;
-          var amt = parseInt(document.getElementById('buyAmount').value, 10);
-          if (!amt || amt <= 0) { showAlert("Miqdorni to'g'ri kiriting."); return; }
-          var receiptFile = document.getElementById('buyReceiptInput').files[0];
-          if (!receiptFile) { showAlert('Kvitansiya rasmini yuklang.'); return; }
-          var sBtn = this; sBtn.disabled = true; sBtn.textContent = 'Yuborilmoqda...';
-          try {
-            var ext = (receiptFile.name.split('.').pop() || 'jpg').toLowerCase();
-            var receiptUrl = await sbUploadFile(HUJJATLAR_BUCKET, 'receipts/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext, receiptFile);
-            await sbPost('qovun_purchase_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, qovun_amount: amt, currency: currency, receipt_url: receiptUrl });
-            vibrate('light');
-            showAlert("So'rovingiz yuborildi. Admin tekshirib tasdiqlagach, hisobingizga qo'shiladi.");
-            renderWallet();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; sBtn.textContent = 'Yuborish'; }
-        });
-      }
-    });
-
-    var withdrawBtn = document.getElementById('withdrawBtn');
-    if (withdrawBtn) withdrawBtn.addEventListener('click', function () {
-      var showing = withdrawFormEl.style.display !== 'none';
-      withdrawFormEl.style.display = showing ? 'none' : 'block';
-      buyForm.style.display = 'none';
-      if (!showing) {
-        withdrawFormEl.innerHTML =
-          '<div class="hint">Kurs: 1 qovuncha = ' + QOVUN_PER_SOM + " so'm, 1 proteincha = " + PROTEINCHA_PER_SOM + " so'm</div>" +
-          '<select id="withdrawCurrency" class="input" style="margin-top:8px">' +
-          '<option value="qovun">Qovuncha</option><option value="proteincha">Proteincha</option>' +
-          '</select>' +
-          '<input id="withdrawAmount" class="input" type="number" min="1" placeholder="Miqdor" />' +
-          '<div id="withdrawAmountSom" style="font-size:12px;color:var(--accent-1);margin-top:4px;font-weight:600"></div>' +
-          '<input id="withdrawCardHolder" class="input" placeholder="Karta egasining F.I.Sh" />' +
-          '<input id="withdrawCard" class="input" placeholder="Karta raqamingiz" />' +
-          '<button id="submitWithdrawBtn" class="btn-primary full" style="margin-top:8px">So\'rov yuborish</button>';
-        var updateWithdrawSom = function () {
-          var amt = parseInt(document.getElementById('withdrawAmount').value, 10) || 0;
-          var cur = document.getElementById('withdrawCurrency').value;
-          var som = cur === 'proteincha' ? amt * PROTEINCHA_PER_SOM : amt * QOVUN_PER_SOM;
-          document.getElementById('withdrawAmountSom').textContent = amt > 0 ? ('= ' + formatSom(som)) : '';
-        };
-        document.getElementById('withdrawAmount').addEventListener('input', updateWithdrawSom);
-        document.getElementById('withdrawCurrency').addEventListener('change', updateWithdrawSom);
-        document.getElementById('submitWithdrawBtn').addEventListener('click', async function () {
-          var currency = document.getElementById('withdrawCurrency').value;
-          var amt = parseInt(document.getElementById('withdrawAmount').value, 10);
-          var holder = document.getElementById('withdrawCardHolder').value.trim();
-          var card = document.getElementById('withdrawCard').value.trim();
-          if (!amt || amt <= 0) { showAlert("Miqdorni to'g'ri kiriting."); return; }
-          if (!holder) { showAlert('Karta egasining ismini kiriting.'); return; }
-          if (!card) { showAlert('Karta raqamingizni kiriting.'); return; }
-          var bal = currency === 'qovun' ? wallet.qovun_balance : wallet.proteincha_balance;
-          if (amt > bal) { showAlert('Balansingizda yetarli mablag\' yo\'q.'); return; }
-          var moneyAmount = currency === 'qovun' ? amt * QOVUN_PER_SOM : amt * PROTEINCHA_PER_SOM;
-          var sBtn = this; sBtn.disabled = true; sBtn.textContent = 'Yuborilmoqda...';
-          try {
-            await sbPost('withdrawal_requests', { user_id: ME.id, user_name: ME.name, username: ME.username, currency: currency, amount: amt, money_amount: moneyAmount, card_number: card, card_holder_name: holder });
-            vibrate('light');
-            showAlert("So'rovingiz yuborildi. Admin to'lab, tasdiqlagach mablag' hisobingizdan yechiladi.");
-            renderWallet();
-          } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); sBtn.disabled = false; sBtn.textContent = "So'rov yuborish"; }
-        });
-      }
-    });
-  } catch (e) { el.innerHTML = '<div class="empty">Yuklanmadi.</div>'; console.error(e); }
-}
-
-async function renderUserBooks() {
-  setBackButton(true, function () { state.view = 'bookDetail'; state.detailTab = 'readers'; render(); });
-  renderShell(
-    '<div class="header"><button class="back" data-go="bookDetail" data-id="' + state.bookId + '">←</button></div>' +
-    '<div class="profile-header">' + avatarHtml(null, 76) + '<div class="profile-header-name">' + escapeHtml(state.viewUserName) + '</div></div>' +
-    '<div id="profileBody"><div class="loading">Yuklanmoqda...</div></div>'
-  );
-  await loadProfileInto('profileBody', state.viewUserId, state.viewUserName, false);
-}
-
 // ===== Admin panel =====
 async function renderAdmin() {
   setBackButton(true, function () { isAdminMode = false; state.view = 'modeSelect'; render(); });
@@ -1424,16 +1225,7 @@ function renderAdminUsersList() {
   document.querySelectorAll('[data-add-qovun]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var id = parseInt(btn.dataset.addQovun, 10);
-      customPrompt(btn.dataset.name + " uchun nechta qovuncha qo'shamiz? (ayirish uchun manfiy son kiriting)", async function (raw) {
-        if (raw === null) return;
-        var amt = parseInt(raw, 10);
-        if (isNaN(amt)) { showAlert("Noto'g'ri son."); return; }
-        try {
-          await adjustWallet(id, amt, 0);
-          vibrate('light');
-          showAlert('Bajarildi.');
-        } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
-      });
+      // (hamyon olib tashlandi)
     });
   });
   document.querySelectorAll('[data-block-id]').forEach(function (btn) {
@@ -1696,8 +1488,6 @@ async function loadAdminTransactions() {
             var amt = parseInt(btn.dataset.amount, 10);
             var uid = parseInt(btn.dataset.uid, 10);
             var currency = btn.dataset.currency;
-            if (currency === 'proteincha') await adjustWallet(uid, 0, amt);
-            else await adjustWallet(uid, amt, 0);
             await sbPatch('qovun_purchase_requests?id=eq.' + id, { status: 'approved', resolved_at: new Date().toISOString() });
             vibrate('light');
             loadAdminTransactions();
@@ -1770,8 +1560,6 @@ async function loadAdminWithdrawals() {
             var currency = btn.dataset.currency;
             var amt = parseInt(btn.dataset.amount, 10);
             var uid = parseInt(btn.dataset.uid, 10);
-            if (currency === 'qovun') await adjustWallet(uid, -amt, 0);
-            else await adjustWallet(uid, 0, -amt);
             await sbPatch('withdrawal_requests?id=eq.' + id, { status: 'paid', resolved_at: new Date().toISOString() });
             vibrate('light');
             loadAdminWithdrawals();
@@ -2354,7 +2142,7 @@ function renderBookDetailBody() {
           if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
           var marker = joinBtnTop.dataset.marker;
           var isCreatorJoin = String(book.created_by_id) === String(ME.id);
-          var confirmMsg = isCreatorJoin ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi " + formatNumber(JOIN_COST_QOVUN) + " ta qovuncha. Tasdiqlaysizmi?");
+          var confirmMsg = "Guruhga qo'shilasizmi?";
           confirmAction(confirmMsg, async function () {
             try {
               var ok = await joinCohortFlow(book, marker, progress);
@@ -2876,7 +2664,7 @@ async function loadSportDetailBody() {
       : '<div class="empty">Hali hech kim qo\'shilmagan.</div>';
 
     var participantsTab = schedHtml +
-      (canJoin ? '<button id="joinSportBtn" class="btn-primary full" data-marker="' + selectedSportMarker + '" style="margin:10px 0">✅ Qo\'shilish (1 proteincha)</button>' : '') +
+      (canJoin ? '<button id="joinSportBtn" class="btn-primary full" data-marker="' + selectedSportMarker + '" style="margin:10px 0">✅ Qo\'shilish</button>' : '') +
       '<div class="section-label" style="margin-top:12px">' + (selectedSportMarker ? formatDate(selectedSportMarker) + ' guruhi' : 'Qatnashuvchilar') + '</div>' +
       participantsHtml;
 
