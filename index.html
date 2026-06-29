@@ -1176,7 +1176,8 @@ async function loadDashboardChart() {
 
     var maxVal = Math.max(Math.max.apply(null, bookData), Math.max.apply(null, sportData), 1);
     var svgH = 130, padL = 30, padB = 22, padT = 10;
-    var svgW = Math.max(340, Math.min(1000, window.innerWidth * 1.5));
+    var isDesktop = window.innerWidth >= 769;
+    var svgW = isDesktop ? 800 : 340;
     var chartW = svgW - padL - 16;
     var chartH = svgH - padB - padT;
     // Bugungi kun 70%da turishi uchun
