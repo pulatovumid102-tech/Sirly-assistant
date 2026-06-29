@@ -85,7 +85,8 @@ body{
 .tabbar{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:8px; padding:14px 10px calc(14px + env(safe-area-inset-bottom)); }
 .tab{ flex:1; max-width:80px; height:64px; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border-radius:var(--radius-md); background:var(--surface); box-shadow:6px 6px 14px var(--shadow-dark), -5px -5px 12px var(--shadow-light); color:var(--text-muted); font-family:inherit; }
 .tab.active{ color:var(--bg); background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); }
-.tab-icon{ font-size:20px; }
+.tab-icon{ font-size:20px; display:flex; align-items:center; justify-content:center; }
+.tab-icon svg{ width:20px; height:20px; }
 .tab-label{ font-size:10px; font-weight:600; }
 
 /* ===== Desktop layout (>768px) ===== */
@@ -582,12 +583,14 @@ function render() {
   else if (state.view === 'profile') renderMyProfile();
   else if (state.view === 'admin') renderAdmin();
   else if (state.view === 'sport') renderSportHome();
+  else if (state.view === 'checklist') renderChecklist();
   else if (state.view === 'sportDetail') renderSportDetail();
   else if (state.view === 'addSport') renderAddSport();
 }
 
 function currentSection() {
   if (state.view === 'sport' || state.view === 'sportDetail' || state.view === 'addSport') return 'sport';
+  if (state.view === 'checklist') return 'checklist';
   if (state.view === 'profile' || state.view === 'wallet') return 'profile';
   return 'home';
 }
@@ -599,7 +602,10 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('profile', '📊', 'Dashboard') + tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport');
+  var tabs = tabBtn('profile', '📊', 'Dashboard') +
+    tabBtn('checklist', '✅', 'Cheklist') +
+    tabBtn('home', '📚', 'Kitoblar') +
+    tabBtn('sport', '🏃', 'Sport');
   var fabTarget = opts.fabAction === 'addSport' ? 'addSport' : 'addBook';
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
@@ -1170,7 +1176,7 @@ async function loadDashboardChart() {
 
     var maxVal = Math.max(Math.max.apply(null, bookData), Math.max.apply(null, sportData), 1);
     var svgH = 130, padL = 30, padB = 22, padT = 10;
-    var svgW = 700;
+    var svgW = 1000;
     var chartW = svgW - padL - 16;
     var chartH = svgH - padB - padT;
     // Bugungi kun 70%da turishi uchun
@@ -1214,7 +1220,7 @@ async function loadDashboardChart() {
       dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + tooltipRects;
 
     el.innerHTML =
-      '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px;width:100%">' +
+      '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px;width:100%;max-width:1200px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
       '<div style="font-size:13px;font-weight:600">Rivojlanish grafigi</div>' +
       '<div style="display:flex;gap:6px">' +
@@ -3084,6 +3090,19 @@ async function renderAddSport() {
       state.view = 'sport'; render();
     } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); btn.disabled = false; btn.textContent = 'Yaratish'; }
   });
+}
+
+// ===== Cheklist =====
+function renderChecklist() {
+  setBackButton(false);
+  renderShell(
+    '<div class="header"><div class="h-title">Cheklist</div></div>' +
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40vh;gap:12px">' +
+    '<div style="font-size:48px">✅</div>' +
+    '<div style="font-size:18px;font-weight:600">Cheklist</div>' +
+    '<div style="font-size:14px;color:var(--text-muted);text-align:center">Tez kunda — kunlik vazifalar tizimi</div>' +
+    '</div>'
+  );
 }
 
 // ===== Tez kunda ekrani =====
