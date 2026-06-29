@@ -173,7 +173,7 @@ var SB_URL = 'https://ubakgpkcemlchpfejmke.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWtncGtjZW1sY2hwZmVqbWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjc3NzUsImV4cCI6MjA5NTkwMzc3NX0.wkKSmoTB9RwREFjcJfe0dNBzZDEw2DHxNM3G6erHSJU';
 var SB_H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
 var HUJJATLAR_BUCKET = 'hujjatlar';
-var JOIN_COST_QOVUN = 10000;
+var JOIN_COST_QOVUN = 0;
 var QOVUN_PER_SOM = 1;
 var PROTEINCHA_PER_SOM = 10000;
 var FURA_SIZE = 5000;
@@ -597,7 +597,7 @@ function tabBtn(view, icon, label) {
 
 function renderShell(innerHtml, opts) {
   opts = opts || {};
-  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('profile', '👤', 'Profil');
+  var tabs = tabBtn('home', '📚', 'Kitoblar') + tabBtn('sport', '🏃', 'Sport') + tabBtn('profile', '👤', 'Profil');
   var fabTarget = opts.fabAction === 'addSport' ? 'addSport' : 'addBook';
   app.innerHTML =
     '<div class="screen">' + innerHtml + '</div>' +
@@ -921,14 +921,38 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
           '</div></div></div>';
       }).join('') + '</div>'
     : '<div class="empty">Hali sport challenj yo\'q.</div>';
+  var sportMedalHtml = '<div class="section-label" style="margin-top:16px">🏃 Sport medallari</div>' +
+    '<div class="medal-slots-row">';
+  for (var j = 1; j <= 5; j++) {
+    sportMedalHtml += '<div class="medal-slot-icon">🏅</div>';
+  }
+  sportMedalHtml += '</div><div class="medal-count-label">0 medal (tez orada)</div>';
+  var sportBooksHtml = sportProgRows && sportProgRows.length
+    ? '<div class="book-list">' + sportProgRows.map(function (p) {
+        var c = p.sport_challenges;
+        if (!c) return '';
+        var totalEx = (sportTotalByChallenge || {})[c.id] || 0;
+        var maxTotal = (sportMaxByChallenge || {})[c.id] || 0;
+        var pct = maxTotal > 0 ? Math.min(100, Math.round((totalEx / maxTotal) * 100)) : 0;
+        var thumb = c.cover_url ? '<img src="' + c.cover_url + '" class="cover-thumb" />' : '<div class="cover-thumb-placeholder">🏃</div>';
+        return '<div class="card book-card" data-go="sportDetail" data-sport-id="' + c.id + '">' +
+          '<div class="book-card-row">' + thumb +
+          '<div class="book-card-info"><div class="card-title">' + escapeHtml(c.title) + '</div>' +
+          '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="card-meta">' + formatNumber(totalEx) + ' ta - ' + pct + '%</div>' +
+          '</div></div></div>';
+      }).join('') + '</div>'
+    : '<div class="empty">Hali sport challenj yo\'q.</div>';
   return '<div class="profile-stats">' +
     '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
+    '<div class="profile-stat-box"><div class="profile-stat-num">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label">tugatilgan sport</div></div>' +
     '</div>' +
     dailyTargetHtml +
     (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
-    bookMedalHtml +
-    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml;
+    bookMedalHtml + sportMedalHtml +
+    '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml +
+    '<div class="section-label" style="margin-top:20px">Sport challenjlari</div>' + sportBooksHtml;
 }
 
 async function loadProfileInto(elId, userId, userName, isOwn) {
@@ -1069,9 +1093,6 @@ async function loadWalletBody() {
     el.innerHTML =
       '<div class="profile-stats">' +
       '<div class="profile-stat-box"><div class="profile-stat-num" style="font-size:18px">' + formatNumber(wallet.qovun_balance) + '</div><div class="profile-stat-label">qovuncha</div></div>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:10px">' +
-      '<button id="buyBtn" class="btn-small" style="flex:1">💰 Sotib olish</button>' +
       '</div>' +
       '<div id="buyForm" style="display:none;margin-top:10px"></div>' +
       '<div id="withdrawForm" style="display:none;margin-top:10px"></div>' +
@@ -2545,16 +2566,10 @@ function renderBookDetailBody() {
         removeBtn.addEventListener('click', function () {
           var isCreatorLeaving = String(book.created_by_id) === String(ME.id);
           var willRefund = !isCreatorLeaving && (myCohortPhase === 'signup' || myCohortPhase === null);
-          var confirmText = willRefund
-            ? "Guruhdan chiqasizmi? Hali challenj boshlanmaganligi sababli " + formatNumber(JOIN_COST_QOVUN) + " ta qovunchangiz qaytariladi."
-            : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi. To'langan qovuncha qaytarilmaydi.";
+          var confirmText = "Guruhdan chiqasizmi? Progressingiz o'chib ketadi.";
           confirmAction(confirmText, async function () {
             try {
               await sbDelete('progress?book_id=eq.' + book.id + '&user_id=eq.' + ME.id);
-              if (willRefund) {
-                await adjustWallet(ME.id, JOIN_COST_QOVUN, 0);
-                await addToTreasury(-JOIN_COST_QOVUN);
-              }
               vibrate('medium');
               _bdCache = null;
               state.view = 'home'; state.detailTab = 'readers'; render();
@@ -2885,17 +2900,12 @@ async function loadSportDetailBody() {
       if (iAmBlocked) { showAlert('Siz blok qilingansiz.'); return; }
       var marker = joinBtn.dataset.marker;
       var isCreator = String(challenge.created_by_id) === String(ME.id);
-      var msg = isCreator ? "Guruhga qo'shilasizmi?" : ("Qo'shilish narxi 1 ta proteincha. Tasdiqlaysizmi?");
+      var msg = "Guruhga qo'shilasizmi?";
       confirmAction(msg, async function () {
         try {
           var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
-          if (!isCreator && (wallet.proteincha_balance || 0) < 1) { showAlert("Proteinchangiz yetarli emas. Qo'shilish uchun 1 ta proteincha kerak."); return; }
           var nowIso = new Date().toISOString();
           await sbPost('sport_progress?on_conflict=challenge_id,user_id', { challenge_id: state.sportId, user_id: ME.id, user_name: ME.name, cohort_start_date: marker, started_at: nowIso }, 'resolution=merge-duplicates,return=representation');
-          if (!isCreator) {
-            await adjustWallet(ME.id, 0, -1);
-            await addToTreasury(0);
-          }
           try { await sbPost('sport_join_confirmations', { challenge_id: state.sportId, user_id: ME.id, challenge_title: challenge.title, cohort_start_date: marker }); } catch (e) { console.error(e); }
           if (!isCreator) {
             try { await sbPost('sport_join_notifications', { challenge_id: state.sportId, creator_id: challenge.created_by_id, cohort_start_date: marker }); } catch (e) { console.error(e); }
@@ -2912,7 +2922,7 @@ async function loadSportDetailBody() {
     if (leaveBtn) leaveBtn.addEventListener('click', function () {
       var willRefund = myCohortPhase === 'signup' || myCohortPhase === null;
       var isCreator = String(challenge.created_by_id) === String(ME.id);
-      var txt = (willRefund && !isCreator) ? "Guruhdan chiqasizmi? Challenj boshlanmaganligi uchun 1 ta proteinchangiz qaytariladi." : "Guruhdan chiqasizmi? Progressingiz o'chib ketadi.";
+      var txt = "Guruhdan chiqasizmi? Progressingiz o'chib ketadi.";
       confirmAction(txt, async function () {
         try {
           await sbDelete('sport_progress?challenge_id=eq.' + state.sportId + '&user_id=eq.' + ME.id);
