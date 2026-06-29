@@ -1012,23 +1012,24 @@ def main():
     application.add_handler(CallbackQueryHandler(contact_response_callback, pattern=r"^cr_(yes|no)_\d+$"))
 
     if application.job_queue:
-        application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
-        application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
-        application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
-        application.job_queue.run_repeating(check_join_confirmations, interval=15, first=11)
-        application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
-        application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
-        application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
-        application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
-        application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
-        application.job_queue.run_daily(
-            check_challenge_start,
-            time=dt_time(23, 0, 0, tzinfo=timezone.utc),  # 04:00 UZT
-        )
-        application.job_queue.run_daily(
-            send_daily_top,
-            time=dt_time(17, 0, 0, tzinfo=timezone.utc),  # 22:00 UZT
-        )
+        pass  # Barcha xabarlar vaqtincha to'xtatilgan
+        # application.job_queue.run_repeating(check_contact_requests, interval=15, first=5)
+        # application.job_queue.run_repeating(check_rank_drops, interval=30, first=12)
+        # application.job_queue.run_repeating(check_join_notifications, interval=15, first=10)
+        # application.job_queue.run_repeating(check_join_confirmations, interval=15, first=11)
+        # application.job_queue.run_repeating(check_payment_notifications, interval=15, first=13)
+        # application.job_queue.run_repeating(check_book_approval_notifications, interval=15, first=16)
+        # application.job_queue.run_repeating(check_sport_approval_notifications, interval=15, first=17)
+        # application.job_queue.run_repeating(check_sport_join_confirmations, interval=15, first=18)
+        # application.job_queue.run_repeating(check_sport_join_notifications, interval=15, first=19)
+        # application.job_queue.run_daily(
+        #     check_challenge_start,
+        #     time=dt_time(23, 0, 0, tzinfo=timezone.utc),  # 04:00 UZT
+        # )
+        # application.job_queue.run_daily(
+        #     send_daily_top,
+        #     time=dt_time(17, 0, 0, tzinfo=timezone.utc),  # 22:00 UZT
+        # )
     else:
         logger.warning(
             "job_queue mavjud emas. Terminalda quyidagini ishga tushiring: "
