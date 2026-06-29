@@ -343,14 +343,6 @@ function qovunLabel(qovun) {
   return formatNumber(qovun) + ' ta qovuncha';
 }
 async function joinCohortFlow(book, marker, progress) {
-  var isCreator = String(book.created_by_id) === String(ME.id);
-  if (!isCreator) {
-    var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
-    if ((wallet.qovun_balance || 0) < JOIN_COST_QOVUN) {
-      showAlert("Qovunchangiz yetarli emas. Challenjga qo'shilish uchun " + formatNumber(JOIN_COST_QOVUN) + " ta qovuncha kerak.");
-      return false;
-    }
-  }
   var nowIso = new Date().toISOString();
   var inserted = await sbPost('progress?on_conflict=book_id,user_id', {
     book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: 0, updated_at: nowIso, started_at: nowIso, cohort_start_date: marker,
@@ -358,10 +350,6 @@ async function joinCohortFlow(book, marker, progress) {
   if (inserted && inserted[0]) {
     progress.push(inserted[0]);
     progress.sort(function (a, b) { return b.pages_read - a.pages_read; });
-  }
-  if (!isCreator) {
-    await adjustWallet(ME.id, -JOIN_COST_QOVUN, 0);
-    await addToTreasury(JOIN_COST_QOVUN);
   }
   try {
     await sbPost('join_notifications', { book_id: book.id, creator_id: book.created_by_id, cohort_start_date: marker });
@@ -948,7 +936,6 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
     '<div class="profile-stat-box"><div class="profile-stat-num">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label">tugatilgan sport</div></div>' +
     '</div>' +
     dailyTargetHtml +
-    (isOwn ? '<button id="goWalletBtn" class="btn-primary full" style="margin-bottom:18px">🏦 Hamyon</button>' : '') +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
     bookMedalHtml + sportMedalHtml +
     '<div class="section-label" style="margin-top:20px">Kitoblari</div>' + booksHtml +
@@ -1019,12 +1006,6 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
       }
     }
     el.innerHTML = profileBodyHtml(isOwn, finishers.length, medals, books, finishedSportCount, dailyTargetInfo, sportProgRows, sportTotalByChallenge, sportMaxByChallenge);
-    if (isOwn) {
-      document.getElementById('goWalletBtn').addEventListener('click', function () {
-        state.view = 'wallet';
-        render();
-      });
-    }
     if (!isOwn) {
       document.getElementById('contactBtn').addEventListener('click', async function () {
         var btn = this;
@@ -1327,8 +1308,6 @@ async function renderAdmin() {
     '<button class="seg-btn' + (state.adminTab === 'users' ? ' active' : '') + '" data-admintab="users">Foydalanuvchilar<span id="badgeUsers"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'books' ? ' active' : '') + '" data-admintab="books">Kitoblar<span id="badgeBooks"></span></button>' +
     '<button class="seg-btn' + (state.adminTab === 'sport' ? ' active' : '') + '" data-admintab="sport">Sport<span id="badgeSport"></span></button>' +
-    '<button class="seg-btn' + (state.adminTab === 'transactions' ? ' active' : '') + '" data-admintab="transactions">Tranzaksiyalar<span id="badgeTx"></span></button>' +
-    '<button class="seg-btn' + (state.adminTab === 'withdrawals' ? ' active' : '') + '" data-admintab="withdrawals">Pul chiqarish<span id="badgeWd"></span></button>' +
     '</div>' +
     '<div id="adminBody"><div class="loading">Yuklanmoqda...</div></div>' +
     '</div>';
@@ -3003,7 +2982,6 @@ async function loadSportDetailBody() {
       var msg = "Guruhga qo'shilasizmi?";
       confirmAction(msg, async function () {
         try {
-          var wallet = await getOrCreateWallet(ME.id, ME.name, ME.username);
           var nowIso = new Date().toISOString();
           await sbPost('sport_progress?on_conflict=challenge_id,user_id', { challenge_id: state.sportId, user_id: ME.id, user_name: ME.name, cohort_start_date: marker, started_at: nowIso }, 'resolution=merge-duplicates,return=representation');
           try { await sbPost('sport_join_confirmations', { challenge_id: state.sportId, user_id: ME.id, challenge_title: challenge.title, cohort_start_date: marker }); } catch (e) { console.error(e); }
@@ -3020,13 +2998,10 @@ async function loadSportDetailBody() {
 
     var leaveBtn = document.getElementById('sportLeaveBtn');
     if (leaveBtn) leaveBtn.addEventListener('click', function () {
-      var willRefund = myCohortPhase === 'signup' || myCohortPhase === null;
-      var isCreator = String(challenge.created_by_id) === String(ME.id);
       var txt = "Guruhdan chiqasizmi? Progressingiz o'chib ketadi.";
       confirmAction(txt, async function () {
         try {
           await sbDelete('sport_progress?challenge_id=eq.' + state.sportId + '&user_id=eq.' + ME.id);
-          if (willRefund && !isCreator) await adjustWallet(ME.id, 0, 1);
           vibrate('medium');
           state.view = 'sport'; render();
         } catch (e) { console.error(e); showAlert('Xatolik yuz berdi.'); }
