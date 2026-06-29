@@ -1110,11 +1110,11 @@ async function loadDashboardChart() {
     try {
       var startStr = labels[0];
       var results = await Promise.all([
-        sbGet('progress?select=updated_at,pages_read&user_id=eq.' + ME.id + '&updated_at=gte.' + startStr + 'T00:00:00'),
+        sbGet('reading_daily_logs?select=log_date,pages_read&user_id=eq.' + ME.id + '&log_date=gte.' + startStr),
         sbGet('sport_daily_logs?select=log_date,count_done&user_id=eq.' + ME.id + '&log_date=gte.' + startStr),
       ]);
       results[0].forEach(function (r) {
-        var d = r.updated_at ? r.updated_at.slice(0, 10) : null;
+        var d = r.log_date ? r.log_date.slice(0, 10) : null;
         var idx = labels.indexOf(d);
         if (idx !== -1) bookData[idx] = Math.max(bookData[idx], r.pages_read || 0);
       });
@@ -2520,9 +2520,17 @@ function renderBookDetailBody() {
             try {
         await recordSportActivity();
               var finalPages = requestedPages;
+              var today = localDateStr();
               await sbPost('progress?on_conflict=book_id,user_id', {
                 book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, updated_at: new Date().toISOString(), cohort_start_date: myCohortMarker,
               }, 'resolution=merge-duplicates,return=representation');
+              // Kunlik tarix uchun log
+              try {
+                await sbPost('reading_daily_logs?on_conflict=user_id,book_id,log_date', {
+                  user_id: ME.id, user_name: ME.name, book_id: book.id, log_date: today, pages_read: finalPages,
+                }, 'resolution=merge-duplicates,return=representation');
+              } catch (e) { console.error('reading_daily_logs:', e); }
+              await recordReadingActivity();
               var insertedNote = await sbPost('reading_notes', {
                 book_id: book.id, user_id: ME.id, user_name: ME.name, pages_read: finalPages, pages_from: oldPages, note: noteText, photo_url: photoUrl, cohort_start_date: myCohortMarker,
               });
