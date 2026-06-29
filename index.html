@@ -1009,8 +1009,12 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
 async function renderMyProfile() {
   setBackButton(false);
   renderShell(
-    '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div>' +
-    '<div id="profileStatus" style="font-size:13px;color:var(--text-muted);margin-top:4px"></div>' +
+    '<div class="profile-header" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0 16px">' +
+    '<div style="display:flex;align-items:center;gap:12px">' +
+    avatarHtml(ME.photoUrl, 56) +
+    '<div class="profile-header-name" style="font-size:18px">' + escapeHtml(ME.name) + '</div>' +
+    '</div>' +
+    '<div id="profileStatus"></div>' +
     '</div>' +
     '<div id="profileStreakBadge"></div>' +
     '<div id="dashboardChart"><div class="loading">Yuklanmoqda...</div></div>' +
@@ -1050,23 +1054,34 @@ async function loadProfileStatus() {
     }
 
     // Speedometer SVG
-    var r = 28, cx = 36, cy = 36;
-    var arcStart = -210, arcEnd = -30;
-    function polarToXY(angleDeg, radius) {
-      var rad = (angleDeg * Math.PI) / 180;
-      return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
-    }
-    var s1 = polarToXY(arcStart, r), e1 = polarToXY(arcEnd, r);
-    var arcPath = 'M ' + s1.x + ' ' + s1.y + ' A ' + r + ' ' + r + ' 0 1 1 ' + e1.x + ' ' + e1.y;
-    var nAngle = -120 + (needleAngle + 130) * (240 / 130);
-    var needleTip = polarToXY(nAngle, r - 6);
-    var needleBase1 = polarToXY(nAngle + 90, 4);
-    var needleBase2 = polarToXY(nAngle - 90, 4);
-    var svg = '<svg viewBox="0 0 72 50" xmlns="http://www.w3.org/2000/svg" style="width:64px;height:45px">' +
-      '<path d="' + arcPath + '" fill="none" stroke="#3a4a3a" stroke-width="5" stroke-linecap="round"/>' +
-      '<path d="' + arcPath + '" fill="none" stroke="' + statusColor + '" stroke-width="5" stroke-linecap="round" stroke-dasharray="' + (180 * (diffDays === 0 ? 1 : diffDays === 1 ? 0.65 : diffDays === 2 ? 0.35 : 0.05)) + ' 999"/>' +
-      '<polygon points="' + needleTip.x + ',' + needleTip.y + ' ' + needleBase1.x + ',' + needleBase1.y + ' ' + needleBase2.x + ',' + needleBase2.y + '" fill="' + statusColor + '"/>' +
-      '<circle cx="' + cx + '" cy="' + cy + '" r="3.5" fill="var(--bg)" stroke="' + statusColor + '" stroke-width="1.5"/>' +
+    var cx = 36, cy = 38, r = 26;
+    // Arc: 210° dan 330° gacha (standart math, soat sohasi teskari)
+    var startAngle = 210, endAngle = 330;
+    // Holat bo'yicha needle burchagi
+    var needleMap = { 0: 330, 1: 290, 2: 250, 3: 210 };
+    var nd = Math.min(diffDays, 3);
+    var nAngle = needleMap[nd];
+    function rad(a) { return a * Math.PI / 180; }
+    function ptX(a, rr) { return cx + rr * Math.cos(rad(a)); }
+    function ptY(a, rr) { return cy + rr * Math.sin(rad(a)); }
+    // Arc path (background)
+    var arcBg = 'M ' + ptX(startAngle, r) + ' ' + ptY(startAngle, r) +
+      ' A ' + r + ' ' + r + ' 0 1 1 ' + ptX(endAngle, r) + ' ' + ptY(endAngle, r);
+    // Arc fill (colored, proportional)
+    var fillRatio = [1, 0.6, 0.3, 0.05][nd];
+    var totalAngle = (endAngle - startAngle + 360) % 360; // 120°
+    var filledAngle = startAngle + totalAngle * fillRatio;
+    var arcFg = 'M ' + ptX(startAngle, r) + ' ' + ptY(startAngle, r) +
+      ' A ' + r + ' ' + r + ' 0 ' + (fillRatio > 0.5 ? 1 : 0) + ' 1 ' + ptX(filledAngle, r) + ' ' + ptY(filledAngle, r);
+    // Needle
+    var tipX = ptX(nAngle, r - 8), tipY = ptY(nAngle, r - 8);
+    var b1X = ptX(nAngle + 90, 5), b1Y = ptY(nAngle + 90, 5);
+    var b2X = ptX(nAngle - 90, 5), b2Y = ptY(nAngle - 90, 5);
+    var svg = '<svg viewBox="0 0 72 56" xmlns="http://www.w3.org/2000/svg" style="width:64px;height:50px">' +
+      '<path d="' + arcBg + '" fill="none" stroke="#2d3d2d" stroke-width="5" stroke-linecap="round"/>' +
+      '<path d="' + arcFg + '" fill="none" stroke="' + statusColor + '" stroke-width="5" stroke-linecap="round"/>' +
+      '<polygon points="' + tipX + ',' + tipY + ' ' + b1X + ',' + b1Y + ' ' + b2X + ',' + b2Y + '" fill="' + statusColor + '"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="4" fill="var(--surface)" stroke="' + statusColor + '" stroke-width="2"/>' +
       '</svg>';
 
     el.innerHTML = '<div style="display:inline-flex;align-items:center;gap:10px;background:var(--surface);border-radius:14px;padding:8px 14px;margin-top:8px">' +
