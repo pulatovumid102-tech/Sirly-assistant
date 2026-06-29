@@ -35,7 +35,7 @@ body{
   min-height:100vh;
   -webkit-font-smoothing:antialiased;
 }
-#app{ min-height:100vh; padding-bottom:120px; max-width:480px; margin:0 auto; }
+#app{ min-height:100vh; padding-bottom:120px; max-width:800px; margin:0 auto; }
 .screen{ padding:20px 16px 12px; }
 
 .header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; min-height:38px; }
@@ -87,6 +87,39 @@ body{
 .tab.active{ color:var(--bg); background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); }
 .tab-icon{ font-size:20px; }
 .tab-label{ font-size:10px; font-weight:600; }
+
+/* ===== Desktop layout (>768px) ===== */
+@media (min-width:769px) {
+  #app{ display:flex; min-height:100vh; padding-bottom:0; max-width:100%; }
+  .tabbar{
+    position:fixed; left:0; top:0; bottom:0; right:auto;
+    width:70px; flex-direction:column; justify-content:flex-start;
+    align-items:center; gap:6px;
+    padding:24px 8px; background:var(--surface-alt);
+    border-right:1px solid rgba(255,255,255,0.06);
+    box-shadow:4px 0 20px var(--shadow-dark);
+  }
+  .tab{
+    max-width:54px; width:54px; height:54px;
+    flex-direction:column; justify-content:center; align-items:center;
+    gap:0; padding:0; border-radius:var(--radius-sm);
+  }
+  .tab-label{ display:none; }
+  .tab-icon{ font-size:22px; }
+  .tab.active .tab-icon{ transform:scale(1.15); }
+  .screen{ margin-left:70px; padding:28px 40px; width:calc(100vw - 70px); max-width:calc(100vw - 70px); }
+  .fab{ right:32px; bottom:32px; }
+  #app > nav.tabbar::before{
+    content:'🌱';
+    display:block;
+    font-size:22px;
+    padding:0 0 20px;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    margin-bottom:6px;
+    width:100%;
+    text-align:center;
+  }
+}
 
 .form{ display:flex; flex-direction:column; gap:12px; }
 .input{ width:100%; background:var(--surface-alt); border:none; color:var(--text); border-radius:var(--radius-sm); padding:13px 14px; font-size:14px; font-family:inherit; box-shadow:inset 4px 4px 8px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
@@ -1137,7 +1170,7 @@ async function loadDashboardChart() {
 
     var maxVal = Math.max(Math.max.apply(null, bookData), Math.max.apply(null, sportData), 1);
     var svgH = 130, padL = 30, padB = 22, padT = 10;
-    var svgW = 340;
+    var svgW = 700;
     var chartW = svgW - padL - 16;
     var chartH = svgH - padB - padT;
     // Bugungi kun 70%da turishi uchun
@@ -1176,12 +1209,12 @@ async function loadDashboardChart() {
       return '<rect x="' + (xPos(i) - 14) + '" y="' + padT + '" width="28" height="' + chartH + '" fill="transparent" data-tip="' + tip + '" class="chart-hover"/>';
     }).join('');
 
-    var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">' +
+    var chartContent =
       yLines + polyline(bookData, 'var(--accent-1)') + polyline(sportData, '#60a5fa') +
-      dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + tooltipRects + '</svg>';
+      dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + tooltipRects;
 
     el.innerHTML =
-      '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px">' +
+      '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px;width:100%">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
       '<div style="font-size:13px;font-weight:600">Rivojlanish grafigi</div>' +
       '<div style="display:flex;gap:6px">' +
@@ -1192,7 +1225,9 @@ async function loadDashboardChart() {
       '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:var(--accent-1);border-radius:2px"></div>Kitob (bet)</div>' +
       '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:#60a5fa;border-radius:2px"></div>Sport (ta)</div>' +
       '</div>' +
-      '<div style="position:relative">' + svg +
+      '<div style="position:relative;width:100%">' +
+      '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">' +
+      chartContent + '</svg>' +
       '<div id="chartTooltip" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--surface);border-radius:8px;padding:5px 10px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10"></div>' +
       '</div>' +
       '<div style="font-size:12px;margin-top:6px">' + diffHtml + '</div>' +
