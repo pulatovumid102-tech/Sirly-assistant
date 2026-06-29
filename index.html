@@ -73,6 +73,12 @@ body{
 .streak-day-num{ font-size:9px; color:var(--text-muted); font-weight:700; }
 
 .loading,.empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:40px 16px; line-height:1.6; }
+.skeleton{ background:var(--surface); border-radius:14px; margin-bottom:10px; overflow:hidden; position:relative; }
+.skeleton::after{ content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.06) 50%,transparent 100%); animation:shimmer 1.2s infinite; }
+@keyframes shimmer{ 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+.skeleton-line{ height:14px; background:var(--shadow-dark); border-radius:6px; margin:10px 14px; }
+.skeleton-line.short{ width:40%; }
+.skeleton-line.medium{ width:65%; }
 
 .fab{ position:fixed; right:18px; bottom:118px; width:58px; height:58px; border-radius:50%; border:none; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); color:var(--bg); font-size:28px; font-weight:700; box-shadow:8px 8px 16px var(--shadow-dark), -6px -6px 14px var(--shadow-light); z-index:5; }
 
@@ -488,6 +494,9 @@ var editTarget = null;
 var expandedReplies = {};
 var isAdminMode = false;
 var _bdCache = null;
+var _bookListCache = null;
+var _bookListCacheTime = 0;
+var BOOK_CACHE_TTL = 60000; // 1 daqiqa
 var noteEditTarget = null;
 var _cohortCountdownInterval = null;
 var selectedCohortMarker = null;
@@ -571,7 +580,7 @@ function renderModeSelect() {
   app.innerHTML =
     '<div class="screen" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh;gap:14px">' +
     '<div style="text-align:center;margin-bottom:24px"><div style="font-size:24px;font-weight:700">Neyra</div></div>' +
-    '<button class="btn-primary full" data-go="home" style="padding:18px 16px;font-size:15px">🌱 Shaxsiy rivojlanish</button>' +
+    '<button class="btn-primary full" data-go="profile" style="padding:18px 16px;font-size:15px">🌱 Shaxsiy rivojlanish</button>' +
     '<button class="btn-primary full" data-go="adminLogin" style="padding:18px 16px;font-size:15px;background:var(--surface);color:var(--text);box-shadow:6px 6px 14px var(--shadow-dark), -4px -4px 10px var(--shadow-light)">🔐 Admin rejimi</button>' +
     '</div>';
 }
@@ -608,7 +617,7 @@ async function renderHome() {
   var bodyHtml = isTop
     ? '<div id="topLists"><div class="loading">Yuklanmoqda...</div></div>'
     : '<input id="bookListSearch" class="input" placeholder="Kitob yoki muallif bo\'yicha qidirish..." style="margin-bottom:14px" />' +
-      '<div id="bookList" class="book-list"><div class="loading">Yuklanmoqda...</div></div>';
+      '<div id="bookList" class="book-list">' + [1,2,3,4].map(function(){return '<div class="skeleton" style="height:76px"><div class="skeleton-line medium"></div><div class="skeleton-line short"></div></div>';}).join('') + '</div>';
   renderShell(
     '<div class="header"><div class="h-title">Kitoblar</div></div>' +
     '<div class="segment">' +
@@ -772,17 +781,27 @@ async function loadAndRenderBookList() {
         return { book: b, pct: pct, pagesRead: r.pages_read, readerCount: null };
       });
     } else {
-      var bookResults = await Promise.all([
-        sbGet('books?select=*&order=title.asc&approved=eq.true'),
-        sbGet('progress?select=book_id'),
-      ]);
-      var books = bookResults[0];
-      var progress = bookResults[1];
-      var counts = {};
-      progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
-      state.listData = books.map(function (b) {
-        return { book: b, pct: null, pagesRead: null, readerCount: counts[b.id] || 0 };
-      });
+      var now = Date.now();
+      if (_bookListCache && (now - _bookListCacheTime) < BOOK_CACHE_TTL) {
+        var cached = _bookListCache;
+        state.listData = cached.books.map(function (b) {
+          return { book: b, pct: null, pagesRead: null, readerCount: cached.counts[b.id] || 0 };
+        });
+      } else {
+        var bookResults = await Promise.all([
+          sbGet('books?select=*&order=title.asc&approved=eq.true'),
+          sbGet('progress?select=book_id'),
+        ]);
+        var books = bookResults[0];
+        var progress = bookResults[1];
+        var counts = {};
+        progress.forEach(function (p) { counts[p.book_id] = (counts[p.book_id] || 0) + 1; });
+        _bookListCache = { books: books, counts: counts };
+        _bookListCacheTime = now;
+        state.listData = books.map(function (b) {
+          return { book: b, pct: null, pagesRead: null, readerCount: counts[b.id] || 0 };
+        });
+      }
     }
     renderFilteredList();
   } catch (e) {
@@ -894,9 +913,9 @@ function profileBodyHtml(isOwn, finishedCount, medals, books, finishedSportCount
           '</div></div></div>';
       }).join('') + '</div>'
     : '<div class="empty">Hali sport challenj yo\'q.</div>';
-  return '<div class="profile-stats">' +
-    '<div class="profile-stat-box"><div class="profile-stat-num">' + finishedCount + '</div><div class="profile-stat-label">tugatilgan kitob</div></div>' +
-    '<div class="profile-stat-box"><div class="profile-stat-num">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label">tugatilgan sport</div></div>' +
+  return '<div class="profile-stats" style="gap:8px;margin-bottom:12px">' +
+    '<div class="profile-stat-box" style="padding:8px 12px"><div class="profile-stat-num" style="font-size:18px">' + finishedCount + '</div><div class="profile-stat-label" style="font-size:11px">tugatilgan kitob</div></div>' +
+    '<div class="profile-stat-box" style="padding:8px 12px"><div class="profile-stat-num" style="font-size:18px">' + (finishedSportCount || 0) + '</div><div class="profile-stat-label" style="font-size:11px">tugatilgan sport</div></div>' +
     '</div>' +
     dailyTargetHtml +
     (isOwn ? '' : '<button id="contactBtn" class="btn-primary full" style="margin-bottom:18px">✉️ Yozish</button>') +
@@ -990,21 +1009,45 @@ async function loadProfileInto(elId, userId, userName, isOwn) {
 async function renderMyProfile() {
   setBackButton(false);
   renderShell(
-    '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div></div>' +
+    '<div class="profile-header">' + avatarHtml(ME.photoUrl, 76) + '<div class="profile-header-name">' + escapeHtml(ME.name) + '</div>' +
+    '<div id="profileStatus" style="font-size:13px;color:var(--text-muted);margin-top:4px"></div>' +
+    '</div>' +
     '<div id="profileStreakBadge"></div>' +
     '<div id="dashboardChart"><div class="loading">Yuklanmoqda...</div></div>' +
     '<div id="profileBody"><div class="loading">...</div></div>'
   );
   loadStreakBadge('profileStreakBadge');
+  await loadProfileStatus();
   await loadDashboardChart();
   await loadProfileInto('profileBody', ME.id, ME.name, true);
+}
+
+async function loadProfileStatus() {
+  var el = document.getElementById('profileStatus');
+  if (!el) return;
+  try {
+    var today = localDateStr();
+    var results = await Promise.all([
+      sbGet('streaks?select=last_active_date&user_id=eq.' + ME.id),
+      sbGet('sport_streaks?select=last_active_date&user_id=eq.' + ME.id),
+    ]);
+    var bookDate = results[0][0] ? results[0][0].last_active_date : null;
+    var sportDate = results[1][0] ? results[1][0].last_active_date : null;
+    var lastActive = null;
+    if (bookDate && sportDate) lastActive = bookDate > sportDate ? bookDate : sportDate;
+    else lastActive = bookDate || sportDate;
+    if (!lastActive) { el.innerHTML = '💀 O\'ldi'; return; }
+    var diffDays = Math.floor((new Date(today) - new Date(lastActive)) / 86400000);
+    if (diffDays === 0) el.innerHTML = '🔥 Faol';
+    else if (diffDays >= 3) el.innerHTML = '💀 O\'ldi';
+    else el.innerHTML = '';
+  } catch (e) { el.innerHTML = ''; }
 }
 
 async function loadDashboardChart() {
   var el = document.getElementById('dashboardChart');
   if (!el) return;
-  var periods = [7, 30, 90];
-  var selectedDays = 30;
+  var selectedDays = 7;
 
   async function renderChart(days) {
     selectedDays = days;
@@ -1012,67 +1055,81 @@ async function loadDashboardChart() {
     var labels = [], bookData = [], sportData = [];
     for (var i = days - 1; i >= 0; i--) {
       var d = new Date(today); d.setDate(d.getDate() - i);
-      var ds = d.toISOString().slice(0, 10);
-      labels.push(ds.slice(5));
+      labels.push(d.toISOString().slice(0, 10));
       bookData.push(0); sportData.push(0);
     }
     try {
-      var startDate = new Date(today); startDate.setDate(today.getDate() - (days - 1));
-      var startStr = startDate.toISOString().slice(0, 10);
+      var startStr = labels[0];
       var results = await Promise.all([
         sbGet('progress?select=updated_at,pages_read&user_id=eq.' + ME.id + '&updated_at=gte.' + startStr + 'T00:00:00'),
         sbGet('sport_daily_logs?select=log_date,count_done&user_id=eq.' + ME.id + '&log_date=gte.' + startStr),
       ]);
       results[0].forEach(function (r) {
-        var d = r.updated_at ? r.updated_at.slice(5, 10) : null;
+        var d = r.updated_at ? r.updated_at.slice(0, 10) : null;
         var idx = labels.indexOf(d);
-        if (idx !== -1) bookData[idx] += r.pages_read || 0;
+        if (idx !== -1) bookData[idx] = Math.max(bookData[idx], r.pages_read || 0);
       });
       results[1].forEach(function (r) {
-        var d = r.log_date ? r.log_date.slice(5) : null;
+        var d = r.log_date ? r.log_date.slice(0, 10) : null;
         var idx = labels.indexOf(d);
         if (idx !== -1) sportData[idx] += r.count_done || 0;
       });
     } catch (e) { console.error(e); }
 
-    var yesterday = bookData[bookData.length - 2] || 0;
-    var today_book = bookData[bookData.length - 1] || 0;
-    var diff = today_book - yesterday;
-    var diffHtml = diff > 0
-      ? '<span style="color:var(--accent-1)">+' + diff + ' bet kechadan ko\'ra</span>'
-      : diff < 0
-      ? '<span style="color:var(--danger)">' + diff + ' bet kechadan ko\'ra</span>'
-      : '<span style="color:var(--text-muted)">Kechaga teng</span>';
+    var todayStr = today.toISOString().slice(0, 10);
+    var todayBook = bookData[bookData.length - 1] || 0;
+    var yesterdayBook = bookData[bookData.length - 2] || 0;
+    var diff = todayBook - yesterdayBook;
+    var diffHtml = todayBook > 0
+      ? (diff > 0 ? '<span style="color:var(--accent-1)">+' + diff + ' bet kechadan ko\'ra</span>'
+        : diff < 0 ? '<span style="color:var(--danger)">' + diff + ' bet kechadan ko\'ra</span>'
+        : '<span style="color:var(--text-muted)">Kechaga teng</span>')
+      : '<span style="color:var(--text-muted)">Bugun hali hech narsa yo\'q</span>';
 
-    var maxVal = Math.max(Math.max(...bookData), Math.max(...sportData), 1);
-    var step = days > 30 ? 7 : days > 14 ? 3 : 1;
-    var svgH = 120, svgW = 320, padL = 28, padB = 20, padT = 8;
-    var chartW = svgW - padL - 8, chartH = svgH - padB - padT;
-    function xPos(i) { return padL + (i / (labels.length - 1)) * chartW; }
+    var maxVal = Math.max(Math.max.apply(null, bookData), Math.max.apply(null, sportData), 1);
+    var svgH = 130, padL = 30, padB = 22, padT = 10;
+    var svgW = 340;
+    var chartW = svgW - padL - 16;
+    var chartH = svgH - padB - padT;
+    // Bugungi kun 70%da turishi uchun
+    var totalSlots = labels.length - 1 + (1 / 0.7 - 1);
+    function xPos(i) { return padL + (i / totalSlots) * chartW; }
     function yPos(v) { return padT + chartH - (v / maxVal) * chartH; }
+
     function polyline(data, color) {
       var pts = data.map(function (v, i) { return xPos(i) + ',' + yPos(v); }).join(' ');
       return '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
     }
     function dots(data, color) {
       return data.map(function (v, i) {
-        return v > 0 ? '<circle cx="' + xPos(i) + '" cy="' + yPos(v) + '" r="3" fill="' + color + '"/>' : '';
+        return '<circle cx="' + xPos(i) + '" cy="' + yPos(v) + '" r="' + (v > 0 ? 3 : 2) + '" fill="' + (v > 0 ? color : 'var(--surface)') + '" stroke="' + color + '" stroke-width="1.5"/>';
       }).join('');
     }
+
+    var step = days <= 7 ? 1 : days <= 30 ? 5 : 14;
     var xLabels = '';
     for (var i = 0; i < labels.length; i += step) {
-      xLabels += '<text x="' + xPos(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + labels[i] + '</text>';
+      var lbl = labels[i].slice(5);
+      xLabels += '<text x="' + xPos(i) + '" y="' + (svgH - 5) + '" text-anchor="middle" font-size="9" fill="var(--text-muted)">' + lbl + '</text>';
     }
     var yLines = '';
-    for (var y = 0; y <= 4; y++) {
-      var yv = padT + (chartH / 4) * y;
-      var val = Math.round(maxVal - (maxVal / 4) * y);
-      yLines += '<line x1="' + padL + '" y1="' + yv + '" x2="' + (svgW - 8) + '" y2="' + yv + '" stroke="var(--surface)" stroke-width="1"/>';
-      yLines += '<text x="' + (padL - 4) + '" y="' + (yv + 3) + '" text-anchor="end" font-size="8" fill="var(--text-muted)">' + val + '</text>';
+    for (var y = 0; y <= 3; y++) {
+      var yv = padT + (chartH / 3) * y;
+      var val = Math.round(maxVal - (maxVal / 3) * y);
+      yLines += '<line x1="' + padL + '" y1="' + yv + '" x2="' + (svgW) + '" y2="' + yv + '" stroke="var(--surface)" stroke-width="1"/>';
+      if (val > 0) yLines += '<text x="' + (padL - 4) + '" y="' + (yv + 3) + '" text-anchor="end" font-size="8" fill="var(--text-muted)">' + val + '</text>';
     }
+
+    // Tooltip overlay rects
+    var tooltipRects = labels.map(function (lbl, i) {
+      var bv = bookData[i], sv = sportData[i];
+      var tip = lbl.slice(5) + (bv > 0 ? ' | 📖 ' + bv + ' bet' : '') + (sv > 0 ? ' | 💪 ' + sv + ' ta' : '') + (bv === 0 && sv === 0 ? ' | Hech narsa' : '');
+      return '<rect x="' + (xPos(i) - 14) + '" y="' + padT + '" width="28" height="' + chartH + '" fill="transparent" data-tip="' + tip + '" class="chart-hover"/>';
+    }).join('');
+
     var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">' +
       yLines + polyline(bookData, 'var(--accent-1)') + polyline(sportData, '#60a5fa') +
-      dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + '</svg>';
+      dots(bookData, 'var(--accent-1)') + dots(sportData, '#60a5fa') + xLabels + tooltipRects + '</svg>';
 
     el.innerHTML =
       '<div style="background:var(--surface);border-radius:16px;padding:14px;margin-bottom:12px">' +
@@ -1081,21 +1138,40 @@ async function loadDashboardChart() {
       '<div style="display:flex;gap:6px">' +
       [7, 30, 90].map(function (d) {
         return '<button class="btn-small' + (d === selectedDays ? ' active' : '') + '" style="padding:3px 8px;font-size:11px" data-chart-days="' + d + '">' + (d === 90 ? '3 oy' : d + ' kun') + '</button>';
-      }).join('') +
-      '</div></div>' +
+      }).join('') + '</div></div>' +
       '<div style="display:flex;gap:12px;margin-bottom:6px">' +
       '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:var(--accent-1);border-radius:2px"></div>Kitob (bet)</div>' +
       '<div style="display:flex;align-items:center;gap:4px;font-size:11px"><div style="width:12px;height:3px;background:#60a5fa;border-radius:2px"></div>Sport (ta)</div>' +
       '</div>' +
-      svg +
+      '<div style="position:relative">' + svg +
+      '<div id="chartTooltip" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--surface);border-radius:8px;padding:5px 10px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10"></div>' +
+      '</div>' +
       '<div style="font-size:12px;margin-top:6px">' + diffHtml + '</div>' +
       '</div>';
+
+    // Tooltip events
+    el.querySelectorAll('.chart-hover').forEach(function (rect) {
+      var tip = rect.getAttribute('data-tip');
+      rect.addEventListener('mouseenter', function (e) {
+        var t = document.getElementById('chartTooltip');
+        if (t) { t.style.display = 'block'; t.textContent = tip; }
+      });
+      rect.addEventListener('mouseleave', function () {
+        var t = document.getElementById('chartTooltip');
+        if (t) t.style.display = 'none';
+      });
+      rect.addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        var t = document.getElementById('chartTooltip');
+        if (t) { t.style.display = 'block'; t.textContent = tip; setTimeout(function () { t.style.display = 'none'; }, 2000); }
+      });
+    });
 
     el.querySelectorAll('[data-chart-days]').forEach(function (btn) {
       btn.addEventListener('click', function () { renderChart(parseInt(btn.dataset.chartDays)); });
     });
   }
-  await renderChart(30);
+  await renderChart(7);
 }
 
 // ===== Admin panel =====
@@ -1133,22 +1209,16 @@ async function loadAdminBadgeCounts() {
     var lastSeen = (stateRows[0] && stateRows[0].users_last_seen_at) || '1970-01-01T00:00:00Z';
     var results = await Promise.all([
       sbGet('books?select=id&approved=eq.false'),
-      sbGet('qovun_purchase_requests?select=id&status=eq.pending'),
-      sbGet('withdrawal_requests?select=id&status=eq.pending'),
       sbGet('wallets?select=id&created_at=gt.' + encodeURIComponent(lastSeen)),
       sbGet('sport_challenges?select=id&approved=eq.false'),
     ]);
     function badgeHtml(n) { return n > 0 ? ' <span style="background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">' + n + '</span>' : ''; }
     var bB = document.getElementById('badgeBooks');
-    var bT = document.getElementById('badgeTx');
-    var bW = document.getElementById('badgeWd');
     var bU = document.getElementById('badgeUsers');
     var bS = document.getElementById('badgeSport');
     if (bB) bB.innerHTML = badgeHtml(results[0].length);
-    if (bT) bT.innerHTML = badgeHtml(results[1].length);
-    if (bW) bW.innerHTML = badgeHtml(results[2].length);
-    if (bU) bU.innerHTML = badgeHtml(results[3].length);
-    if (bS) bS.innerHTML = badgeHtml(results[4].length);
+    if (bU) bU.innerHTML = badgeHtml(results[1].length);
+    if (bS) bS.innerHTML = badgeHtml(results[2].length);
   } catch (e) { console.error(e); }
 }
 
@@ -1166,12 +1236,12 @@ async function loadAllUsersMerged() {
     sbGet('progress?select=user_id,user_name,started_at'),
     sbGet('comments?select=user_id,user_name,created_at'),
     sbGet('books?select=created_by_id,created_by_name,created_at'),
-    sbGet('wallets?select=user_id,user_name,created_at'),
+    sbGet('sport_progress?select=user_id,user_name,started_at'),
   ]);
   results[0].forEach(function (p) { consider(p.user_id, p.user_name, p.started_at); });
   results[1].forEach(function (c) { consider(c.user_id, c.user_name, c.created_at); });
   results[2].forEach(function (b) { consider(b.created_by_id, b.created_by_name, b.created_at); });
-  results[3].forEach(function (w) { consider(w.user_id, w.user_name, w.created_at); });
+  results[3].forEach(function (p) { consider(p.user_id, p.user_name, p.started_at); });
   return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return new Date(b.firstSeen) - new Date(a.firstSeen); });
 }
 
